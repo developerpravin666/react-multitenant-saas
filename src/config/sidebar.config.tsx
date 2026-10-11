@@ -58,6 +58,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
     icon: Database,
   },
   {
+    id: "admin-database-tables",
+    label: "Table Management",
+    path: APP_ROUTES.admin.databaseTables,
+    icon: Database,
+  },
+  {
     id: "admin-settings",
     label: "System Settings",
     path: APP_ROUTES.admin.systemSettings,
@@ -241,6 +247,12 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Store Approvals",
         path: APP_ROUTES.settings.tenantApprovals,
         icon: ShieldCheck,
+      },
+      {
+        id: "database-tables",
+        label: "Database Tables",
+        path: APP_ROUTES.settings.databaseTables,
+        icon: Database,
       },
     ],
   },

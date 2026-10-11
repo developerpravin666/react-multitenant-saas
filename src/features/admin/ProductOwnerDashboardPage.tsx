@@ -259,7 +259,7 @@ export function ProductOwnerDashboardPage() {
       </div>
 
       {/* Quick Navigation Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           to={APP_ROUTES.admin.tenants}
           className="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-700"
@@ -269,11 +269,11 @@ export function ProductOwnerDashboardPage() {
           </div>
           <div>
             <div className="flex items-center gap-1.5 font-bold text-slate-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
-              <span>Tenant Directory & Management</span>
+              <span>Tenant Directory</span>
               <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              View all stores, suspend or reactivate tenants, examine store schema names, and view owner contact details.
+              Manage stores, approvals, schema names, and owner contacts.
             </p>
           </div>
         </Link>
@@ -291,7 +291,25 @@ export function ProductOwnerDashboardPage() {
               <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Inspect master schema and per-tenant isolated schemas. Trigger platform-wide automated EF Core schema migrations.
+              Inspect schemas and trigger EF Core schema migrations.
+            </p>
+          </div>
+        </Link>
+
+        <Link
+          to={APP_ROUTES.admin.databaseTables}
+          className="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-purple-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-purple-700"
+        >
+          <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400">
+            <Layers className="size-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5 font-bold text-slate-900 group-hover:text-purple-600 dark:text-white dark:group-hover:text-purple-400">
+              <span>Table Management</span>
+              <ArrowRight className="size-4 transition group-hover:translate-x-1" />
+            </div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Classify Master vs Data tables. Safely clear data tables while protecting Master catalogs.
             </p>
           </div>
         </Link>
@@ -305,11 +323,11 @@ export function ProductOwnerDashboardPage() {
           </div>
           <div>
             <div className="flex items-center gap-1.5 font-bold text-slate-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
-              <span>System & Offline Settings</span>
+              <span>System Settings</span>
               <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Verify local PostgreSQL connection, email simulation logs, offline/online switches, and platform security tokens.
+              PostgreSQL connections, email simulation, and platform tokens.
             </p>
           </div>
         </Link>
