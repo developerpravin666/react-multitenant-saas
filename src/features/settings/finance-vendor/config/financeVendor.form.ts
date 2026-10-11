@@ -1,0 +1,68 @@
+import type { FormFieldConfig } from "../../../../types/form";
+
+export const financeVendorFormConfig: FormFieldConfig[] = [
+  {
+    id: "name",
+    name: "name",
+    label: "Finance Vendor Name",
+    type: "text",
+    placeholder: "Enter finance vendor name",
+    required: true,
+    minLength: 2,
+  },
+  {
+    id: "code",
+    name: "code",
+    label: "Code",
+    type: "text",
+    placeholder: "Enter vendor code",
+    //required: true,
+  },
+  {
+    id: "mobile",
+    name: "mobile",
+    label: "Mobile",
+    type: "tel",
+    placeholder: "Enter mobile number",
+    //required: true,
+  },
+  {
+    id: "email",
+    name: "email",
+    label: "Email",
+    type: "email",
+    placeholder: "vendor@example.com",
+    //required: true,
+  },
+  {
+    id: "contactName",
+    name: "contactName",
+    label: "Contact Name",
+    type: "text",
+    placeholder: "Enter contact name",
+    //required: true,
+  },
+  {
+    id: "contactMobile",
+    name: "contactMobile",
+    label: "Contact Mobile",
+    type: "tel",
+    placeholder: "Enter contact mobile number",
+    //required: true,
+  },
+  {
+    id: "description",
+    name: "description",
+    label: "Description",
+    type: "textarea",
+    placeholder: "Enter description",
+    colSpan: "full",
+  },
+  {
+    id: "isActive",
+    name: "isActive",
+    label: "Active",
+    type: "toggle",
+    defaultValue: true,
+  },
+];

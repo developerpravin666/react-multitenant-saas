@@ -1,0 +1,60 @@
+import type { FormFieldConfig } from "../../../types/form";
+
+export const profileFormConfig: FormFieldConfig[] = [
+  {
+    id: "full-name",
+    name: "fullName",
+    label: "Full name",
+    type: "text",
+    required: true,
+    minLength: 2,
+    maxLength: 80,
+    placeholder: "e.g. Alex Morgan",
+    description: "This name appears across your tenant workspace.",
+  },
+  {
+    id: "work-email",
+    name: "email",
+    label: "Work email",
+    type: "email",
+    required: true,
+    placeholder: "alex@company.com",
+  },
+  {
+    id: "department",
+    name: "department",
+    label: "Department",
+    type: "select",
+    required: true,
+    placeholder: "Choose a department",
+    options: [
+      { label: "Engineering", value: "engineering" },
+      { label: "Product", value: "product" },
+      { label: "Sales", value: "sales" },
+      { label: "Operations", value: "operations" },
+    ],
+  },
+  {
+    id: "job-title",
+    name: "jobTitle",
+    label: "Job title",
+    type: "text",
+    placeholder: "e.g. Principal Engineer",
+    maxLength: 100,
+  },
+  {
+    id: "product-updates",
+    name: "productUpdates",
+    label: "Receive product updates",
+    type: "checkbox",
+    description: "Get occasional release notes and feature announcements.",
+  },
+  {
+    id: "terms",
+    name: "termsAccepted",
+    label: "I agree to the workspace terms",
+    type: "checkbox",
+    required: true,
+    description: "Required before changes can be saved.",
+  },
+];

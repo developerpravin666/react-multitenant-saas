@@ -1,0 +1,247 @@
+import {
+  Boxes,
+  Factory,
+  HandCoins,
+  FolderTree,
+  LayoutDashboard,
+  Palette,
+  Package,
+  Shapes,
+  Settings as SettingsIcon,
+  Tags,
+  Truck,
+  ShoppingCart,
+  Receipt,
+  Users,
+  ClipboardList,
+  BookOpenCheck,
+  Clock3,
+  CalendarDays,
+  Landmark,
+  ArrowLeftRight,
+  FileSpreadsheet,
+  FileText,
+  ShieldCheck,
+  Building2,
+  Database,
+  Server,
+  Clock,
+  ToggleRight,
+} from "lucide-react";
+
+import type { NavigationItem } from "../types/navigation";
+import { APP_ROUTES } from "./routes";
+
+export const productOwnerSidebarConfiguration: NavigationItem[] = [
+  {
+    id: "admin-dashboard",
+    label: "Platform Overview",
+    path: APP_ROUTES.admin.dashboard,
+    icon: LayoutDashboard,
+  },
+  {
+    id: "admin-approvals",
+    label: "Store Approvals",
+    path: APP_ROUTES.admin.pendingApprovals,
+    icon: ShieldCheck,
+  },
+  {
+    id: "admin-tenants",
+    label: "Tenant Directory",
+    path: APP_ROUTES.admin.tenants,
+    icon: Building2,
+  },
+  {
+    id: "admin-migrations",
+    label: "Database Migrations",
+    path: APP_ROUTES.admin.databaseMigrations,
+    icon: Database,
+  },
+  {
+    id: "admin-settings",
+    label: "System Settings",
+    path: APP_ROUTES.admin.systemSettings,
+    icon: Server,
+  },
+  {
+    id: "admin-feature-flags",
+    label: "Feature Flags",
+    path: APP_ROUTES.admin.featureFlags,
+    icon: ToggleRight,
+  },
+  {
+    id: "admin-masters-import",
+    label: "Master Data Import",
+    path: APP_ROUTES.admin.mastersImport,
+    icon: FileSpreadsheet,
+  },
+];
+
+export const sidebarConfiguration: NavigationItem[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    path: APP_ROUTES.dashboard,
+    icon: LayoutDashboard,
+  },
+  {
+    id: "products",
+    label: "Product",
+    icon: Package,
+    children: [
+      {
+        id: "vendors",
+        label: "Vendors",
+        path: APP_ROUTES.products.vendors.list,
+        icon: Truck,
+      },
+      {
+        id: "brands",
+        label: "Brands",
+        path: APP_ROUTES.products.brands.list,
+        icon: Factory,
+      },
+      {
+        id: "product-types",
+        label: "Product Types",
+        path: APP_ROUTES.products.types.list,
+        icon: Shapes,
+      },
+      {
+        id: "product-models",
+        label: "Categories / Models",
+        path: APP_ROUTES.products.models.list,
+        icon: FolderTree,
+      },
+      {
+        id: "variants",
+        label: "Variants",
+        path: APP_ROUTES.products.variants.list,
+        icon: Tags,
+      },
+      {
+        id: "colors",
+        label: "Colors",
+        path: APP_ROUTES.products.colors.list,
+        icon: Palette,
+      },
+      {
+        id: "master-import",
+        label: "Import Master Data",
+        path: APP_ROUTES.products.importMasters,
+        icon: FileSpreadsheet,
+      },
+    ],
+  },
+  {
+    id: "purchase",
+    label: "Purchase",
+    icon: ShoppingCart,
+    children: [
+      {
+        id: "product-list",
+        label: "Products",
+        path: APP_ROUTES.purchase.products.list,
+        icon: Boxes,
+      },
+      {
+        id: "stock-inventory",
+        label: "Stock Inventory",
+        path: APP_ROUTES.purchase.stock,
+        icon: Boxes,
+      },
+      {
+        id: "purchase-accounting",
+        label: "Bills & Payments",
+        path: APP_ROUTES.purchase.accounting,
+        icon: HandCoins,
+      },
+    ],
+  },
+  {
+    id: "accounting",
+    label: "Accounting",
+    icon: BookOpenCheck,
+    children: [
+      { id: "party-statement", label: "Party Ledger (SOA)", path: APP_ROUTES.partyStatement, icon: FileText },
+      { id: "general-ledger", label: "General Ledger", path: APP_ROUTES.generalLedger, icon: BookOpenCheck },
+      { id: "accounting-aging", label: "Receivable & Payable Aging", path: APP_ROUTES.accountingAging, icon: Clock3 },
+      { id: "tax-reports", label: "GST Reports", path: APP_ROUTES.taxReports, icon: FileSpreadsheet },
+      { id: "accounting-periods", label: "Accounting Periods", path: APP_ROUTES.accountingPeriods, icon: CalendarDays },
+      { id: "bank-reconciliation", label: "Bank Reconciliation", path: APP_ROUTES.bankReconciliation, icon: Landmark },
+      { id: "stock-movements", label: "Stock Movements", path: APP_ROUTES.stockMovements, icon: ArrowLeftRight },
+      { id: "accounting-controls", label: "Controls & Budgets", path: APP_ROUTES.accountingControls, icon: ShieldCheck },
+      { id: "invoice-corrections", label: "Returns & Corrections", path: "/accounting/corrections", icon: ArrowLeftRight },
+      { id: "opening-balances", label: "Opening Balances & Reconciliation", path: "/accounting/opening-balances", icon: BookOpenCheck },
+      { id: "staff-access", label: "Staff Access", path: "/accounting/staff", icon: Users },
+    ],
+  },
+  {
+    id: "sale",
+    label: "Sale",
+    icon: Receipt,
+    children: [
+      {
+        id: "sales-invoices",
+        label: "Sales Invoices",
+        path: APP_ROUTES.sale.invoices.list,
+        icon: FileText,
+      },
+      {
+        id: "sale-products",
+        label: "Products",
+        path: APP_ROUTES.sale.products.list,
+        icon: Boxes,
+      },
+      {
+        id: "sale-customers",
+        label: "Customers",
+        path: APP_ROUTES.sale.customers.list,
+        icon: Users,
+      },
+      {
+        id: "sales-accounting",
+        label: "Bills & Payments",
+        path: APP_ROUTES.sale.accounting,
+        icon: HandCoins,
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: SettingsIcon,
+    children: [
+      {
+        id: "tax",
+        label: "Tax",
+        path: APP_ROUTES.settings.tax.list,
+        icon: Tags,
+      },
+      {
+        id: "finance-vendors",
+        label: "Finance Vendors",
+        path: APP_ROUTES.settings.financeVendors.list,
+        icon: HandCoins,
+      },
+      {
+        id: "customer-bill",
+        label: "Customer Bill",
+        path: APP_ROUTES.settings.customerBill,
+        icon: Receipt,
+      },
+      {
+        id: "audit-logs",
+        label: "Audit Logs",
+        path: APP_ROUTES.settings.auditLogs,
+        icon: ClipboardList,
+      },
+      {
+        id: "tenant-approvals",
+        label: "Store Approvals",
+        path: APP_ROUTES.settings.tenantApprovals,
+        icon: ShieldCheck,
+      },
+    ],
+  },
+];

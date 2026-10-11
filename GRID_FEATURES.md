@@ -1,0 +1,32 @@
+# Dynamic Grid Feature Matrix
+
+- Generic `DynamicGrid<TData>` component
+- Client-side paging
+- Server-side paging
+- Client-side sorting
+- Server-side sorting query contract
+- Multi-column sorting with Shift+click
+- Debounced global search
+- Client-side global search
+- Server-side search query contract
+- Column filters with text/select controls
+- Configurable filter operators
+- Row selection and select-current-page
+- Column visibility chooser
+- Compact / normal / spacious density
+- CSV export
+- Server refresh
+- Sticky header
+- Horizontal responsive scrolling
+- Loading skeleton
+- Empty state
+- Error state
+- Custom cell templates
+- Action column support
+- Dark mode
+- Tenant CSS variable theming
+- Accessible sort/selection/table semantics
+- AbortController request cancellation
+- Stale-response protection
+- Mock server implementation
+- Production HTTP source adapter
