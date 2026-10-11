@@ -104,6 +104,7 @@ export const APP_ROUTES = {
       edit: (id: string) => `/settings/finance-vendors/${id}/edit`,
     },
     tenantApprovals: "/settings/tenant-approvals",
+    databaseTables: "/settings/database-tables",
   },
 
   admin: {
@@ -111,6 +112,7 @@ export const APP_ROUTES = {
     tenants: "/admin/tenants",
     pendingApprovals: "/admin/tenants/pending",
     databaseMigrations: "/admin/database-migrations",
+    databaseTables: "/admin/database-tables",
     systemSettings: "/admin/system-settings",
     featureFlags: "/admin/feature-flags",
     mastersImport: "/admin/masters-import",
