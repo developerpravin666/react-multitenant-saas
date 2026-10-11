@@ -1,13 +1,17 @@
 import { apiClient } from "../../services/apiClient";
-import type { FeatureFlag, FeatureFlagsResponse } from "./types";
+import type {
+  FeatureFlag,
+  FeatureFlagsResponse,
+  AdminFeatureFlagsResponse,
+} from "./types";
 
 const CACHE_KEY = "siddhi_feature_flags_cache";
 
 export const featureFlagService = {
   /**
-   * Retrieves active feature flags from database or cached state.
+   * Retrieves active feature flags from database or cached state for a client session.
    */
-  async getFeatureFlags(tenantId?: string): Promise<FeatureFlagsResponse> {
+  async getFeatureFlags(tenantId?: string | null): Promise<FeatureFlagsResponse> {
     try {
       const url = tenantId ? `/features?tenantId=${encodeURIComponent(tenantId)}` : "/features";
       const response = await apiClient.get<FeatureFlagsResponse>(url);
@@ -16,31 +20,38 @@ export const featureFlagService = {
         return response;
       }
     } catch {
-      // Fallback to cache or defaults
+      // Fallback to cache
     }
 
     return this.getCache();
   },
 
   /**
-   * Admin: Retrieves all registered feature flags directly from database.
+   * Admin: Retrieves all registered feature flags, tenant summaries, and overrides directly from database.
    */
-  async getAdminFeatureFlags(): Promise<FeatureFlagsResponse> {
+  async getAdminFeatureFlags(tenantId?: string | null): Promise<AdminFeatureFlagsResponse> {
     try {
-      const response = await apiClient.get<FeatureFlagsResponse>("/admin/features");
+      const url = tenantId ? `/admin/features?tenantId=${encodeURIComponent(tenantId)}` : "/admin/features";
+      const response = await apiClient.get<AdminFeatureFlagsResponse>(url);
       if (response && response.flags) {
-        this.saveCache(response);
+        this.saveCache({ flags: response.flags, items: response.items });
         return response;
       }
     } catch {
       // Fallback
     }
 
-    return this.getCache();
+    const cache = this.getCache();
+    return {
+      flags: cache.flags,
+      items: cache.items,
+      tenants: [],
+      rawOverrides: [],
+    };
   },
 
   /**
-   * Admin: Toggles a feature flag on or off and persists to database table `tenant.feature_flags`.
+   * Admin: Toggles a feature flag for a particular tenant (or global default if tenantId is null).
    */
   async toggleFeatureFlag(
     key: string,
@@ -62,7 +73,7 @@ export const featureFlagService = {
       current.flags[key] = isEnabled;
       const idx = current.items.findIndex((item) => item.key.toLowerCase() === key.toLowerCase());
       if (idx >= 0 && res.flag) {
-        current.items[idx] = res.flag;
+        current.items[idx] = { ...current.items[idx], isEnabled, modifiedAt: res.flag.modifiedAt };
       } else if (res.flag) {
         current.items.push(res.flag);
       }
@@ -70,7 +81,7 @@ export const featureFlagService = {
 
       return res;
     } catch {
-      // Optimistic local update if server is temporarily unreachable
+      // Fallback optimistic update
       const current = this.getCache();
       current.flags[key] = isEnabled;
       const existing = current.items.find((item) => item.key.toLowerCase() === key.toLowerCase());
@@ -88,9 +99,78 @@ export const featureFlagService = {
           name: key,
           isEnabled,
           category: "General",
+          tenantId: tenantId || null,
           modifiedAt: new Date().toISOString(),
         },
       };
+    }
+  },
+
+  /**
+   * Admin: Toggles a feature flag for ALL tenants at once in the database.
+   */
+  async toggleAllTenants(
+    key: string,
+    isEnabled: boolean
+  ): Promise<{ success: boolean; updatedCount: number; message?: string }> {
+    try {
+      const res = await apiClient.post<{ success: boolean; updatedCount: number; message?: string }>(
+        "/admin/features/toggle-all",
+        {
+          key,
+          isEnabled,
+          syncAllTenants: true,
+        }
+      );
+
+      // Update local cache
+      const current = this.getCache();
+      if (key && key !== "all") {
+        current.flags[key] = isEnabled;
+        const target = current.items.find((i) => i.key.toLowerCase() === key.toLowerCase());
+        if (target) {
+          target.isEnabled = isEnabled;
+          target.globalEnabled = isEnabled;
+          target.modifiedAt = new Date().toISOString();
+        }
+      } else {
+        Object.keys(current.flags).forEach((k) => (current.flags[k] = isEnabled));
+        current.items.forEach((i) => {
+          i.isEnabled = isEnabled;
+          i.globalEnabled = isEnabled;
+          i.modifiedAt = new Date().toISOString();
+        });
+      }
+      this.saveCache(current);
+
+      return res;
+    } catch {
+      return {
+        success: false,
+        updatedCount: 0,
+        message: "Failed to broadcast toggle across all tenants.",
+      };
+    }
+  },
+
+  /**
+   * Admin: Resets a tenant's custom override so they inherit the global default.
+   */
+  async resetTenantOverride(
+    key: string,
+    tenantId: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await apiClient.post<{ success: boolean; message?: string }>(
+        "/admin/features/reset-override",
+        {
+          key,
+          tenantId,
+        }
+      );
+      return res;
+    } catch {
+      return { success: false, message: "Failed to reset tenant override." };
     }
   },
 
@@ -143,6 +223,8 @@ export const featureFlagService = {
           isEnabled: true,
           category: "Accessibility",
           tenantId: null,
+          globalEnabled: true,
+          overridesCount: 0,
         },
       ],
     };
@@ -157,4 +239,3 @@ export const featureFlagService = {
     }
   },
 };
-

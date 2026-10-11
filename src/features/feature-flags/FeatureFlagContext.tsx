@@ -6,7 +6,7 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import type { FeatureFlag, FeatureFlagContextValue } from "./types";
+import type { FeatureFlag, FeatureFlagContextValue, TenantSummary } from "./types";
 import { featureFlagService } from "./featureFlagService";
 
 const FeatureFlagContext = createContext<FeatureFlagContextValue | null>(null);
@@ -15,22 +15,29 @@ export function FeatureFlagProvider({ children }: PropsWithChildren) {
   const initialCache = featureFlagService.getCache();
   const [flags, setFlags] = useState<Record<string, boolean>>(initialCache.flags);
   const [items, setItems] = useState<FeatureFlag[]>(initialCache.items);
+  const [tenants, setTenants] = useState<TenantSummary[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshFlags = useCallback(async () => {
+  const refreshFlags = useCallback(async (tenantId?: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await featureFlagService.getFeatureFlags();
+      const activeTenant = tenantId !== undefined ? tenantId : selectedTenantId;
+      // Fetch admin feature flags which return full tenant lists and overrides
+      const data = await featureFlagService.getAdminFeatureFlags(activeTenant);
       setFlags(data.flags);
       setItems(data.items);
+      if (data.tenants && data.tenants.length > 0) {
+        setTenants(data.tenants);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load feature flags.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedTenantId]);
 
   // Fetch flags on initial mount
   useEffect(() => {
@@ -56,7 +63,6 @@ export function FeatureFlagProvider({ children }: PropsWithChildren) {
   const isEnabled = useCallback(
     (key: string, defaultValue: boolean = false): boolean => {
       const normalizedKey = key.toLowerCase();
-      // Match case-insensitively
       for (const k of Object.keys(flags)) {
         if (k.toLowerCase() === normalizedKey) {
           return Boolean(flags[k]);
@@ -69,6 +75,8 @@ export function FeatureFlagProvider({ children }: PropsWithChildren) {
 
   const toggleFlag = useCallback(
     async (key: string, enabled: boolean, tenantId?: string | null): Promise<boolean> => {
+      const effectiveTenant = tenantId !== undefined ? tenantId : selectedTenantId;
+
       // Optimistic update
       setFlags((prev) => ({ ...prev, [key]: enabled }));
       setItems((prev) =>
@@ -80,14 +88,50 @@ export function FeatureFlagProvider({ children }: PropsWithChildren) {
       );
 
       try {
-        await featureFlagService.toggleFeatureFlag(key, enabled, tenantId);
+        await featureFlagService.toggleFeatureFlag(key, enabled, effectiveTenant);
+        // Refresh to guarantee clean state and overrides
+        await refreshFlags(effectiveTenant);
         return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to update feature flag.");
         return false;
       }
     },
-    []
+    [selectedTenantId, refreshFlags]
+  );
+
+  const toggleAllTenants = useCallback(
+    async (key: string, enabled: boolean): Promise<boolean> => {
+      setLoading(true);
+      try {
+        const res = await featureFlagService.toggleAllTenants(key, enabled);
+        await refreshFlags(selectedTenantId);
+        return res.success;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to toggle feature flag for all tenants.");
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedTenantId, refreshFlags]
+  );
+
+  const resetTenantOverride = useCallback(
+    async (key: string, tenantId: string): Promise<boolean> => {
+      setLoading(true);
+      try {
+        const res = await featureFlagService.resetTenantOverride(key, tenantId);
+        await refreshFlags(selectedTenantId);
+        return res.success;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to reset tenant override.");
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedTenantId, refreshFlags]
   );
 
   const saveFlag = useCallback(
@@ -97,17 +141,21 @@ export function FeatureFlagProvider({ children }: PropsWithChildren) {
       description?: string;
       isEnabled: boolean;
       category?: string;
+      tenantId?: string | null;
     }): Promise<boolean> => {
       try {
-        await featureFlagService.saveFeatureFlag(flag);
-        await refreshFlags();
+        await featureFlagService.saveFeatureFlag({
+          ...flag,
+          tenantId: flag.tenantId !== undefined ? flag.tenantId : selectedTenantId,
+        });
+        await refreshFlags(selectedTenantId);
         return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save feature flag.");
         return false;
       }
     },
-    [refreshFlags]
+    [selectedTenantId, refreshFlags]
   );
 
   return (
@@ -115,10 +163,18 @@ export function FeatureFlagProvider({ children }: PropsWithChildren) {
       value={{
         flags,
         items,
+        tenants,
         loading,
         error,
+        selectedTenantId,
+        setSelectedTenantId: (id) => {
+          setSelectedTenantId(id);
+          void refreshFlags(id);
+        },
         isEnabled,
         toggleFlag,
+        toggleAllTenants,
+        resetTenantOverride,
         saveFlag,
         refreshFlags,
       }}
@@ -142,7 +198,6 @@ export function useFeatureFlags(): FeatureFlagContextValue {
 export function useFeatureFlag(key: string, defaultValue: boolean = true): boolean {
   const ctx = useContext(FeatureFlagContext);
   if (!ctx) {
-    // If used outside provider, fallback to cache
     const cached = featureFlagService.getCache();
     for (const k of Object.keys(cached.flags)) {
       if (k.toLowerCase() === key.toLowerCase()) {
@@ -153,4 +208,3 @@ export function useFeatureFlag(key: string, defaultValue: boolean = true): boole
   }
   return ctx.isEnabled(key, defaultValue);
 }
-
