@@ -7,7 +7,7 @@ export const loginFormFields: FormFieldConfig[] = [
     label: "Tenant slug",
     type: "text",
     placeholder: "acme",
-    autoComplete: "organization",
+    autoComplete: "off",
     required: true,
   },
   {
@@ -15,7 +15,7 @@ export const loginFormFields: FormFieldConfig[] = [
     name: "username",
     label: "Username",
     type: "text",
-    autoComplete: "username",
+    autoComplete: "off",
     required: true,
   },
   {
@@ -23,7 +23,7 @@ export const loginFormFields: FormFieldConfig[] = [
     name: "password",
     label: "Password",
     type: "password",
-    autoComplete: "current-password",
+    autoComplete: "off",
     required: true,
   },
 ];

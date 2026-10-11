@@ -23,7 +23,7 @@ export function TextField({ field, register, errors }: CompatibleProps) {
         id={field.id}
         type="text"
         placeholder={field.placeholder}
-        autoComplete={field.autoComplete}
+        autoComplete={field.autoComplete ?? "off"}
         disabled={field.disabled}
         aria-invalid={Boolean(message)}
         aria-describedby={message ? `${field.id}-error` : undefined}

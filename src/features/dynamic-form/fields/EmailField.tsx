@@ -22,7 +22,7 @@ export function EmailField({ field, register, errors }: CompatibleProps) {
       <input
         id={field.id}
         type="email"
-        autoComplete="email"
+        autoComplete={field.autoComplete ?? "off"}
         placeholder={field.placeholder}
         disabled={field.disabled}
         aria-invalid={Boolean(message)}

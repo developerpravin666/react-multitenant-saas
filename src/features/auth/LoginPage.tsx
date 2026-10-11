@@ -53,7 +53,7 @@ export function LoginPage() {
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Sign in</h1>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Enter your tenant workspace and account credentials.</p>
         </div>
-        <form className="space-y-4" onSubmit={submit} noValidate>
+        <form className="space-y-4" onSubmit={submit} noValidate autoComplete="off">
           {resetMessage && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">{resetMessage}</p>}
           {loginFormFields.map((field) => {
             const Field = getFieldComponent(field.type);

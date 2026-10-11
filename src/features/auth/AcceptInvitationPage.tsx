@@ -113,14 +113,14 @@ export function AcceptInvitationPage() {
             </Link>
           </div>
         ) : (
-          <form onSubmit={submit} noValidate className="space-y-4">
+          <form onSubmit={submit} noValidate autoComplete="off" className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
                 Choose a password <span className="text-rose-500">*</span>
               </label>
               <input
                 type="password"
-                autoComplete="new-password"
+                autoComplete="off"
                 aria-invalid={Boolean(fieldErrors.password)}
                 placeholder="At least 12 characters"
                 value={password}
@@ -151,7 +151,7 @@ export function AcceptInvitationPage() {
               </label>
               <input
                 type="password"
-                autoComplete="new-password"
+                autoComplete="off"
                 aria-invalid={Boolean(fieldErrors.confirmPassword)}
                 placeholder="Re-enter password"
                 value={confirmPassword}

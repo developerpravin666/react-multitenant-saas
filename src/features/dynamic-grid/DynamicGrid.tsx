@@ -448,6 +448,7 @@ export function DynamicGrid<TData>({
                             updateFilter(column.id, event.target.value)
                           }
                           placeholder={`Filter ${column.header}`}
+                          autoComplete="off"
                           className="h-8 w-full min-w-24 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                           aria-label={`Filter ${column.header}`}
                         />

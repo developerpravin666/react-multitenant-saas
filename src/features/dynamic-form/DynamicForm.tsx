@@ -209,7 +209,7 @@ export function DynamicForm({
         ) : null}
       </div>
 
-      <form onSubmit={submit} noValidate className="space-y-4">
+      <form onSubmit={submit} noValidate autoComplete="off" className="space-y-4">
         <div className={`grid grid-cols-1 gap-3 ${columnClass}`}>
           {fields.filter((field) =>
             !field.visibleWhen

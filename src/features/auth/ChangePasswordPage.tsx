@@ -70,7 +70,7 @@ export function ChangePasswordPage() {
     <section className="mx-auto w-full max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Change password</h1>
       <p className="mb-6 mt-2 text-sm text-slate-600 dark:text-slate-300">Enter your current password and choose a new one.</p>
-      <form className="space-y-4" onSubmit={submit} noValidate>
+      <form className="space-y-4" onSubmit={submit} noValidate autoComplete="off">
         {changePasswordFields.map((field) => {
           const Field = getFieldComponent(field.type);
           return <Field key={field.id} field={field} register={register} control={control} errors={errors} />;

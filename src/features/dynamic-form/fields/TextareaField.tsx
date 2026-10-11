@@ -20,6 +20,7 @@ export function TextareaField({ field, register, errors }: DynamicFieldProps) {
         id={field.id}
         rows={field.rows ?? 4}
         placeholder={field.placeholder}
+        autoComplete="off"
         disabled={field.disabled}
         aria-invalid={Boolean(message)}
         aria-describedby={message ? `${field.id}-error` : undefined}

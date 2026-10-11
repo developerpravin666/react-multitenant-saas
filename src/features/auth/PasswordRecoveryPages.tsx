@@ -77,14 +77,14 @@ export function ForgotPasswordPage() {
         <p className="mb-6 mt-2 text-sm text-slate-600 dark:text-slate-300">
           Enter your tenant and account email. If they match, we’ll email you a reset link.
         </p>
-        <form className="space-y-4" onSubmit={submit} noValidate>
+        <form className="space-y-4" onSubmit={submit} noValidate autoComplete="off">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
               Tenant slug <span className="text-rose-500">*</span>
             </label>
             <input
               className={getInputClass(Boolean(fieldErrors.tenantSlug))}
-              autoComplete="organization"
+              autoComplete="off"
               aria-invalid={Boolean(fieldErrors.tenantSlug)}
               placeholder="e.g. acme"
               value={tenantSlug}
@@ -107,7 +107,7 @@ export function ForgotPasswordPage() {
             <input
               type="email"
               className={getInputClass(Boolean(fieldErrors.email))}
-              autoComplete="email"
+              autoComplete="off"
               aria-invalid={Boolean(fieldErrors.email)}
               placeholder="user@example.com"
               value={email}
@@ -208,7 +208,7 @@ export function ResetPasswordPage() {
       <section className={card}>
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Choose a new password</h1>
         <p className="mb-6 mt-2 text-sm text-slate-600 dark:text-slate-300">Your reset link is valid for 30 minutes.</p>
-        <form className="space-y-4" onSubmit={submit} noValidate>
+        <form className="space-y-4" onSubmit={submit} noValidate autoComplete="off">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
               New password <span className="text-rose-500">*</span>
@@ -216,7 +216,7 @@ export function ResetPasswordPage() {
             <input
               type="password"
               className={getInputClass(Boolean(fieldErrors.password))}
-              autoComplete="new-password"
+              autoComplete="off"
               aria-invalid={Boolean(fieldErrors.password)}
               placeholder="Enter new password"
               value={password}
@@ -240,7 +240,7 @@ export function ResetPasswordPage() {
             <input
               type="password"
               className={getInputClass(Boolean(fieldErrors.confirm))}
-              autoComplete="new-password"
+              autoComplete="off"
               aria-invalid={Boolean(fieldErrors.confirm)}
               placeholder="Re-enter new password"
               value={confirm}

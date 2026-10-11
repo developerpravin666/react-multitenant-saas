@@ -6,7 +6,7 @@ export const changePasswordFields: FormFieldConfig[] = [
     name: "currentPassword",
     label: "Current password",
     type: "password",
-    autoComplete: "current-password",
+    autoComplete: "off",
     required: true,
   },
   {
@@ -14,7 +14,7 @@ export const changePasswordFields: FormFieldConfig[] = [
     name: "newPassword",
     label: "New password",
     type: "password",
-    autoComplete: "new-password",
+    autoComplete: "off",
     description: "At least 8 characters, with uppercase, lowercase, and a number.",
     required: true,
   },
@@ -23,7 +23,7 @@ export const changePasswordFields: FormFieldConfig[] = [
     name: "confirmPassword",
     label: "Confirm new password",
     type: "password",
-    autoComplete: "new-password",
+    autoComplete: "off",
     required: true,
   },
 ];

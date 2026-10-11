@@ -47,7 +47,7 @@ export function NativeInputField({
     disabled: field.disabled,
     readOnly: field.readOnly,
     placeholder: "placeholder" in field ? field.placeholder : undefined,
-    autoComplete: "autoComplete" in field ? field.autoComplete : undefined,
+    autoComplete: ("autoComplete" in field && field.autoComplete) ? field.autoComplete : "off",
     min: "min" in field ? field.min : undefined,
     max: "max" in field ? field.max : undefined,
     step: "step" in field ? field.step : undefined,

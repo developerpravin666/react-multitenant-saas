@@ -90,6 +90,7 @@ function SearchableSelect({
           aria-controls={`${id}-listbox`}
           aria-activedescendant={open && filtered[activeIndex] ? `${id}-option-${activeIndex}` : undefined}
           aria-invalid={invalid}
+          autoComplete="off"
           disabled={disabled}
           value={open ? query : selected?.label ?? ""}
           placeholder={open ? "Search options..." : placeholder}

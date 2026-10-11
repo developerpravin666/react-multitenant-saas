@@ -78,6 +78,7 @@ export function GridToolbar<TData>({
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Search all visible columns..."
+              autoComplete="off"
               className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-[var(--tenant-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
             {isLoading ? (

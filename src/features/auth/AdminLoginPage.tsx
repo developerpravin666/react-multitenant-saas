@@ -94,7 +94,7 @@ export function AdminLoginPage() {
           </div>
         )}
 
-        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate autoComplete="off">
           <div>
             <label
               htmlFor="admin-username"
@@ -109,7 +109,7 @@ export function AdminLoginPage() {
               <input
                 id="admin-username"
                 type="text"
-                autoComplete="username"
+                autoComplete="off"
                 value={username}
                 onChange={(e) => {
                   setUsername(e.target.value);
@@ -144,7 +144,7 @@ export function AdminLoginPage() {
               <input
                 id="admin-password"
                 type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
+                autoComplete="off"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);

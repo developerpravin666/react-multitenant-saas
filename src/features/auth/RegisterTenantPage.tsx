@@ -277,7 +277,7 @@ export function RegisterTenantPage() {
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8 dark:border-slate-800 dark:bg-slate-900">
-          <form onSubmit={handleSubmit} noValidate className="space-y-6">
+          <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-6">
             {error && (
               <div
                 role="alert"
@@ -502,7 +502,7 @@ export function RegisterTenantPage() {
                   </label>
                   <input
                     type="password"
-                    autoComplete="new-password"
+                    autoComplete="off"
                     aria-invalid={Boolean(fieldErrors.password)}
                     placeholder="Min. 8 characters"
                     value={password}
@@ -529,7 +529,7 @@ export function RegisterTenantPage() {
                   </label>
                   <input
                     type="password"
-                    autoComplete="new-password"
+                    autoComplete="off"
                     aria-invalid={Boolean(fieldErrors.confirmPassword)}
                     placeholder="Re-enter password"
                     value={confirmPassword}
