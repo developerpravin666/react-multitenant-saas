@@ -302,14 +302,13 @@ export function RegisterTenantPage() {
                   <input
                     type="text"
                     aria-invalid={Boolean(fieldErrors.name)}
-                    placeholder="e.g. Siddhi Electronics & Mobiles"
+                    placeholder="e.g. ABC Electronics"
                     value={name}
                     onChange={(e) => handleNameChange(e.target.value)}
-                    className={`mt-1.5 w-full rounded-xl border ${
-                      fieldErrors.name
-                        ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:focus:ring-rose-950"
-                        : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-blue-950"
-                    } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
+                    className={`mt-1.5 w-full rounded-xl border ${fieldErrors.name
+                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:focus:ring-rose-950"
+                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-blue-950"
+                      } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
                   />
                   {fieldErrors.name && (
                     <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -325,14 +324,13 @@ export function RegisterTenantPage() {
                   <input
                     type="text"
                     aria-invalid={Boolean(fieldErrors.slug)}
-                    placeholder="e.g. siddhi-electronics"
+                    placeholder="e.g. abc-electronics"
                     value={slug}
                     onChange={(e) => handleSlugChange(e.target.value)}
-                    className={`mt-1.5 w-full rounded-xl border ${
-                      fieldErrors.slug
-                        ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:focus:ring-rose-950"
-                        : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-blue-950"
-                    } px-3.5 py-2.5 text-sm font-mono text-slate-900 outline-none transition dark:text-white`}
+                    className={`mt-1.5 w-full rounded-xl border ${fieldErrors.slug
+                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:focus:ring-rose-950"
+                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-blue-950"
+                      } px-3.5 py-2.5 text-sm font-mono text-slate-900 outline-none transition dark:text-white`}
                   />
                   {fieldErrors.slug ? (
                     <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -358,11 +356,10 @@ export function RegisterTenantPage() {
                       setStateCode(e.target.value);
                       clearFieldError("stateCode");
                     }}
-                    className={`mt-1.5 w-full rounded-xl border ${
-                      fieldErrors.stateCode
-                        ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
-                        : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
-                    } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
+                    className={`mt-1.5 w-full rounded-xl border ${fieldErrors.stateCode
+                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
+                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
+                      } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
                   >
                     {GST_STATES.map((s) => (
                       <option key={s.code} value={s.code}>
@@ -388,11 +385,10 @@ export function RegisterTenantPage() {
                     placeholder="e.g. 27AABCU9603R1ZM"
                     value={gstin}
                     onChange={(e) => handleGstinChange(e.target.value)}
-                    className={`mt-1.5 w-full rounded-xl border ${
-                      fieldErrors.gstin
-                        ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
-                        : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
-                    } px-3.5 py-2.5 text-sm font-mono uppercase text-slate-900 outline-none transition dark:text-white`}
+                    className={`mt-1.5 w-full rounded-xl border ${fieldErrors.gstin
+                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
+                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
+                      } px-3.5 py-2.5 text-sm font-mono uppercase text-slate-900 outline-none transition dark:text-white`}
                   />
                   {fieldErrors.gstin && (
                     <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -408,7 +404,7 @@ export function RegisterTenantPage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Shop 12, Market Yard, Pune - 411037"
+                  placeholder="e.g. Shop 123, Main Road, Indore - 452001"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -430,7 +426,7 @@ export function RegisterTenantPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Pravin Kumar"
+                    placeholder="e.g. ABC XYZ"
                     value={ownerName}
                     onChange={(e) => setOwnerName(e.target.value)}
                     className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -451,11 +447,10 @@ export function RegisterTenantPage() {
                       setOwnerMobile(e.target.value.replace(/\D/g, ""));
                       clearFieldError("ownerMobile");
                     }}
-                    className={`mt-1.5 w-full rounded-xl border ${
-                      fieldErrors.ownerMobile
-                        ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
-                        : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
-                    } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
+                    className={`mt-1.5 w-full rounded-xl border ${fieldErrors.ownerMobile
+                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
+                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
+                      } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
                   />
                   {fieldErrors.ownerMobile && (
                     <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -472,17 +467,16 @@ export function RegisterTenantPage() {
                 <input
                   type="email"
                   aria-invalid={Boolean(fieldErrors.ownerEmail)}
-                  placeholder="owner@siddhimobile.in"
+                  placeholder="owner@abcelectronics.in"
                   value={ownerEmail}
                   onChange={(e) => {
                     setOwnerEmail(e.target.value);
                     clearFieldError("ownerEmail");
                   }}
-                  className={`mt-1.5 w-full rounded-xl border ${
-                    fieldErrors.ownerEmail
-                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
-                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
-                  } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
+                  className={`mt-1.5 w-full rounded-xl border ${fieldErrors.ownerEmail
+                    ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
+                    : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
+                    } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
                 />
                 {fieldErrors.ownerEmail ? (
                   <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -510,11 +504,10 @@ export function RegisterTenantPage() {
                       setPassword(e.target.value);
                       clearFieldError("password");
                     }}
-                    className={`mt-1.5 w-full rounded-xl border ${
-                      fieldErrors.password
-                        ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
-                        : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
-                    } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
+                    className={`mt-1.5 w-full rounded-xl border ${fieldErrors.password
+                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
+                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
+                      } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
                   />
                   {fieldErrors.password && (
                     <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -537,11 +530,10 @@ export function RegisterTenantPage() {
                       setConfirmPassword(e.target.value);
                       clearFieldError("confirmPassword");
                     }}
-                    className={`mt-1.5 w-full rounded-xl border ${
-                      fieldErrors.confirmPassword
-                        ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
-                        : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
-                    } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
+                    className={`mt-1.5 w-full rounded-xl border ${fieldErrors.confirmPassword
+                      ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20"
+                      : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
+                      } px-3.5 py-2.5 text-sm text-slate-900 outline-none transition dark:text-white`}
                   />
                   {fieldErrors.confirmPassword && (
                     <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
