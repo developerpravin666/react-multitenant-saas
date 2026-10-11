@@ -2,7 +2,22 @@
   "$schema": "https://json.schemastore.org/staticwebapp.config.json",
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*.{png,jpg,jpeg,gif,svg,ico,css,js,webp,woff,woff2,ttf}", "/favicon.ico"]
+    "exclude": [
+      "/assets/*",
+      "*.css",
+      "*.js",
+      "*.png",
+      "*.jpg",
+      "*.jpeg",
+      "*.gif",
+      "*.svg",
+      "*.ico",
+      "*.webp",
+      "*.woff",
+      "*.woff2",
+      "*.ttf",
+      "*.json"
+    ]
   },
   "routes": [
     {
@@ -27,13 +42,7 @@
     ".json": "application/json",
     ".js": "text/javascript",
     ".css": "text/css",
+    ".woff": "font/woff",
     ".woff2": "font/woff2"
-  },
-  "responseOverrides": {
-    "404": {
-      "rewrite": "/index.html",
-      "statusCode": 200
-    }
   }
 }
-
