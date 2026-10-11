@@ -8,6 +8,9 @@ import "./styles/index.css";
 import { BrowserRouter } from "react-router-dom";
 import { ApiLoadingProvider } from "./context/ApiLoadingContext";
 import { AuthProvider } from "./features/auth/AuthContext";
+import { FeatureFlagProvider } from "./features/feature-flags/FeatureFlagContext";
+import { VoiceTypingProvider } from "./features/voice-typing/VoiceTypingContext";
+import { VoiceTypingWidget } from "./features/voice-typing/VoiceTypingWidget";
 
 /**
  * Universally enforces autocomplete="off" on all HTML controls across the entire application:
@@ -103,7 +106,12 @@ createRoot(root).render(
         <ApiLoadingProvider>
           <BrowserRouter>
             <AuthProvider>
-              <App />
+              <FeatureFlagProvider>
+                <VoiceTypingProvider>
+                  <App />
+                  <VoiceTypingWidget />
+                </VoiceTypingProvider>
+              </FeatureFlagProvider>
             </AuthProvider>
           </BrowserRouter>
         </ApiLoadingProvider>

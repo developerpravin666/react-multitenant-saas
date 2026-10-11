@@ -112,6 +112,7 @@ export const APP_ROUTES = {
     pendingApprovals: "/admin/tenants/pending",
     databaseMigrations: "/admin/database-migrations",
     systemSettings: "/admin/system-settings",
+    featureFlags: "/admin/feature-flags",
     mastersImport: "/admin/masters-import",
     login: "/admin/login",
   },

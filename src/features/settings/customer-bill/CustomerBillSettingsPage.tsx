@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
-import { Check, RotateCcw } from "lucide-react";
+import { Check, RotateCcw, Mic } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { apiClient } from "../../../services/apiClient";
+import { useVoiceTyping } from "../../voice-typing/VoiceTypingContext";
 import { CustomerBillDocument } from "../../sale/accounting/components/CustomerBillDocument";
 import { defaultCustomerBillTemplate, type CustomerBillTemplate, type PrintableSalesBill } from "../../sale/accounting/types/customerBill.types";
 import { INDIAN_GST_STATES } from "../../sale/invoices/types/salesInvoice.types";
@@ -40,6 +41,7 @@ const visibilityOptions: [keyof CustomerBillTemplate, string][] = [
 ];
 
 export function CustomerBillSettingsPage() {
+  const { isVoiceFeatureEnabled, setVoiceFeatureEnabled } = useVoiceTyping();
   const [template, setTemplate] = useState<CustomerBillTemplate>(defaultCustomerBillTemplate);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -308,6 +310,44 @@ export function CustomerBillSettingsPage() {
         <div className="min-w-0 space-y-2">
           <div className="flex items-center justify-between"><h2 className="text-base font-semibold">Live preview</h2><span className="text-xs text-slate-500">Sample data · {template.paperSize}</span></div>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-3 dark:border-slate-800 dark:bg-slate-950"><CustomerBillDocument template={template} bill={exampleBill} /></div>
+        </div>
+      </div>
+
+      {/* Voice Dictation Preference */}
+      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`grid size-9 place-items-center rounded-xl text-white ${isVoiceFeatureEnabled ? "bg-indigo-600" : "bg-slate-500"}`}>
+              <Mic className="size-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Voice Typing & Speech Dictation</h3>
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${isVoiceFeatureEnabled ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}>
+                  {isVoiceFeatureEnabled ? "Enabled" : "Disabled"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Allow billers and staff to fill in customer billing fields and product forms by voice (Alt + V).
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isVoiceFeatureEnabled}
+            onClick={() => setVoiceFeatureEnabled(!isVoiceFeatureEnabled)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+              isVoiceFeatureEnabled ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
+            }`}
+            title={isVoiceFeatureEnabled ? "Click to Disable Voice Typing" : "Click to Enable Voice Typing"}
+          >
+            <span
+              className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                isVoiceFeatureEnabled ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
         </div>
       </div>
     </section>

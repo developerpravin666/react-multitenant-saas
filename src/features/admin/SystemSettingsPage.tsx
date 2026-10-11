@@ -18,8 +18,14 @@ import {
   AlertCircle,
   Save,
   Activity,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
+import { Link } from "react-router-dom";
+import { APP_ROUTES } from "../../config/routes";
+import { useVoiceTyping } from "../voice-typing/VoiceTypingContext";
+import { useNotifications } from "../../context/NotificationContext";
 
 interface AdminSystemSettings {
   offlineMode: boolean;
@@ -75,9 +81,34 @@ interface DatabaseSwitchResult {
 }
 
 export function SystemSettingsPage() {
+  const notifications = useNotifications();
+  const {
+    isSupported: isVoiceSupported,
+    isVoiceFeatureEnabled,
+    setVoiceFeatureEnabled,
+    toggleListening,
+    isListening,
+  } = useVoiceTyping();
+  const [voiceTestInput, setVoiceTestInput] = useState("");
+
   const [settings, setSettings] = useState<AdminSystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleToggleVoiceFeature = async (enabled: boolean) => {
+    await setVoiceFeatureEnabled(enabled);
+    if (enabled) {
+      notifications.success(
+        "Voice Feature Flag Enabled",
+        "Feature flag 'voice_typing' set to Enabled and stored in PostgreSQL database."
+      );
+    } else {
+      notifications.info(
+        "Voice Feature Flag Disabled",
+        "Feature flag 'voice_typing' set to Disabled and stored in PostgreSQL database."
+      );
+    }
+  };
 
   // Database Management State
   const [dbConfig, setDbConfig] = useState<DatabaseConfigSummary | null>(null);
@@ -785,6 +816,173 @@ export function SystemSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* 2. VOICE TYPING & SPEECH DICTATION FEATURE CONTROL */}
+      {/* ========================================================================= */}
+      <div className="rounded-2xl border border-indigo-200/80 bg-white p-6 shadow-sm dark:border-indigo-900/60 dark:bg-slate-900">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div
+              className={`grid size-10 place-items-center rounded-xl text-white shadow-sm transition-colors ${
+                isVoiceFeatureEnabled ? "bg-indigo-600" : "bg-slate-500"
+              }`}
+            >
+              <Mic className="size-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Voice Typing & Speech Dictation Control
+                </h2>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                    isVoiceFeatureEnabled
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  }`}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      isVoiceFeatureEnabled ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                    }`}
+                  />
+                  {isVoiceFeatureEnabled ? "Feature Active (Enabled)" : "Feature Disabled"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-mono font-bold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                  <Database className="size-2.5" />
+                  flag: voice_typing (DB)
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Managed through the database feature flags engine (<code className="font-mono text-[11px]">tenant.feature_flags</code>).{" "}
+                <Link
+                  to={APP_ROUTES.admin.featureFlags}
+                  className="font-semibold text-indigo-600 hover:text-indigo-500 underline dark:text-indigo-400"
+                >
+                  Open Feature Flags Manager →
+                </Link>
+              </p>
+            </div>
+          </div>
+
+          {/* Admin Toggle Switch */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              {isVoiceFeatureEnabled ? "Enabled" : "Disabled"}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isVoiceFeatureEnabled}
+              onClick={() => handleToggleVoiceFeature(!isVoiceFeatureEnabled)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                isVoiceFeatureEnabled ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
+              }`}
+              title={isVoiceFeatureEnabled ? "Click to Disable Voice Typing" : "Click to Enable Voice Typing"}
+            >
+              <span
+                className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  isVoiceFeatureEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Feature status details & description */}
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3 text-xs">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-800/40 space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Browser Speech API Support
+            </span>
+            <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+              <span
+                className={`size-2 rounded-full ${
+                  isVoiceSupported ? "bg-emerald-500" : "bg-rose-500"
+                }`}
+              />
+              <span>{isVoiceSupported ? "Supported (Chrome / Edge)" : "Not Supported"}</span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Uses native browser Web Speech Recognition engine.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-800/40 space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Global Shortcut & Form Buttons
+            </span>
+            <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white font-mono">
+              Alt + V / [🎙️ Voice]
+            </div>
+            <p className="text-[11px] text-slate-500">
+              {isVoiceFeatureEnabled
+                ? "Microphone shortcuts and field triggers active."
+                : "All shortcuts and buttons disabled."}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-800/40 space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Floating Voice Assistant
+            </span>
+            <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+              {isVoiceFeatureEnabled ? "Visible bottom-right" : "Hidden"}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              {isVoiceFeatureEnabled
+                ? "Waveform, multi-language selector & transcript preview active."
+                : "Floating widget completely deactivated."}
+            </p>
+          </div>
+        </div>
+
+        {/* Live Admin Test Sandbox */}
+        <div className="mt-5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/30 p-4 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Admin Voice Typing Verification Sandbox
+              </span>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {isVoiceFeatureEnabled
+                  ? "Click into the test box below and speak or press Alt + V to verify speech dictation."
+                  : "Voice typing is currently disabled. Toggle the switch above to re-enable."}
+              </p>
+            </div>
+            {isVoiceFeatureEnabled && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold shadow-sm transition cursor-pointer ${
+                  isListening
+                    ? "bg-rose-600 text-white animate-pulse"
+                    : "bg-indigo-600 text-white hover:bg-indigo-500"
+                }`}
+              >
+                {isListening ? <MicOff className="size-3.5" /> : <Mic className="size-3.5" />}
+                <span>{isListening ? "Listening… Click to Stop" : "Test Voice Dictation"}</span>
+              </button>
+            )}
+          </div>
+          <div className="mt-3">
+            <input
+              type="text"
+              id="admin-voice-test-input"
+              value={voiceTestInput}
+              disabled={!isVoiceFeatureEnabled}
+              onChange={(e) => setVoiceTestInput(e.target.value)}
+              placeholder={
+                isVoiceFeatureEnabled
+                  ? "Click here and say: 'Samsung Galaxy S24 Ultra 256GB' or any test words..."
+                  : "Voice typing disabled by admin."
+              }
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Deployment Mode Overview */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

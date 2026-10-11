@@ -26,6 +26,7 @@ import {
   Database,
   Server,
   Clock,
+  ToggleRight,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -61,6 +62,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
     label: "System Settings",
     path: APP_ROUTES.admin.systemSettings,
     icon: Server,
+  },
+  {
+    id: "admin-feature-flags",
+    label: "Feature Flags",
+    path: APP_ROUTES.admin.featureFlags,
+    icon: ToggleRight,
   },
   {
     id: "admin-masters-import",
