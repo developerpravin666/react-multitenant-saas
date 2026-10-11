@@ -80,28 +80,22 @@ export function createProductFormConfig({
       step: 1,
       computed: {
         calculate: (values) => {
-          // Helper to catch NaN, null, and undefined values cleanly
           const safeNumber = (val: any) => {
             const num = Number(val);
             return isNaN(num) ? 0 : num;
           };
 
-          // 1. Parse all pricing inputs safely
           const purchasePrice = safeNumber(values.purchasePrice);
           const discount = safeNumber(values.discount);
           const cgst = safeNumber(values.cgst);
           const sgst = safeNumber(values.sgst);
 
-          // 2. Parse tax percent safely without letting a legitimate 0% tax trigger the fallback
           const rawTax = Number(values.tax);
           const taxPercent = (values.tax !== undefined && values.tax !== null && !isNaN(rawTax))
             ? rawTax
             : (cgst + sgst);
 
-          // 3. Prevent negative taxable amounts
           const taxableAmount = Math.max(0, purchasePrice - discount);
-
-          // 4. Calculate total and format safely to 2 decimal places
           const totalAmount = taxableAmount + taxableAmount * (taxPercent / 100);
           return safeNumber(totalAmount.toFixed(2));
         },
@@ -128,6 +122,10 @@ export function createProductFormConfig({
           return Number(cgst + sgst);
         },
       },
+    },
+    {
+      id: "isActive", name: "isActive", label: "Active Product (Available for Sale)",
+      type: "checkbox", defaultValue: true,
     },
   ];
 }

@@ -1,5 +1,13 @@
 import type { ResourceRecord } from "../../../shared/resourceApi";
 
+export interface EmiScheduleItem {
+  installmentNumber: number;
+  dueDate: string;
+  amount: number;
+  status: "Upcoming" | "Due Soon" | "Overdue" | "Paid";
+  daysRemaining?: number;
+}
+
 export interface SaleRecord extends ResourceRecord {
   billNumber: string;
   productId: string;
@@ -21,6 +29,15 @@ export interface SaleRecord extends ResourceRecord {
   sgstRate?: number;
   totalAmount?: number;
   paymentMode?: "Cash" | "Finance" | null;
+  paidAmount?: number;
+  balanceAmount?: number;
+  downPayment?: number | null;
+  numberOfEmi?: number | null;
+  emiAmount?: number | null;
+  firstInstallmentDate?: string | null;
+  financeVendorName?: string | null;
+  hasInsurance?: boolean | null;
+  insuranceAmount?: number | null;
 }
 
 export interface SaleProductOption extends ResourceRecord {
@@ -46,7 +63,3 @@ export interface CustomerLookupRecord extends ResourceRecord {
   address: string;
   email?: string | null;
 }
-
-
-// Guid Id, string BrandName, string ProductType, string ProductModel, string Variant,
-// string Color, string SerialNumber, string SerialNumber1, decimal PurchasePrice, decimal Discount);
