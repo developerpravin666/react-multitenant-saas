@@ -72,8 +72,9 @@ export const featureFlagService = {
       const current = this.getCache();
       current.flags[key] = isEnabled;
       const idx = current.items.findIndex((item) => item.key.toLowerCase() === key.toLowerCase());
-      if (idx >= 0 && res.flag) {
-        current.items[idx] = { ...current.items[idx], isEnabled, modifiedAt: res.flag.modifiedAt };
+      const existing = current.items[idx];
+      if (existing && res.flag) {
+        current.items[idx] = { ...existing, isEnabled, modifiedAt: res.flag.modifiedAt };
       } else if (res.flag) {
         current.items.push(res.flag);
       }

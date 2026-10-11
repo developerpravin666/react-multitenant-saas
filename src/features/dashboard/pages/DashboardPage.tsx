@@ -389,13 +389,13 @@ export function DashboardPage() {
           <div className="flex items-center gap-2">
             {metrics.totalReceivables > 0 && (
               <Link to={`${APP_ROUTES.sale.invoices.list}?action=multipay`}>
-                <Button size="sm" className="gap-1 text-xs">
+                <Button className="gap-1 text-xs">
                   <WalletCards size={13} /> Settle Customer Dues
                 </Button>
               </Link>
             )}
             <Link to={APP_ROUTES.taxReports}>
-              <Button size="sm" variant="secondary" className="gap-1 text-xs">
+              <Button variant="secondary" className="gap-1 text-xs">
                 <Receipt size={13} /> Review GST
               </Button>
             </Link>

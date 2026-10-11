@@ -1090,7 +1090,7 @@ export function SalesInvoiceFormPage() {
                       hsnSac: sku.hsnSac,
                       unitOfMeasure: sku.unitOfMeasure || "NOS",
                       quantity: 1,
-                      unitPrice: sku.unitCost || 0,
+                      unitPrice: 0, // The SKU summary API does not provide a selling price.
                       discount: 0,
                       taxId: defaultTax?.id,
                       cgstRate: defaultTax?.cgst ?? 0,

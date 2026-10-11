@@ -470,7 +470,7 @@ export function PartyStatementPage() {
                 </div>
               </div>
               <Link to={`${APP_ROUTES.sale.invoices.list}?action=multipay&customerId=${encodeURIComponent(statement.partyId)}`}>
-                <Button size="sm" className="gap-1.5 text-xs">
+                <Button className="gap-1.5 text-xs">
                   Collect Payment via Multi-Pay <ArrowRight size={13} />
                 </Button>
               </Link>

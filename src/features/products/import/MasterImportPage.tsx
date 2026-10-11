@@ -162,7 +162,8 @@ export function MasterImportPage({ isAdminMode = false }: { isAdminMode?: boolea
         .then((res) => {
           if (Array.isArray(res) && res.length > 0) {
             setTenants(res);
-            setSelectedTenantId(res[0].id);
+            const firstTenant = res[0];
+            if (firstTenant) setSelectedTenantId(firstTenant.id);
           }
         })
         .catch((err) => console.warn("Failed to load tenant directory", err));
@@ -191,7 +192,7 @@ export function MasterImportPage({ isAdminMode = false }: { isAdminMode?: boolea
         // Automatically select the newest batch or keep currently selected
         const currentId = selectedBatch?.id;
         const target = currentId ? batchList.find((b) => b.id === currentId) || batchList[0] : batchList[0];
-        fetchBatchDetails(target.id);
+        if (target) fetchBatchDetails(target.id);
       } else {
         setSelectedBatch(null);
       }
@@ -318,9 +319,8 @@ export function MasterImportPage({ isAdminMode = false }: { isAdminMode?: boolea
           const arrayBuffer = event.target?.result as ArrayBuffer;
           const bytes = new Uint8Array(arrayBuffer);
           let binary = "";
-          const len = bytes.byteLength;
-          for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
+          for (const byte of bytes) {
+            binary += String.fromCharCode(byte);
           }
           const base64 = window.btoa(binary);
 
