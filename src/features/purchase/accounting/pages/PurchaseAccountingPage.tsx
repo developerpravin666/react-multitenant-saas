@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
-import { History as HistoryIcon } from "lucide-react";
+import { History as HistoryIcon, Receipt } from "lucide-react";
 import { Button } from "../../../../components/ui/Button";
 import type { GridColumn } from "../../../../types/grid";
 import { DynamicGrid } from "../../../dynamic-grid/DynamicGrid";
@@ -37,7 +37,14 @@ export function PurchaseAccountingPage() {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div><h1 className="text-2xl font-semibold tracking-tight">Purchase Accounting</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Track vendor bills, payments made, and outstanding payables.</p></div>
-        <Button variant="secondary" onClick={() => navigate(`${APP_ROUTES.settings.auditLogs}?tableName=purchase_payments`)}><HistoryIcon size={16} /> Payment Audit</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => navigate(APP_ROUTES.purchase.scanBill)}>
+            <Receipt size={16} /> Scan / Upload Bill
+          </Button>
+          <Button variant="secondary" onClick={() => navigate(`${APP_ROUTES.settings.auditLogs}?tableName=purchase_payments`)}>
+            <HistoryIcon size={16} /> Payment Audit
+          </Button>
+        </div>
       </header>
       <DynamicGrid
         title="Vendor Bills"

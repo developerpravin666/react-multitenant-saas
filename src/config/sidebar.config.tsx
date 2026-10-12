@@ -164,6 +164,12 @@ export const sidebarConfiguration: NavigationItem[] = [
         icon: Boxes,
       },
       {
+        id: "purchase-scan-bill",
+        label: "Scan / Upload Bill",
+        path: APP_ROUTES.purchase.scanBill,
+        icon: Receipt,
+      },
+      {
         id: "purchase-accounting",
         label: "Bills & Payments",
         path: APP_ROUTES.purchase.accounting,

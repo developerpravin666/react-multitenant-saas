@@ -55,6 +55,7 @@ export const APP_ROUTES = {
     stock: "/purchase/stock",
     accounting: "/purchase/accounting",
     accountingPayment: "/purchase/accounting/payments",
+    scanBill: "/purchase/scan-bill",
     stockProducts: (brandId: string, modelId: string, variantId: string) =>
       `/purchase/stock/${brandId}/${modelId}/${variantId}`,
     products: {
