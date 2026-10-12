@@ -15,10 +15,33 @@ import {
   Edit2,
   X,
   Check,
-  ChevronDown
+  ChevronDown,
+  RotateCcw,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  CheckSquare
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
+
+export interface TableColumnMeta {
+  name: string;
+  dataType: string;
+  isNullable: boolean;
+}
+
+export interface TableRecordsData {
+  schema: string;
+  tableName: string;
+  primaryKeyColumn: string;
+  columns: TableColumnMeta[];
+  totalRecords: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  records: Record<string, unknown>[];
+}
 
 export interface TableItem {
   id: string;
@@ -44,6 +67,9 @@ export interface TableDashboardData {
   tables: TableItem[];
 }
 
+export const isTableProtected = (tableName: string): boolean =>
+  tableName.startsWith("__") || tableName === "table_registry";
+
 export function TableManagementDashboardPage() {
   const notifications = useNotifications();
   const notifyError = notifications.error;
@@ -62,16 +88,156 @@ export function TableManagementDashboardPage() {
   // Modals
   const [clearTableModal, setClearTableModal] = useState<TableItem | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [confirmTableName, setConfirmTableName] = useState('');
 
   const [showClearAllModal, setShowClearAllModal] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
   const [confirmClearAllText, setConfirmClearAllText] = useState("");
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [recoveries, setRecoveries] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("table-clear-recoveries") || "{}"); } catch { return {}; }
+  });
+  const [maintenance, setMaintenance] = useState<"selected" | "restore" | null>(null);
+  const [maintenanceConfirmation, setMaintenanceConfirmation] = useState("");
+  const [maintaining, setMaintaining] = useState(false);
+  useEffect(() => { setSelectedTables([]); }, [selectedSchema]);
+  const saveRecovery = (schema: string, operationId?: string) => {
+    if (!operationId) return;
+    setRecoveries(previous => {
+      const updated = { ...previous, [schema]: operationId };
+      localStorage.setItem("table-clear-recoveries", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const selectedTablesInfo = useMemo(() => {
+    if (!data?.tables || selectedTables.length === 0) return { tables: [], totalRows: 0 };
+    const items = data.tables.filter((t) => selectedTables.includes(t.tableName));
+    const totalRows = items.reduce((sum, t) => sum + t.rowCount, 0);
+    return { tables: items, totalRows };
+  }, [data, selectedTables]);
+
+  const runMaintenance = async () => {
+    const isRestore = maintenance === "restore";
+    const conf = maintenanceConfirmation.trim().toUpperCase();
+    if (isRestore) {
+      if (conf !== "RESTORE DATA" && conf !== "RESTORE") return;
+    } else {
+      if (conf !== "DELETE" && conf !== "CLEAR SELECTED TABLES" && conf !== "CONFIRM" && conf !== "DELETE SELECTED") return;
+    }
+
+    setMaintaining(true);
+    try {
+      const path = isRestore ? `/admin/tables/restore/${recoveries[selectedSchema]}` : "/admin/tables/clear-selected";
+      const result = await apiClient.post<{ operationId?: string; message?: string }>(
+        `${path}?schema=${encodeURIComponent(selectedSchema)}`,
+        { tables: selectedTables, confirmation: conf }
+      );
+      if (isRestore) {
+        const updated = { ...recoveries }; delete updated[selectedSchema];
+        setRecoveries(updated); localStorage.setItem("table-clear-recoveries", JSON.stringify(updated));
+        notifications.success("Data Restored", "Previously cleared table records have been restored.");
+      } else {
+        saveRecovery(selectedSchema, result.operationId);
+        notifications.success("Tables Cleared", `Data deleted from ${selectedTables.length} selected table(s).`);
+      }
+      setMaintenance(null);
+      setSelectedTables([]);
+      await fetchTables(selectedSchema);
+    } catch (error) {
+      notifications.error("Operation Failed", error instanceof Error ? error.message : "Operation failed");
+    } finally {
+      setMaintaining(false);
+    }
+  };
 
   const [editingTable, setEditingTable] = useState<TableItem | null>(null);
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Table Records Viewer & Deletion state
+  const [viewingRecordsTable, setViewingRecordsTable] = useState<TableItem | null>(null);
+  const [recordsData, setRecordsData] = useState<TableRecordsData | null>(null);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+  const [recordsPage, setRecordsPage] = useState(1);
+  const [recordsPageSize, setRecordsPageSize] = useState(25);
+  const [recordsSearch, setRecordsSearch] = useState("");
+  const [selectedRecordKeys, setSelectedRecordKeys] = useState<string[]>([]);
+  const [deletingRecords, setDeletingRecords] = useState(false);
+  const [confirmDeleteRecordModal, setConfirmDeleteRecordModal] = useState<{
+    singleKey?: string;
+    keys: string[];
+  } | null>(null);
+
+  const fetchTableRecords = useCallback(async (table: TableItem, page = 1, pageSize = 25, search = "") => {
+    setLoadingRecords(true);
+    try {
+      const queryParams = new URLSearchParams({
+        schema: table.schemaName,
+        page: page.toString(),
+        pageSize: pageSize.toString(),
+      });
+      if (search.trim()) queryParams.set("search", search.trim());
+
+      const res = await apiClient.get<TableRecordsData>(
+        `/admin/tables/${encodeURIComponent(table.tableName)}/records?${queryParams.toString()}`
+      );
+      setRecordsData(res);
+      setRecordsPage(res.page);
+      setRecordsPageSize(res.pageSize);
+      setSelectedRecordKeys([]);
+    } catch (err) {
+      notifications.error("Failed to load records", err instanceof Error ? err.message : "Error loading records");
+    } finally {
+      setLoadingRecords(false);
+    }
+  }, [notifications]);
+
+  const handleDeleteRecords = async (keysToDelete: string[]) => {
+    if (!viewingRecordsTable || !recordsData || keysToDelete.length === 0) return;
+    setDeletingRecords(true);
+    try {
+      const res = await apiClient.post<{ success: boolean; deletedCount: number; message: string }>(
+        `/admin/tables/${encodeURIComponent(viewingRecordsTable.tableName)}/delete-records?schema=${encodeURIComponent(viewingRecordsTable.schemaName)}`,
+        {
+          keyColumn: recordsData.primaryKeyColumn,
+          recordKeys: keysToDelete,
+        }
+      );
+
+      notifications.success("Records Deleted", res.message || `${res.deletedCount} record(s) deleted.`);
+      setConfirmDeleteRecordModal(null);
+      setSelectedRecordKeys([]);
+
+      // Update rowCount in the main dashboard tables list
+      setData((prev) => {
+        if (!prev) return null;
+        const updated = prev.tables.map((t) =>
+          t.tableName === viewingRecordsTable.tableName
+            ? { ...t, rowCount: Math.max(0, t.rowCount - res.deletedCount) }
+            : t
+        );
+        const newDataRecords = updated
+          .filter((t) => t.tableType === "Data")
+          .reduce((sum, t) => sum + t.rowCount, 0);
+
+        return {
+          ...prev,
+          totalDataRecords: newDataRecords,
+          tables: updated,
+        };
+      });
+
+      // Reload records in current modal
+      await fetchTableRecords(viewingRecordsTable, recordsPage, recordsPageSize, recordsSearch);
+    } catch (err) {
+      notifications.error("Delete Failed", err instanceof Error ? err.message : "Failed to delete record(s)");
+    } finally {
+      setDeletingRecords(false);
+    }
+  };
 
   const fetchTables = useCallback(async (schemaToLoad?: string) => {
     setLoading(true);
@@ -144,11 +310,11 @@ export function TableManagementDashboardPage() {
   };
 
   const handleClearSingleTable = async () => {
-    if (!clearTableModal) return;
+    if (!clearTableModal || (clearTableModal.tableType === "Master" && confirmTableName !== clearTableModal.tableName)) return;
     setClearing(true);
     try {
-      const query = selectedSchema ? `?schema=${encodeURIComponent(selectedSchema)}` : "";
-      await apiClient.post(`/admin/tables/${encodeURIComponent(clearTableModal.tableName)}/clear${query}`, {});
+      const result = await apiClient.post<{ operationId?: string }>(`/admin/tables/${encodeURIComponent(clearTableModal.tableName)}/clear?schema=${encodeURIComponent(clearTableModal.schemaName)}`, { confirmTableName });
+      saveRecovery(clearTableModal.schemaName, result.operationId);
 
       notifications.success(
         "Data Cleared",
@@ -172,6 +338,7 @@ export function TableManagementDashboardPage() {
       });
 
       setClearTableModal(null);
+      await fetchTables(selectedSchema);
     } catch (err) {
       notifications.error("Clear Failed", err instanceof Error ? err.message : "Failed to clear table data");
     } finally {
@@ -180,17 +347,22 @@ export function TableManagementDashboardPage() {
   };
 
   const handleClearAllData = async () => {
-    if (confirmClearAllText.trim().toUpperCase() !== "CLEAR DATA") {
-      notifications.error("Confirmation Required", "Please type 'CLEAR DATA' to confirm wiping all transactional data.");
+    const conf = confirmClearAllText.trim().toUpperCase();
+    if (conf !== "CLEAR ALL TABLES" && conf !== "DELETE ALL" && conf !== "DELETE") {
+      notifications.error("Confirmation Required", "Please type 'DELETE' or 'CLEAR ALL TABLES' to confirm wiping records.");
       return;
     }
 
     setClearingAll(true);
     try {
       const query = selectedSchema ? `?schema=${encodeURIComponent(selectedSchema)}` : "";
-      const res = await apiClient.post<{ clearedCount: number; message: string }>(`/admin/tables/clear-all-data${query}`, {});
+      const res = await apiClient.post<{ clearedCount: number; message: string; operationId?: string }>(
+        `/admin/tables/clear-all-data${query}`,
+        { confirmation: conf }
+      );
+      saveRecovery(selectedSchema, res.operationId);
 
-      notifications.success("All Data Tables Cleared", res.message || "All transactional data cleared. Master tables preserved.");
+      notifications.success("All Tables Cleared", res.message || "All Master and Data records cleared.");
       setShowClearAllModal(false);
       setConfirmClearAllText("");
       await fetchTables(selectedSchema);
@@ -269,6 +441,39 @@ export function TableManagementDashboardPage() {
     });
   }, [data, search, typeFilter, categoryFilter]);
 
+  // Selectable tables (excluding protected system tables)
+  const selectableTables = useMemo(
+    () => filteredTables.filter((t) => !isTableProtected(t.tableName)),
+    [filteredTables]
+  );
+
+  const allSelectableChecked = useMemo(
+    () => selectableTables.length > 0 && selectableTables.every((t) => selectedTables.includes(t.tableName)),
+    [selectableTables, selectedTables]
+  );
+
+  const someSelectableChecked = useMemo(
+    () => selectableTables.some((t) => selectedTables.includes(t.tableName)),
+    [selectableTables, selectedTables]
+  );
+
+  const handleToggleAll = () => {
+    if (allSelectableChecked) {
+      const selectableNames = new Set(selectableTables.map((t) => t.tableName));
+      setSelectedTables((prev) => prev.filter((name) => !selectableNames.has(name)));
+    } else {
+      const selectableNames = selectableTables.map((t) => t.tableName);
+      setSelectedTables((prev) => Array.from(new Set([...prev, ...selectableNames])));
+    }
+  };
+
+  const handleToggleRow = (tableName: string) => {
+    if (isTableProtected(tableName)) return;
+    setSelectedTables((prev) =>
+      prev.includes(tableName) ? prev.filter((name) => name !== tableName) : [...prev, tableName]
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -283,7 +488,7 @@ export function TableManagementDashboardPage() {
                 Database Tables & Classification
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Categorize Master vs Data tables. Safely clear transactional data while safeguarding Master reference catalogs.
+                Classify tables and clear their records. Master tables require explicit confirmation.
               </p>
             </div>
           </div>
@@ -319,17 +524,39 @@ export function TableManagementDashboardPage() {
             {syncing ? "Scanning DB…" : "Scan & Sync DB"}
           </button>
 
-          {/* Clear All Data Tables Button */}
+          {/* Selective Delete Button */}
+          {selectedTables.length > 0 && (
+            <button
+              onClick={() => { setMaintenanceConfirmation(""); setMaintenance("selected"); }}
+              className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-700 animate-pulse"
+            >
+              <Trash2 className="size-3.5" />
+              <span>Delete Selected ({selectedTables.length})</span>
+            </button>
+          )}
+
+          {/* Revert Last Clear Button */}
+          <button
+            disabled={loading || !recoveries[selectedSchema]}
+            onClick={() => { setMaintenanceConfirmation(""); setMaintenance("restore"); }}
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100 disabled:opacity-40 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+            title={recoveries[selectedSchema] ? "Restore tables from the last clear snapshot" : "No recent clear snapshot to restore"}
+          >
+            <RotateCcw className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Revert Last Clear</span>
+          </button>
+
+          {/* Delete All Table Records Button */}
           <button
             onClick={() => {
               setConfirmClearAllText("");
               setShowClearAllModal(true);
             }}
-            disabled={loading || (data?.dataTables ?? 0) === 0}
+            disabled={loading || (data?.tables.filter((table) => !isTableProtected(table.tableName)).length ?? 0) === 0}
             className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm transition hover:bg-red-100 disabled:opacity-50 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50"
           >
             <Trash2 className="size-3.5" />
-            Clear All Data Tables
+            <span>Delete All Table Records</span>
           </button>
         </div>
       </div>
@@ -353,7 +580,7 @@ export function TableManagementDashboardPage() {
         {/* Master Tables */}
         <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/50 to-white p-4 shadow-sm dark:border-indigo-950 dark:from-indigo-950/20 dark:to-slate-900">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">Master Tables (Protected)</p>
+            <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">Master Tables</p>
             <ShieldCheck className="size-5 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
@@ -374,7 +601,7 @@ export function TableManagementDashboardPage() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-              {loading ? "…" : data?.dataTables ?? 0}
+              {loading ? "…" : data?.tables.filter((table) => !isTableProtected(table.tableName)).length ?? 0}
             </span>
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
               Transactional
@@ -403,8 +630,8 @@ export function TableManagementDashboardPage() {
         <div>
           <p className="font-semibold">How Table Types Work:</p>
           <p className="mt-1 leading-relaxed text-blue-800 dark:text-blue-300">
-            <strong>Master Tables</strong> (e.g., Brands, Variants, Taxes, Store Settings, Users) contain core catalog & configuration references and are strictly locked against data deletion. 
-            <strong> Data Tables</strong> (e.g., Sold Products, Invoices, Payments, Customers, Audit Logs) contain transactional history and can be cleared whenever you want to reset demo or cutover test data while leaving all your Master catalogs intact.
+            <strong>Master Tables</strong> contain catalog and configuration records. Clear them individually by confirming the exact table name. Related tables may also be cleared by database cascade rules.
+            <strong> Data Tables</strong> (e.g., Sold Products, Invoices, Payments, Customers, Audit Logs) contain transactional history. Clear All Tables removes records from both table types.
           </p>
         </div>
       </div>
@@ -460,13 +687,117 @@ export function TableManagementDashboardPage() {
         </div>
       </div>
 
+      {/* Active Bulk Selection Bar */}
+      {selectedTables.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50/90 p-3.5 shadow-sm dark:border-red-900/60 dark:bg-red-950/40">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="grid size-7 place-items-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/60 dark:text-red-300">
+                <CheckSquare className="size-4" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-red-900 dark:text-red-100">
+                  {selectedTables.length} {selectedTables.length === 1 ? "table" : "tables"} selected
+                </span>
+                <span className="ml-2 text-xs text-red-700 dark:text-red-300">
+                  ({selectedTablesInfo.totalRows.toLocaleString()} total live records)
+                </span>
+              </div>
+            </div>
+            <div className="hidden sm:block h-4 w-px bg-red-200 dark:bg-red-800" />
+            <button
+              type="button"
+              onClick={() => {
+                const visibleDeletable = selectableTables.map((t) => t.tableName);
+                setSelectedTables((prev) => Array.from(new Set([...prev, ...visibleDeletable])));
+              }}
+              className="text-xs font-semibold text-red-700 hover:underline dark:text-red-300"
+            >
+              Select All Visible ({selectableTables.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const allDeletable = (data?.tables || [])
+                  .filter((t) => !isTableProtected(t.tableName))
+                  .map((t) => t.tableName);
+                setSelectedTables(allDeletable);
+              }}
+              className="text-xs font-semibold text-red-700 hover:underline dark:text-red-300"
+            >
+              Select All in Schema ({(data?.tables || []).filter((t) => !isTableProtected(t.tableName)).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTables([])}
+              className="text-xs font-medium text-slate-600 hover:underline dark:text-slate-400"
+            >
+              Deselect All
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMaintenanceConfirmation("");
+              setMaintenance("selected");
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-red-700 hover:shadow-lg"
+          >
+            <Trash2 className="size-3.5" />
+            <span>Delete Data from Selected ({selectedTables.length}) Tables</span>
+          </button>
+        </div>
+      )}
+
       {/* Tables Grid */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
               <tr>
-                <th className="px-4 py-3">Table Identifier</th>
+                <th className="w-12 px-4 py-3 text-center">
+                  <label className="inline-flex cursor-pointer items-center justify-center p-1">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible tables"
+                      checked={allSelectableChecked}
+                      ref={(el) => {
+                        if (el) {
+                          el.indeterminate = !allSelectableChecked && someSelectableChecked;
+                        }
+                      }}
+                      onChange={handleToggleAll}
+                      className="size-4 cursor-pointer rounded border-slate-300 text-red-600 accent-red-600 focus:ring-red-500 dark:border-slate-700 dark:bg-slate-800"
+                    />
+                  </label>
+                </th>
+                <th className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <span>Table Identifier</span>
+                      {selectedTables.length > 0 && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                          {selectedTables.length} selected
+                        </span>
+                      )}
+                    </div>
+                    {selectedTables.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMaintenanceConfirmation("");
+                          setMaintenance("selected");
+                        }}
+                        className="inline-flex items-center gap-1 rounded bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-700 active:scale-95 animate-pulse"
+                        title="Delete records from selected tables"
+                      >
+                        <Trash2 className="size-3" />
+                        <span>Delete ({selectedTables.length})</span>
+                      </button>
+                    )}
+                  </div>
+                </th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3 text-right">Row Count</th>
                 <th className="px-4 py-3">Table Type</th>
@@ -477,14 +808,14 @@ export function TableManagementDashboardPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={7} className="py-12 text-center text-slate-500">
                     <RefreshCw className="mx-auto size-6 animate-spin text-indigo-500" />
                     <p className="mt-2 text-xs">Loading database table registry…</p>
                   </td>
                 </tr>
               ) : filteredTables.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={7} className="py-12 text-center text-slate-500">
                     <Database className="mx-auto size-8 text-slate-300 dark:text-slate-700" />
                     <p className="mt-2 font-medium text-slate-700 dark:text-slate-300">No tables match your filter criteria.</p>
                     <p className="text-xs text-slate-400">Try clearing the search or category filters.</p>
@@ -494,19 +825,86 @@ export function TableManagementDashboardPage() {
                 filteredTables.map((tbl) => {
                   const isMaster = tbl.tableType === "Master";
                   const isBusy = updatingTable === tbl.tableName;
+                  const isSelected = selectedTables.includes(tbl.tableName);
+                  const isProtected = isTableProtected(tbl.tableName);
 
                   return (
                     <tr
                       key={tbl.id}
-                      className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                      className={`transition-colors ${
+                        isSelected
+                          ? "bg-red-50/60 dark:bg-red-950/20"
+                          : "hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                      }`}
                     >
-                      {/* Table Name */}
+                      {/* Checkbox */}
+                      <td
+                        className="w-12 px-4 py-3 text-center"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleRow(tbl.tableName);
+                        }}
+                      >
+                        <label
+                          className="inline-flex cursor-pointer items-center justify-center p-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${tbl.tableName}`}
+                            disabled={isProtected}
+                            checked={isSelected}
+                            onChange={() => handleToggleRow(tbl.tableName)}
+                            className="size-4 cursor-pointer rounded border-slate-300 text-red-600 accent-red-600 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-30 dark:border-slate-700 dark:bg-slate-800"
+                          />
+                        </label>
+                      </td>
+
+                      {/* Table Identifier */}
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900 dark:text-white">
-                          {tbl.displayName}
-                        </div>
-                        <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                          {tbl.schemaName}.<span className="font-semibold text-slate-700 dark:text-slate-300">{tbl.tableName}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <div className="font-semibold text-slate-900 dark:text-white">
+                              {tbl.displayName}
+                            </div>
+                            <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                              {tbl.schemaName}.<span className="font-semibold text-slate-700 dark:text-slate-300">{tbl.tableName}</span>
+                            </div>
+                          </div>
+                          {!isProtected && (
+                            <div className="flex items-center gap-1.5">
+                              {isSelected ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMaintenanceConfirmation("");
+                                    setMaintenance("selected");
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-700 active:scale-95"
+                                  title={`Delete data from selected tables (including ${tbl.tableName})`}
+                                >
+                                  <Trash2 className="size-3 text-white" />
+                                  <span>Delete Selected ({selectedTables.length})</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedTables([tbl.tableName]);
+                                    setMaintenanceConfirmation("");
+                                    setMaintenance("selected");
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-50/70 px-2 py-0.5 text-[10px] font-semibold text-red-600 transition hover:bg-red-100 hover:text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/60"
+                                  title={`Select and delete records from ${tbl.tableName}`}
+                                >
+                                  <Trash2 className="size-3 text-red-600" />
+                                  <span>Delete</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
 
@@ -547,7 +945,7 @@ export function TableManagementDashboardPage() {
                                 ? "bg-indigo-600 text-white shadow-sm"
                                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
                             }`}
-                            title={isMaster ? "Protected Master Table" : "Switch to Master Table"}
+                            title={isMaster ? "Master Table" : "Switch to Master Table"}
                           >
                             <ShieldCheck className="size-3" />
                             Master
@@ -596,11 +994,26 @@ export function TableManagementDashboardPage() {
                             <Edit2 className="size-3.5" />
                           </button>
 
+                          {/* View & Delete Records */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewingRecordsTable(tbl);
+                              setRecordsSearch("");
+                              void fetchTableRecords(tbl, 1, recordsPageSize, "");
+                            }}
+                            className="flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50/70 px-2 py-1 text-[11px] font-medium text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-900/40 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
+                            title="View and delete specific table records"
+                          >
+                            <Eye className="size-3" />
+                            <span>Records</span>
+                          </button>
+
                           {/* Clear Table Action */}
-                          {isMaster ? (
+                          {tbl.isSystem || tbl.tableName.startsWith("__") ? (
                             <span
                               className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400"
-                              title="Master table data is protected. Switch type to Data if you want to clear."
+                              title="System table data is protected."
                             >
                               <ShieldCheck className="size-3 text-indigo-400" />
                               Protected
@@ -608,13 +1021,13 @@ export function TableManagementDashboardPage() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setClearTableModal(tbl)}
+                              onClick={() => { setConfirmTableName(""); setClearTableModal(tbl); }}
                               disabled={tbl.rowCount === 0}
                               className="flex items-center gap-1 rounded border border-red-200 bg-red-50/70 px-2 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-100 disabled:opacity-30 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-900/40"
-                              title="Clear table data"
+                              title="Delete all records from this table"
                             >
                               <Trash2 className="size-3" />
-                              Clear Data
+                              <span>Clear Table</span>
                             </button>
                           )}
                         </div>
@@ -628,7 +1041,138 @@ export function TableManagementDashboardPage() {
         </div>
       </div>
 
-      {/* MODAL 1: Confirm Clear Single Table */}
+      {/* MODAL 0: Maintenance Modal (Clear Selected or Restore) */}
+      {maintenance && (() => {
+        const isRestore = maintenance === "restore";
+        const conf = maintenanceConfirmation.trim().toUpperCase();
+        const isConfValid = isRestore
+          ? conf === "RESTORE DATA" || conf === "RESTORE"
+          : conf === "DELETE" || conf === "CLEAR SELECTED TABLES" || conf === "CONFIRM" || conf === "DELETE SELECTED";
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={isRestore ? "Restore cleared records" : "Delete data from selected tables"}
+              className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`rounded-full p-2.5 ${
+                    isRestore
+                      ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+                  }`}
+                >
+                  {isRestore ? <RotateCcw className="size-6" /> : <AlertTriangle className="size-6" />}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                    {isRestore ? "Restore Cleared Records?" : `Delete Data from ${selectedTables.length} Selected Tables?`}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Target Schema: <code className="font-mono font-semibold">{selectedSchema}</code>
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                <p>
+                  {isRestore
+                    ? "This will restore the most recent table truncation snapshot, including any dependent tables. Restore is blocked if affected tables have since received new records or schema modifications."
+                    : `You are about to permanently delete all records from ${selectedTables.length} selected table(s). Dependent tables linked via foreign keys will also be truncated to preserve integrity. A point-in-time recovery snapshot is automatically created.`}
+                </p>
+
+                {!isRestore && selectedTablesInfo.tables.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
+                      <span>Selected Tables to Wipe:</span>
+                      <span className="font-mono text-red-600 dark:text-red-400">
+                        Total {selectedTablesInfo.totalRows.toLocaleString()} records
+                      </span>
+                    </div>
+                    <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-800/40">
+                      {selectedTablesInfo.tables.map((t) => (
+                        <div key={t.tableName} className="flex items-center justify-between py-1.5 px-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-900 dark:text-white">{t.displayName}</span>
+                            <span className="font-mono text-[10px] text-slate-400">({t.tableName})</span>
+                            <span
+                              className={`rounded px-1.5 py-0.2 text-[9px] font-semibold ${
+                                t.tableType === "Master"
+                                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300"
+                                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300"
+                              }`}
+                            >
+                              {t.tableType}
+                            </span>
+                          </div>
+                          <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
+                            {t.rowCount.toLocaleString()} rows
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Type <span className="font-mono font-bold text-red-600">{isRestore ? "RESTORE" : "DELETE"}</span> to confirm:
+                  </label>
+                  <input
+                    aria-label="Maintenance confirmation"
+                    type="text"
+                    value={maintenanceConfirmation}
+                    onChange={(event) => setMaintenanceConfirmation(event.target.value)}
+                    placeholder={isRestore ? "RESTORE" : "DELETE"}
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono uppercase tracking-wider text-slate-900 outline-none focus:border-red-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={maintaining}
+                  onClick={() => setMaintenance(null)}
+                  className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={maintaining || !isConfValid}
+                  onClick={() => void runMaintenance()}
+                  className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white transition disabled:opacity-40 ${
+                    isRestore
+                      ? "bg-indigo-600 hover:bg-indigo-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  {maintaining ? (
+                    <>
+                      <RefreshCw className="size-3.5 animate-spin" />
+                      <span>Processing…</span>
+                    </>
+                  ) : isRestore ? (
+                    <>
+                      <RotateCcw className="size-3.5" />
+                      <span>Confirm Restore</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="size-3.5" />
+                      <span>Confirm Delete Selected ({selectedTables.length})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {clearTableModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-6 shadow-xl dark:border-red-900/50 dark:bg-slate-900">
@@ -638,7 +1182,7 @@ export function TableManagementDashboardPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Clear Data Table?
+                  Clear {clearTableModal.tableType} Table?
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Table: <code className="font-semibold text-red-600 dark:text-red-400">{clearTableModal.tableName}</code>
@@ -647,13 +1191,22 @@ export function TableManagementDashboardPage() {
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-              Are you sure you want to permanently delete all{" "}
+              Are you sure you want to delete all{" "}
               <strong>{clearTableModal.rowCount.toLocaleString()}</strong> records from{" "}
               <strong>{clearTableModal.displayName}</strong>?
             </p>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              This action cannot be undone. All Master tables and catalogs will remain unaffected.
+              {clearTableModal.tableType === "Master"
+                ? "Master and related records will be removed. A recovery copy is saved for Revert Last Clear."
+                : "Related transactional tables may also be cleared. A recovery copy is saved for Revert Last Clear."}
             </p>
+            {clearTableModal.tableType === "Master" && (
+              <label className="mt-4 block text-xs text-slate-600 dark:text-slate-300">
+                Type the exact table name to confirm
+                <input value={confirmTableName} onChange={(event) => setConfirmTableName(event.target.value)}
+                  autoComplete="off" className="mt-2 w-full rounded border border-red-200 p-2 dark:bg-slate-800" />
+              </label>
+            )}
 
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
@@ -667,7 +1220,7 @@ export function TableManagementDashboardPage() {
               <button
                 type="button"
                 onClick={handleClearSingleTable}
-                disabled={clearing}
+                disabled={clearing || (clearTableModal.tableType === "Master" && confirmTableName !== clearTableModal.tableName)}
                 className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
               >
                 {clearing ? (
@@ -697,44 +1250,34 @@ export function TableManagementDashboardPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Clear All Data Tables in Schema '{selectedSchema}'?
+                  Clear All Tables in Schema '{selectedSchema}'?
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Transactional reset for testing / cutover
+                  Deletes Master catalogs and transactional records
                 </p>
               </div>
             </div>
 
             <div className="mt-4 space-y-3 text-xs">
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                <p className="font-semibold flex items-center gap-1.5">
-                  <ShieldCheck className="size-4 text-emerald-600" />
-                  Protected Master Tables ({data?.masterTables ?? 0}):
-                </p>
-                <p className="mt-1 text-[11px] text-emerald-800 dark:text-emerald-300">
-                  Brands, Variants, Colors, Product Models, Taxes, Bill Settings, Users and Chart of Accounts will <strong>NEVER</strong> be touched.
-                </p>
-              </div>
-
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
                 <p className="font-semibold flex items-center gap-1.5">
                   <Trash2 className="size-4 text-red-600" />
-                  Tables to be Wiped ({data?.dataTables ?? 0}):
+                  Tables to be Wiped ({data?.tables.filter((table) => !isTableProtected(table.tableName)).length ?? 0}):
                 </p>
                 <p className="mt-1 text-[11px] text-red-800 dark:text-red-300">
-                  Sales products, invoices, line items, customer ledgers, payments, advances, and journal transactions will be wiped.
+                  Both Master and Data tables will be wiped, including brands, models, taxes, users, invoices and payments. Related tables may also be cleared. Internal system tables are excluded.
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-                  Type <span className="font-mono font-bold text-red-600">CLEAR DATA</span> to confirm:
+                  Type <span className="font-mono font-bold text-red-600">DELETE</span> or <span className="font-mono font-bold text-red-600">CLEAR ALL TABLES</span> to confirm:
                 </label>
                 <input
                   type="text"
                   value={confirmClearAllText}
                   onChange={(e) => setConfirmClearAllText(e.target.value)}
-                  placeholder="CLEAR DATA"
+                  placeholder="DELETE"
                   className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono uppercase tracking-wider text-slate-900 outline-none focus:border-red-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -752,7 +1295,7 @@ export function TableManagementDashboardPage() {
               <button
                 type="button"
                 onClick={handleClearAllData}
-                disabled={confirmClearAllText.trim().toUpperCase() !== "CLEAR DATA" || clearingAll}
+                disabled={!["CLEAR ALL TABLES", "DELETE ALL", "DELETE"].includes(confirmClearAllText.trim().toUpperCase()) || clearingAll}
                 className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-red-700 disabled:opacity-40"
               >
                 {clearingAll ? (
@@ -763,7 +1306,7 @@ export function TableManagementDashboardPage() {
                 ) : (
                   <>
                     <Trash2 className="size-3.5" />
-                    Confirm Wiping All Data Tables
+                    Confirm Delete All Records
                   </>
                 )}
               </button>
@@ -861,7 +1404,342 @@ export function TableManagementDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL 4: Table Records Viewer & Row Deletion */}
+      {viewingRecordsTable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="flex h-[90vh] w-full max-w-6xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-indigo-100 p-2 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                  <Database className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      {viewingRecordsTable.displayName}
+                    </h3>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        viewingRecordsTable.tableType === "Master"
+                          ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300"
+                          : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300"
+                      }`}
+                    >
+                      {viewingRecordsTable.tableType} Table
+                    </span>
+                  </div>
+                  <p className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                    {viewingRecordsTable.schemaName}.<span className="font-semibold text-slate-700 dark:text-slate-300">{viewingRecordsTable.tableName}</span>
+                    {recordsData?.primaryKeyColumn && (
+                      <span className="ml-2 text-slate-400">
+                        (PK: <code className="text-indigo-600 dark:text-indigo-400">{recordsData.primaryKeyColumn}</code>)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewingRecordsTable(null)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Toolbar: Search & Batch Actions */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 px-6 py-3 dark:border-slate-800 dark:bg-slate-800/40">
+              <div className="flex flex-1 items-center gap-3">
+                <div className="relative max-w-sm flex-1">
+                  <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search records in table…"
+                    value={recordsSearch}
+                    onChange={(e) => setRecordsSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        void fetchTableRecords(viewingRecordsTable, 1, recordsPageSize, recordsSearch);
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void fetchTableRecords(viewingRecordsTable, 1, recordsPageSize, recordsSearch)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Search
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void fetchTableRecords(viewingRecordsTable, recordsPage, recordsPageSize, recordsSearch)}
+                  disabled={loadingRecords}
+                  className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  title="Reload records"
+                >
+                  <RefreshCw className={`size-3.5 ${loadingRecords ? "animate-spin text-indigo-600" : ""}`} />
+                </button>
+              </div>
+
+              {/* Action: Delete Selected Records */}
+              <div className="flex items-center gap-3">
+                {selectedRecordKeys.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteRecordModal({ keys: selectedRecordKeys })}
+                    className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
+                  >
+                    <Trash2 className="size-3.5" />
+                    <span>Delete Selected Records ({selectedRecordKeys.length})</span>
+                  </button>
+                )}
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Total Records: <strong className="font-semibold text-slate-900 dark:text-white">{(recordsData?.totalRecords ?? 0).toLocaleString()}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Body: Table Grid */}
+            <div className="flex-1 overflow-auto p-4">
+              {loadingRecords ? (
+                <div className="flex h-full flex-col items-center justify-center py-20 text-slate-500">
+                  <RefreshCw className="size-8 animate-spin text-indigo-500" />
+                  <p className="mt-3 text-xs font-medium">Fetching table records from database…</p>
+                </div>
+              ) : !recordsData || recordsData.records.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center py-20 text-slate-500">
+                  <Database className="size-10 text-slate-300 dark:text-slate-700" />
+                  <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-300">No records found</p>
+                  <p className="text-xs text-slate-400">This table is empty or no rows matched your search filter.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300">
+                      <tr>
+                        <th className="w-10 px-3 py-2.5">
+                          <input
+                            type="checkbox"
+                            aria-label="Select all records on page"
+                            checked={
+                              recordsData.records.length > 0 &&
+                              recordsData.records.every((r) =>
+                                selectedRecordKeys.includes(String(r[recordsData.primaryKeyColumn]))
+                              )
+                            }
+                            onChange={(e) => {
+                              const pageKeys = recordsData.records.map((r) =>
+                                String(r[recordsData.primaryKeyColumn])
+                              );
+                              if (e.target.checked) {
+                                setSelectedRecordKeys((prev) => Array.from(new Set([...prev, ...pageKeys])));
+                              } else {
+                                setSelectedRecordKeys((prev) => prev.filter((k) => !pageKeys.includes(k)));
+                              }
+                            }}
+                          />
+                        </th>
+                        <th className="w-20 px-3 py-2.5 text-center">Action</th>
+                        {recordsData.columns.map((col) => (
+                          <th key={col.name} className="px-3 py-2.5 whitespace-nowrap" title={`${col.name} (${col.dataType})`}>
+                            <span className={col.name === recordsData.primaryKeyColumn ? "text-indigo-600 dark:text-indigo-400 font-bold" : ""}>
+                              {col.name}
+                            </span>
+                            <span className="ml-1 text-[10px] font-normal lowercase text-slate-400">
+                              {col.dataType}
+                            </span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {recordsData.records.map((row, idx) => {
+                        const pkVal = String(row[recordsData.primaryKeyColumn] ?? idx);
+                        const isSelected = selectedRecordKeys.includes(pkVal);
+
+                        return (
+                          <tr
+                            key={pkVal + idx}
+                            className={`transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
+                              isSelected ? "bg-indigo-50/40 dark:bg-indigo-950/20" : ""
+                            }`}
+                          >
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                aria-label={`Select record ${pkVal}`}
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  setSelectedRecordKeys((prev) =>
+                                    e.target.checked ? [...prev, pkVal] : prev.filter((k) => k !== pkVal)
+                                  );
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteRecordModal({ keys: [pkVal], singleKey: pkVal })}
+                                className="rounded p-1 text-red-500 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40"
+                                title="Delete this record"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </td>
+                            {recordsData.columns.map((col) => {
+                              const val = row[col.name];
+                              const isNull = val === null || val === undefined;
+                              const displayVal = isNull
+                                ? "—"
+                                : typeof val === "object"
+                                ? JSON.stringify(val)
+                                : String(val);
+
+                              return (
+                                <td
+                                  key={col.name}
+                                  className={`max-w-xs truncate px-3 py-2 font-mono text-[11px] ${
+                                    isNull ? "text-slate-300 dark:text-slate-600" : "text-slate-700 dark:text-slate-300"
+                                  } ${col.name === recordsData.primaryKeyColumn ? "font-semibold text-indigo-700 dark:text-indigo-400" : ""}`}
+                                  title={displayVal}
+                                >
+                                  {displayVal}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer: Pagination */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-3 text-xs dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Rows per page:</span>
+                <select
+                  value={recordsPageSize}
+                  onChange={(e) => {
+                    const newSize = Number(e.target.value);
+                    setRecordsPageSize(newSize);
+                    void fetchTableRecords(viewingRecordsTable, 1, newSize, recordsSearch);
+                  }}
+                  className="rounded border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">
+                  Page <strong className="text-slate-800 dark:text-slate-200">{recordsPage}</strong> of{" "}
+                  <strong className="text-slate-800 dark:text-slate-200">{recordsData?.totalPages || 1}</strong>
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={recordsPage <= 1 || loadingRecords}
+                    onClick={() => void fetchTableRecords(viewingRecordsTable, recordsPage - 1, recordsPageSize, recordsSearch)}
+                    className="rounded border border-slate-200 p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!recordsData || recordsPage >= recordsData.totalPages || loadingRecords}
+                    onClick={() => void fetchTableRecords(viewingRecordsTable, recordsPage + 1, recordsPageSize, recordsSearch)}
+                    className="rounded border border-slate-200 p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    title="Next page"
+                  >
+                    <ChevronRight className="size-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: Confirm Delete Record(s) */}
+      {confirmDeleteRecordModal && viewingRecordsTable && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900/50 dark:bg-slate-900">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-red-100 p-2 text-red-600 dark:bg-red-900/50 dark:text-red-300">
+                <AlertTriangle className="size-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Delete {confirmDeleteRecordModal.keys.length > 1 ? `${confirmDeleteRecordModal.keys.length} Records` : "Record"}?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Table: <code className="font-semibold text-red-600 dark:text-red-400">{viewingRecordsTable.tableName}</code>
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+              {confirmDeleteRecordModal.singleKey ? (
+                <>
+                  Are you sure you want to permanently delete record with {recordsData?.primaryKeyColumn || "ID"}{" "}
+                  <code className="font-mono font-semibold text-slate-900 dark:text-white">{confirmDeleteRecordModal.singleKey}</code>?
+                </>
+              ) : (
+                <>
+                  Are you sure you want to permanently delete{" "}
+                  <strong>{confirmDeleteRecordModal.keys.length}</strong> selected records?
+                </>
+              )}
+            </p>
+            <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+              Note: If any child tables reference these records, deletion will be blocked by foreign key constraints.
+            </p>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={deletingRecords}
+                onClick={() => setConfirmDeleteRecordModal(null)}
+                className="rounded-lg border border-slate-200 px-3.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingRecords}
+                onClick={() => void handleDeleteRecords(confirmDeleteRecordModal.keys)}
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingRecords ? (
+                  <>
+                    <RefreshCw className="size-3.5 animate-spin" />
+                    Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="size-3.5" />
+                    Confirm Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

@@ -326,6 +326,7 @@ export function RegisterTenantPage() {
                     aria-invalid={Boolean(fieldErrors.slug)}
                     placeholder="e.g. abc-electronics"
                     value={slug}
+                    maxLength={15}
                     onChange={(e) => handleSlugChange(e.target.value)}
                     className={`mt-1.5 w-full rounded-xl border ${fieldErrors.slug
                       ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:focus:ring-rose-950"
