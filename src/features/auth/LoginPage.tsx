@@ -72,7 +72,7 @@ export function LoginPage() {
                 Create store workspace
               </Link>
             </div>
-            <div>
+            {/* <div>
               <Link
                 to="/admin/login"
                 className="inline-flex items-center gap-1.5 font-semibold text-slate-600 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300 transition"
@@ -80,7 +80,7 @@ export function LoginPage() {
                 <ShieldCheck className="size-3.5" />
                 <span>Product Owner / Platform Sign In</span>
               </Link>
-            </div>
+            </div> */}
           </div>
         </form>
       </section>

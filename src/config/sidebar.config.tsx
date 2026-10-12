@@ -248,12 +248,6 @@ export const sidebarConfiguration: NavigationItem[] = [
         path: APP_ROUTES.settings.tenantApprovals,
         icon: ShieldCheck,
       },
-      {
-        id: "database-tables",
-        label: "Database Tables",
-        path: APP_ROUTES.settings.databaseTables,
-        icon: Database,
-      },
     ],
   },
 ];

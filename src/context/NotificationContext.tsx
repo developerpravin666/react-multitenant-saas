@@ -102,21 +102,27 @@ export function NotificationProvider({
       return null;
     });
   }, []);
+  const variants = useMemo(
+    () => ({
+      success: (t, m, o) => createVariant("success", t, m, o),
+      error: (t, m, o) => createVariant("error", t, m, o),
+      warning: (t, m, o) => createVariant("warning", t, m, o),
+      info: (t, m, o) => createVariant("info", t, m, o),
+    }) satisfies Pick<NotificationApi, "success" | "error" | "warning" | "info">,
+    [createVariant],
+  );
   const value = useMemo<NotificationContextValue>(
     () => ({
       toasts,
       alerts,
       confirmDialog,
       toast,
-      success: (t, m, o) => createVariant("success", t, m, o),
-      error: (t, m, o) => createVariant("error", t, m, o),
-      warning: (t, m, o) => createVariant("warning", t, m, o),
-      info: (t, m, o) => createVariant("info", t, m, o),
+      ...variants,
       alert,
       dismiss,
       confirm,
     }),
-    [alerts, confirm, confirmDialog, createVariant, dismiss, toast, toasts],
+    [alerts, confirm, confirmDialog, variants, dismiss, toast, toasts],
   );
   return (
     <NotificationContext.Provider value={value}>

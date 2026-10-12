@@ -46,6 +46,7 @@ export interface TableDashboardData {
 
 export function TableManagementDashboardPage() {
   const notifications = useNotifications();
+  const notifyError = notifications.error;
 
   const [data, setData] = useState<TableDashboardData | null>(null);
   const [selectedSchema, setSelectedSchema] = useState<string>("");
@@ -82,11 +83,11 @@ export function TableManagementDashboardPage() {
         setSelectedSchema(res.activeSchema);
       }
     } catch (err) {
-      notifications.error("Failed to load tables", err instanceof Error ? err.message : "Error loading table registry");
+      notifyError("Failed to load tables", err instanceof Error ? err.message : "Error loading table registry");
     } finally {
       setLoading(false);
     }
-  }, [notifications, selectedSchema]);
+  }, [notifyError, selectedSchema]);
 
   useEffect(() => {
     void fetchTables(selectedSchema || undefined);
