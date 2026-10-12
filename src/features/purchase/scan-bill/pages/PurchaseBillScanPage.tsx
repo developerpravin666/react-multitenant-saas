@@ -45,6 +45,7 @@ interface LookupRecord {
   id: string;
   name: string;
   code?: string;
+  gstNumber?: string;
   brandId?: string;
 }
 
@@ -130,7 +131,7 @@ export function PurchaseBillScanPage() {
 
     const matched = vendors.find(
       (v) =>
-        (gstin && v.code?.toUpperCase().trim() === gstin) ||
+        (gstin && (v.gstNumber?.toUpperCase().trim() === gstin || v.code?.toUpperCase().trim() === gstin)) ||
         (name && v.name.toLowerCase().includes(name.split(" ")[0] || ""))
     );
     if (matched) {

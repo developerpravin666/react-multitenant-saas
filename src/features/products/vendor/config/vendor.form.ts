@@ -19,6 +19,14 @@ export const vendorFormConfig: FormFieldConfig[] = [
     required: true,
   },
   {
+    id: "gstNumber",
+    name: "gstNumber",
+    label: "GST Number",
+    type: "text",
+    placeholder: "Example: 23AANFN9230A1ZK",
+    maxLength: 15,
+  },
+  {
     id: "description",
     name: "description",
     label: "Description",

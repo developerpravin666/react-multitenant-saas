@@ -20,6 +20,19 @@ export const vendorColumns: GridColumn<Vendor>[] = [
     editable: true,
   },
   {
+    id: "gstNumber",
+    header: "GST Number",
+    accessorKey: "gstNumber",
+    sortable: true,
+    searchable: true,
+    editable: true,
+    cell: (_, row) => (
+      <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+        {row.gstNumber || "—"}
+      </span>
+    ),
+  },
+  {
     id: "mobile",
     header: "Mobile",
     accessorKey: "mobile",

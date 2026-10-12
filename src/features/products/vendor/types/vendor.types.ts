@@ -4,6 +4,7 @@ export interface Vendor extends BaseMasterEntity {
   id: string;
   name: string;
   code: string;
+  gstNumber?: string;
   description: string;
   address: string;
   mobile: string;
