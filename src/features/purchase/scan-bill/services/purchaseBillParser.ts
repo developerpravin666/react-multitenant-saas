@@ -832,7 +832,7 @@ export function parsePurchaseBillText(rawText: string): ExtractedPurchaseBill {
  * Runs client-side Tesseract.js OCR on an image file or object URL.
  */
 export async function runOcrOnImage(
-  imageSource: File | string,
+  imageSource: File | Blob | string,
   onProgress?: (status: string, progress: number) => void
 ): Promise<string> {
   onProgress?.("Initializing OCR engine…", 10);
@@ -848,6 +848,81 @@ export async function runOcrOnImage(
     await worker.terminate();
     throw err;
   }
+}
+
+/**
+ * Extracts text from an invoice document (image or PDF).
+ */
+export async function extractTextFromInvoiceDocument(
+  file: File,
+  onProgress?: (status: string, progress: number) => void
+): Promise<{ text: string; previewUrl?: string }> {
+  // 1. If Image: run OCR directly
+  if (file.type.startsWith("image/")) {
+    const text = await runOcrOnImage(file, onProgress);
+    const previewUrl = URL.createObjectURL(file);
+    return { text, previewUrl };
+  }
+
+  // 2. If PDF: check for embedded image or plain text streams
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    onProgress?.("Inspecting PDF invoice…", 20);
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // Try finding embedded JPEG
+    let startIdx = -1;
+    for (let i = 0; i < bytes.length - 2; i++) {
+      if (bytes[i] === 0xff && bytes[i + 1] === 0xd8 && bytes[i + 2] === 0xff) {
+        startIdx = i;
+        break;
+      }
+    }
+
+    if (startIdx !== -1) {
+      let endIdx = -1;
+      for (let i = bytes.length - 2; i > startIdx; i--) {
+        if (bytes[i] === 0xff && bytes[i + 1] === 0xd9) {
+          endIdx = i + 2;
+          break;
+        }
+      }
+
+      if (endIdx !== -1 && endIdx - startIdx > 1024) {
+        onProgress?.("Found invoice page image in PDF, analyzing…", 40);
+        const jpegBytes = bytes.slice(startIdx, endIdx);
+        const blob = new Blob([jpegBytes], { type: "image/jpeg" });
+        const previewUrl = URL.createObjectURL(blob);
+        const text = await runOcrOnImage(blob, onProgress);
+        return { text, previewUrl };
+      }
+    }
+
+    // Extract text streams from PDF
+    onProgress?.("Extracting text operators from PDF…", 50);
+    const decoder = new TextDecoder("latin1");
+    const rawContent = decoder.decode(bytes);
+
+    const textMatches: string[] = [];
+    const tjRegex = /\(([^()]{2,})\)\s*(?:Tj|'|")/g;
+    let match: RegExpExecArray | null;
+    while ((match = tjRegex.exec(rawContent)) !== null) {
+      if (match[1] && match[1].trim().length > 1) {
+        textMatches.push(match[1]);
+      }
+    }
+
+    if (textMatches.length >= 5) {
+      onProgress?.("Parsed PDF text contents…", 90);
+      return { text: textMatches.join(" ") };
+    }
+
+    return { text: rawContent };
+  }
+
+  // Fallback
+  const text = await runOcrOnImage(file, onProgress);
+  return { text };
 }
 
 function parseAmount(str: string): number {

@@ -16,9 +16,9 @@ function ProductStatusCell({ row }: { row: Product }) {
     const nextActive = !isActive;
     try {
       if (nextActive) {
-        await apiClient.post(`/products/${row.id}/activate`);
+        await apiClient.post(`/products/${row.id}/activate`, {});
       } else {
-        await apiClient.post(`/products/${row.id}/deactivate`);
+        await apiClient.post(`/products/${row.id}/deactivate`, {});
       }
       setIsActive(nextActive);
       row.isActive = nextActive;
