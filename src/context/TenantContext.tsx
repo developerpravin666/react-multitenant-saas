@@ -6,6 +6,7 @@ import {
 } from "react";
 import type { TenantConfig } from "../types/tenant";
 import { darkenHex, normalizeHexColor } from "../lib/color";
+import { useAuth } from "../features/auth/AuthContext";
 
 interface TenantContextValue {
   tenant: TenantConfig;
@@ -18,6 +19,13 @@ interface TenantProviderProps extends PropsWithChildren {
 }
 
 export function TenantProvider({ tenant, children }: TenantProviderProps) {
+  const { session, isProductOwner } = useAuth();
+  const activeTenant = {
+    ...tenant,
+    tenantId: session?.tenantId ?? tenant.tenantId,
+    tenantName: isProductOwner ? "Siddhi Multi-Tenant" :
+      session?.user.tenantName?.trim() || session?.user.tenantSlug?.trim() || tenant.tenantName,
+  };
   useLayoutEffect(() => {
     const root = document.documentElement;
     const primary = normalizeHexColor(tenant.primaryColor);
@@ -30,7 +38,7 @@ export function TenantProvider({ tenant, children }: TenantProviderProps) {
   }, [tenant]);
 
   return (
-    <TenantContext.Provider value={{ tenant }}>
+    <TenantContext.Provider value={{ tenant: activeTenant }}>
       {children}
     </TenantContext.Provider>
   );

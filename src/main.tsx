@@ -102,20 +102,20 @@ if (!root) {
 createRoot(root).render(
   <ThemeProvider>
     <NotificationProvider position="top-right" maxToasts={5}>
-      <TenantProvider tenant={defaultTenant}>
         <ApiLoadingProvider>
           <BrowserRouter>
             <AuthProvider>
+              <TenantProvider tenant={defaultTenant}>
               <FeatureFlagProvider>
                 <VoiceTypingProvider>
                   <App />
                   <VoiceTypingWidget />
                 </VoiceTypingProvider>
               </FeatureFlagProvider>
+              </TenantProvider>
             </AuthProvider>
           </BrowserRouter>
         </ApiLoadingProvider>
-      </TenantProvider>
     </NotificationProvider>
   </ThemeProvider>,
 );
