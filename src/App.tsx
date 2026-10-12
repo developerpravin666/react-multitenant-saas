@@ -39,6 +39,7 @@ import { SystemSettingsPage } from "./features/admin/SystemSettingsPage";
 import { MasterImportPage } from "./features/products/import/MasterImportPage";
 import { FeatureFlagsAdminPage } from "./features/feature-flags/FeatureFlagsAdminPage";
 import { TableManagementDashboardPage } from "./features/admin/TableManagementDashboardPage";
+import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
 import { AdminRoute } from "./features/auth/AdminRoute";
 
 function RootDashboard() {
@@ -104,6 +105,7 @@ export default function App() {
           <Route path={APP_ROUTES.admin.systemSettings} element={<SystemSettingsPage />} />
           <Route path={APP_ROUTES.admin.featureFlags} element={<FeatureFlagsAdminPage />} />
           <Route path={APP_ROUTES.admin.mastersImport} element={<MasterImportPage isAdminMode={true} />} />
+          <Route path={APP_ROUTES.admin.emailTemplates} element={<EmailTemplatesPage />} />
 
           <Route path="**" element={<Navigate to="/" replace />} />
         </Route>

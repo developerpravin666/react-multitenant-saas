@@ -116,6 +116,7 @@ export const APP_ROUTES = {
     systemSettings: "/admin/system-settings",
     featureFlags: "/admin/feature-flags",
     mastersImport: "/admin/masters-import",
+    emailTemplates: "/admin/email-templates",
     login: "/admin/login",
   },
 } as const;

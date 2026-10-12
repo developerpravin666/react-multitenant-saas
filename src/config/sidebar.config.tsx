@@ -27,6 +27,7 @@ import {
   Server,
   Clock,
   ToggleRight,
+  Mail,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -80,6 +81,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
     label: "Master Data Import",
     path: APP_ROUTES.admin.mastersImport,
     icon: FileSpreadsheet,
+  },
+  {
+    id: "admin-email-templates",
+    label: "Welcome Email Format",
+    path: APP_ROUTES.admin.emailTemplates,
+    icon: Mail,
   },
 ];
 

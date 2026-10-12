@@ -16,6 +16,7 @@ import {
   Sliders,
   ExternalLink,
   Layers,
+  Mail,
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { APP_ROUTES } from "../../config/routes";
@@ -259,7 +260,7 @@ export function ProductOwnerDashboardPage() {
       </div>
 
       {/* Quick Navigation Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Link
           to={APP_ROUTES.admin.tenants}
           className="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-700"
@@ -328,6 +329,24 @@ export function ProductOwnerDashboardPage() {
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               PostgreSQL connections, email simulation, and platform tokens.
+            </p>
+          </div>
+        </Link>
+
+        <Link
+          to={APP_ROUTES.admin.emailTemplates}
+          className="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-amber-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-amber-700"
+        >
+          <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
+            <Mail className="size-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5 font-bold text-slate-900 group-hover:text-amber-600 dark:text-white dark:group-hover:text-amber-400">
+              <span>Welcome Email Format</span>
+              <ArrowRight className="size-4 transition group-hover:translate-x-1" />
+            </div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Customize subject and HTML email sent to store owners upon registration.
             </p>
           </div>
         </Link>
