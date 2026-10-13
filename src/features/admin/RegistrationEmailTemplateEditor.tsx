@@ -91,7 +91,7 @@ export function RegistrationEmailTemplateEditor() {
   const lastActiveFieldRef = useRef<"subject" | "body">("body");
 
   const currentTemplateDef =
-    TEMPLATES.find((t) => t.key === selectedTemplateKey) || TEMPLATES[0];
+    TEMPLATES.find((t) => t.key === selectedTemplateKey) || TEMPLATES[0]!;
 
   const getApiPath = (key: TemplateKey) => `/admin/email-templates/${key}`;
 
@@ -120,7 +120,7 @@ export function RegistrationEmailTemplateEditor() {
 
   const handleSelectTemplate = (key: TemplateKey) => {
     if (key === selectedTemplateKey) return;
-    const def = TEMPLATES.find((t) => t.key === key) || TEMPLATES[0];
+    const def = TEMPLATES.find((t) => t.key === key) || TEMPLATES[0]!;
     setSelectedTemplateKey(key);
     setTestEmailAddress(def.defaultToEmail);
   };
@@ -285,10 +285,11 @@ export function RegistrationEmailTemplateEditor() {
     settings &&
     (template.subject !== settings.subject ||
       template.htmlBody !== settings.htmlBody);
-  const isDefault =
+  const isDefault = Boolean(
     settings &&
-    template.subject === settings.defaultSubject &&
-    template.htmlBody === settings.defaultHtmlBody;
+      template.subject === settings.defaultSubject &&
+      template.htmlBody === settings.defaultHtmlBody
+  );
 
   return (
     <div className="space-y-6">

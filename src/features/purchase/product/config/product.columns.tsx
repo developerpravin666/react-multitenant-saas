@@ -40,11 +40,10 @@ function ProductStatusCell({ row }: { row: Product }) {
   return (
     <div className="flex items-center gap-1.5">
       <span
-        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-          isActive
+        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${isActive
             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
             : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-        }`}
+          }`}
       >
         {isActive ? "Available" : "Inactive"}
       </span>
@@ -54,11 +53,10 @@ function ProductStatusCell({ row }: { row: Product }) {
         disabled={isUpdating}
         onClick={toggleActive}
         title={isActive ? "Click to Deactivate Product" : "Click to Activate Product"}
-        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold shadow-2xs transition cursor-pointer ${
-          isActive
+        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold shadow-2xs transition cursor-pointer ${isActive
             ? "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
             : "border border-emerald-300 bg-emerald-600 text-white hover:bg-emerald-500"
-        } ${isUpdating ? "opacity-50" : ""}`}
+          } ${isUpdating ? "opacity-50" : ""}`}
       >
         {isActive ? (
           <>

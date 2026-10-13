@@ -160,7 +160,7 @@ export function MasterImportPage({ isAdminMode = false }: { isAdminMode?: boolea
     if (isAdminMode && isProductOwner) {
       apiClient.get<TenantItem[]>("/admin/tenants")
         .then((res) => {
-          if (Array.isArray(res) && res.length > 0) {
+          if (Array.isArray(res) && res.length > 0 && res[0]) {
             setTenants(res);
             setSelectedTenantId(res[0].id);
           }
@@ -191,7 +191,9 @@ export function MasterImportPage({ isAdminMode = false }: { isAdminMode?: boolea
         // Automatically select the newest batch or keep currently selected
         const currentId = selectedBatch?.id;
         const target = currentId ? batchList.find((b) => b.id === currentId) || batchList[0] : batchList[0];
-        fetchBatchDetails(target.id);
+        if (target) {
+          fetchBatchDetails(target.id);
+        }
       } else {
         setSelectedBatch(null);
       }
@@ -320,7 +322,7 @@ export function MasterImportPage({ isAdminMode = false }: { isAdminMode?: boolea
           let binary = "";
           const len = bytes.byteLength;
           for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
+            binary += String.fromCharCode(bytes[i] ?? 0);
           }
           const base64 = window.btoa(binary);
 

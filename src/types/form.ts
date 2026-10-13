@@ -65,6 +65,7 @@ export interface TextFieldConfig extends BaseFieldConfig {
 export interface EmailFieldConfig extends BaseFieldConfig {
   type: "email";
   placeholder?: string;
+  autoComplete?: string;
 }
 export interface PasswordFieldConfig extends BaseFieldConfig {
   type: "password";
