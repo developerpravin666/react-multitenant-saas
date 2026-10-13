@@ -109,14 +109,72 @@ function matchVendor(header: ExtractedBillHeader, vendors: ProductLookupRecord[]
   return vendors[0]?.id ?? "";
 }
 
-function matchBrand(itemBrand: string, brands: ProductLookupRecord[]): string {
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchBrand(itemBrand: string, brands: ProductLookupRecord[], itemDesc?: string): string {
   if (!brands.length) return "";
-  const clean = itemBrand.trim().toLowerCase();
-  const matched = brands.find((b) => {
-    const bName = b.name.trim().toLowerCase();
-    return bName === clean || bName.includes(clean) || clean.includes(bName);
-  });
-  return matched?.id ?? brands[0]?.id ?? "";
+  const clean = (itemBrand || "").trim().toLowerCase();
+  const desc = (itemDesc || "").trim().toLowerCase();
+
+  // 1. Exact match on brand name
+  if (clean) {
+    const exact = brands.find((b) => b.name.trim().toLowerCase() === clean);
+    if (exact) return exact.id;
+  }
+
+  // 2. Apple / iPhone equivalence (database brand can be "IPhone" or "Apple")
+  const isAppleFamily =
+    clean === "apple" ||
+    clean === "iphone" ||
+    /\b(apple|iphone)\b/i.test(clean) ||
+    /\b(apple|iphone)\b/i.test(desc);
+
+  if (isAppleFamily) {
+    const appleBrand = brands.find((b) => {
+      const bName = b.name.trim().toLowerCase();
+      return bName === "iphone" || bName === "apple" || /iphone|apple/i.test(bName);
+    });
+    if (appleBrand) return appleBrand.id;
+  }
+
+  // 3. Techno / Tecno equivalence
+  const isTecnoFamily =
+    clean === "tecno" ||
+    clean === "techno" ||
+    /\b(tecno|techno)\b/i.test(clean) ||
+    /\b(tecno|techno)\b/i.test(desc);
+
+  if (isTecnoFamily) {
+    const tecnoBrand = brands.find((b) => {
+      const bName = b.name.trim().toLowerCase();
+      return bName === "techno" || bName === "tecno" || /techno|tecno/i.test(bName);
+    });
+    if (tecnoBrand) return tecnoBrand.id;
+  }
+
+  // 4. Standalone brand word mentioned in description (e.g. "VIVO", "OPPO", "SAMSUNG")
+  if (desc) {
+    const inDesc = brands.find((b) => {
+      const bName = b.name.trim().toLowerCase();
+      if (!bName) return false;
+      const regex = new RegExp(`\\b${escapeRegex(bName)}\\b`, "i");
+      return regex.test(desc);
+    });
+    if (inDesc) return inDesc.id;
+  }
+
+  // 5. Partial contains match
+  if (clean) {
+    const partial = brands.find((b) => {
+      const bName = b.name.trim().toLowerCase();
+      return bName === clean || bName.includes(clean) || clean.includes(bName);
+    });
+    if (partial) return partial.id;
+  }
+
+  return brands[0]?.id ?? "";
 }
 
 function matchProductType(matchedBrandId: string, productTypes: ProductLookupRecord[]): string {
@@ -127,46 +185,102 @@ function matchProductType(matchedBrandId: string, productTypes: ProductLookupRec
   return brandTypes[0]?.id ?? productTypes[0]?.id ?? "";
 }
 
+function cleanDescForModelMatching(desc: string): string {
+  return (desc || "")
+    .toLowerCase()
+    .replace(/\b(86\d{13}|35\d{13}|\d{15})\b/g, "") // remove IMEIs
+    .replace(/\bhsn\s*:?\s*\d+\b/gi, "")            // remove HSN
+    .replace(/\bqty\s*:?\s*\d+\b/gi, "")            // remove Qty
+    .replace(/\b\d+\s*gb\b/gi, "")                  // remove 128GB, 256GB, etc.
+    .replace(/\(\d+\+\d+g?\)/gi, "")                // remove (4+64)
+    .replace(/\b(white|black|blue|orange|lavender|green|gold|silver|grey|gray|purple|red)\b/gi, "") // remove common colors
+    .trim();
+}
+
 function matchModelRecord(
   item: ExtractedBillItem,
-  models: ProductLookupRecord[]
+  models: ProductLookupRecord[],
+  preferredBrandId?: string
 ): ProductLookupRecord | undefined {
   if (!models.length) return undefined;
-  const itemModelClean = item.model.trim().toLowerCase();
-  const descClean = item.description.trim().toLowerCase();
 
-  // 1. Exact match on model name
-  let matched = models.find((m) => m.name.trim().toLowerCase() === itemModelClean);
-  if (matched) return matched;
+  const itemModelClean = (item.model || "").trim().toLowerCase();
+  const descClean = (item.description || "").trim().toLowerCase();
+  const cleanedDesc = cleanDescForModelMatching(item.description);
 
-  // 2. Contains match on model name
-  matched = models.find((m) => {
-    const mName = m.name.trim().toLowerCase();
-    return mName.length > 2 && (mName.includes(itemModelClean) || itemModelClean.includes(mName));
-  });
-  if (matched) return matched;
+  // If a preferred brand is selected, prioritize models of that brand
+  const brandModels = preferredBrandId
+    ? models.filter((m) => m.brandId === preferredBrandId)
+    : [];
 
-  // 3. Match from description
-  matched = models.find((m) => {
-    const mName = m.name.trim().toLowerCase();
-    return mName.length > 2 && descClean.includes(mName);
-  });
-  if (matched) return matched;
+  const searchPools = brandModels.length > 0 ? [brandModels, models] : [models];
+
+  for (const pool of searchPools) {
+    // 1. Exact match on model name
+    if (itemModelClean) {
+      const exact = pool.find((m) => m.name.trim().toLowerCase() === itemModelClean);
+      if (exact) return exact;
+    }
+
+    // 2. Strip brand prefixes (apple, iphone, tecno, techno, oppo, vivo, samsung)
+    const strippedItemModel = itemModelClean
+      .replace(/\b(apple|iphone|vivo|oppo|tecno|techno|samsung)\b/gi, "")
+      .trim();
+
+    if (strippedItemModel) {
+      const matchStripped = pool.find((m) => {
+        const mClean = m.name.trim().toLowerCase();
+        const mStripped = mClean.replace(/\b(apple|iphone|vivo|oppo|tecno|techno|samsung)\b/gi, "").trim();
+        return mClean === strippedItemModel || mStripped === strippedItemModel;
+      });
+      if (matchStripped) return matchStripped;
+    }
+
+    // 3. Exact word boundary match in cleaned description (e.g. "16", "15", "17", "V80", "F35")
+    const wordInDesc = pool.find((m) => {
+      const mName = m.name.trim().toLowerCase();
+      if (!mName) return false;
+      const regex = new RegExp(`\\b${escapeRegex(mName)}\\b`, "i");
+      return regex.test(cleanedDesc) || (itemModelClean && regex.test(itemModelClean));
+    });
+    if (wordInDesc) return wordInDesc;
+
+    // 4. Substring / contains match for longer model names (>= 3 chars)
+    const substringMatch = pool.find((m) => {
+      const mName = m.name.trim().toLowerCase();
+      if (mName.length < 3) return false;
+      return (
+        (itemModelClean && (mName.includes(itemModelClean) || itemModelClean.includes(mName))) ||
+        descClean.includes(mName)
+      );
+    });
+    if (substringMatch) return substringMatch;
+  }
+
+  // 5. If a preferred brand is selected, fall back to its first model
+  if (brandModels.length > 0) {
+    return brandModels[0];
+  }
 
   return undefined;
 }
 
 function matchVariant(itemVariant: string, itemDesc: string, variants: ProductLookupRecord[]): string {
   if (!variants.length) return "";
-  const vClean = itemVariant.replace(/[()\s]/g, "").toLowerCase();
-  const dClean = itemDesc.replace(/[()\s]/g, "").toLowerCase();
+  const vClean = (itemVariant || "").replace(/[()\s]/g, "").toLowerCase();
+  const dClean = (itemDesc || "").replace(/[()\s]/g, "").toLowerCase();
 
+  // 1. Exact match on variant name
+  if (vClean && vClean !== "standard") {
+    const exact = variants.find((v) => v.name.replace(/[()\s]/g, "").toLowerCase() === vClean);
+    if (exact) return exact.id;
+  }
+
+  // 2. Exact word boundary or contained in description
   const matched = variants.find((v) => {
     const nameClean = v.name.replace(/[()\s]/g, "").toLowerCase();
     return (
-      nameClean === vClean ||
-      nameClean.includes(vClean) ||
-      vClean.includes(nameClean) ||
+      (vClean && (nameClean === vClean || nameClean.includes(vClean) || vClean.includes(nameClean))) ||
       dClean.includes(nameClean)
     );
   });
@@ -176,20 +290,57 @@ function matchVariant(itemVariant: string, itemDesc: string, variants: ProductLo
 
 function matchColor(itemColor: string, itemDesc: string, colors: ProductLookupRecord[]): string {
   if (!colors.length) return "";
-  const cClean = itemColor.trim().toLowerCase();
-  const dClean = itemDesc.trim().toLowerCase();
+  const cClean = (itemColor || "").trim().toLowerCase();
+  const dClean = (itemDesc || "").trim().toLowerCase();
 
-  const matched = colors.find((c) => {
-    const nameClean = c.name.trim().toLowerCase();
-    return (
-      nameClean === cClean ||
-      nameClean.includes(cClean) ||
-      cClean.includes(nameClean) ||
-      dClean.includes(nameClean)
-    );
-  });
+  // STEP 1: Exact match with itemColor (e.g. "White" === "White", "Blue" === "Blue", "Black" === "Black")
+  if (cClean && cClean !== "standard") {
+    const exact = colors.find((c) => c.name.trim().toLowerCase() === cClean);
+    if (exact) return exact.id;
+  }
 
-  return matched?.id ?? colors[0]?.id ?? "";
+  // STEP 2: Exact standalone single-word color found in description (e.g. "White", "Blue", "Black", "Orange", "Lavender")
+  if (dClean) {
+    const singleWordColors = colors.filter((c) => !c.name.trim().includes(" "));
+    const foundSingle = singleWordColors.find((c) => {
+      const name = c.name.trim().toLowerCase();
+      if (!name) return false;
+      const regex = new RegExp(`\\b${escapeRegex(name)}\\b`, "i");
+      return regex.test(dClean);
+    });
+    if (foundSingle) return foundSingle.id;
+  }
+
+  // STEP 3: Multi-word / compound color found in description (e.g. "Air White", "Cosmic Black", "Sierra Blue")
+  if (dClean) {
+    const multiWordColors = colors.filter((c) => c.name.trim().includes(" "));
+    const foundMulti = multiWordColors.find((c) => {
+      const name = c.name.trim().toLowerCase();
+      if (!name) return false;
+      const regex = new RegExp(`\\b${escapeRegex(name)}\\b`, "i");
+      return regex.test(dClean);
+    });
+    if (foundMulti) return foundMulti.id;
+  }
+
+  // STEP 4: Substring / word contains match on itemColor
+  if (cClean && cClean !== "standard") {
+    const wordInName = colors.find((c) => {
+      const name = c.name.trim().toLowerCase();
+      const regex = new RegExp(`\\b${escapeRegex(cClean)}\\b`, "i");
+      return regex.test(name);
+    });
+    if (wordInName) return wordInName.id;
+
+    const partial = colors.find((c) => {
+      const name = c.name.trim().toLowerCase();
+      return name.includes(cClean) || cClean.includes(name);
+    });
+    if (partial) return partial.id;
+  }
+
+  // Fallback to first color
+  return colors[0]?.id ?? "";
 }
 
 function createRowFromBillItem(
@@ -197,26 +348,32 @@ function createRowFromBillItem(
   index: number,
   lookups: ProductLookupsData
 ): ProductRowItem {
-  const matchedModel = matchModelRecord(item, lookups.models);
+  // 1. Identify Brand first
+  const brandId = matchBrand(item.brand, lookups.brands, item.description);
 
-  let brandId = "";
+  // 2. Identify Model with preferred brand so models belonging to that brand are prioritized
+  const matchedModel = matchModelRecord(item, lookups.models, brandId);
+
+  let finalBrandId = brandId;
   let productTypeId = "";
   let productModelId = "";
 
   if (matchedModel) {
     productModelId = matchedModel.id;
-    brandId = matchedModel.brandId ?? matchBrand(item.brand, lookups.brands);
-    productTypeId = matchedModel.productTypeId ?? matchProductType(brandId, lookups.productTypes);
+    if (matchedModel.brandId) {
+      finalBrandId = matchedModel.brandId;
+    }
+    productTypeId =
+      matchedModel.productTypeId ?? matchProductType(finalBrandId, lookups.productTypes);
   } else {
-    brandId = matchBrand(item.brand, lookups.brands);
-    productTypeId = matchProductType(brandId, lookups.productTypes);
+    productTypeId = matchProductType(finalBrandId, lookups.productTypes);
     const candidateModels = lookups.models.filter(
-      (m) => (!m.brandId || m.brandId === brandId) && (!m.productTypeId || m.productTypeId === productTypeId)
+      (m) => !m.brandId || m.brandId === finalBrandId
     );
     productModelId = candidateModels[0]?.id ?? lookups.models[0]?.id ?? "";
     const chosenModel = lookups.models.find((m) => m.id === productModelId);
     if (chosenModel) {
-      if (chosenModel.brandId) brandId = chosenModel.brandId;
+      if (chosenModel.brandId) finalBrandId = chosenModel.brandId;
       if (chosenModel.productTypeId) productTypeId = chosenModel.productTypeId;
     }
   }
@@ -241,7 +398,7 @@ function createRowFromBillItem(
     id: `row-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
     lineNumber: index + 1,
     description: item.description,
-    brandId,
+    brandId: finalBrandId,
     productTypeId,
     productModelId,
     variantId,

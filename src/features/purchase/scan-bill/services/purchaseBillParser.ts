@@ -418,8 +418,8 @@ export function getHpTelecomBill(): ExtractedPurchaseBill {
         id: "item-1",
         lineNumber: 1,
         description: "IPHONE 16 128GB WHITE",
-        brand: "Apple",
-        model: "iPhone 16",
+        brand: "iPhone",
+        model: "16",
         variant: "128GB",
         color: "White",
         serialNumber: "354946916399047",
@@ -441,8 +441,8 @@ export function getHpTelecomBill(): ExtractedPurchaseBill {
         id: "item-2",
         lineNumber: 2,
         description: "IPHONE 15 128GB BLUE",
-        brand: "Apple",
-        model: "iPhone 15",
+        brand: "iPhone",
+        model: "15",
         variant: "128GB",
         color: "Blue",
         serialNumber: "358478956602599",
@@ -464,8 +464,8 @@ export function getHpTelecomBill(): ExtractedPurchaseBill {
         id: "item-3",
         lineNumber: 3,
         description: "IPHONE 17 256GB LAVENDER",
-        brand: "Apple",
-        model: "iPhone 17",
+        brand: "iPhone",
+        model: "17",
         variant: "256GB",
         color: "Lavender",
         serialNumber: "350292989868913",
@@ -700,8 +700,8 @@ export function parsePurchaseBillText(rawText: string): ExtractedPurchaseBill {
     matchedPhones.forEach((match, idx) => {
       const fullDesc = match[0].trim();
       let parsedBrand = match[1] || "Mobile";
-      if (parsedBrand.toLowerCase() === "iphone") {
-        parsedBrand = "Apple";
+      if (parsedBrand.toLowerCase() === "apple") {
+        parsedBrand = "iPhone";
       }
 
       // Parse variant e.g. (8+128G) or 8+128 or 128GB
@@ -717,13 +717,13 @@ export function parsePurchaseBillText(rawText: string): ExtractedPurchaseBill {
       );
       const parsedColor = colorMatch ? colorMatch[0] : "";
 
-      // Parse model
+      // Parse model - strip brand, Apple/iPhone keywords, line numbers, variant and color
       let parsedModel = fullDesc
-        .replace(new RegExp(parsedBrand, "i"), "")
+        .replace(new RegExp(`\\b(${parsedBrand}|Apple|iPhone)\\b`, "gi"), "")
         .replace(variantMatch?.[0] || "", "")
         .replace(colorMatch?.[0] || "", "")
         .trim();
-      parsedModel = parsedModel.replace(/[()]/g, "").trim();
+      parsedModel = parsedModel.replace(/^[0-9]+\s+/, "").replace(/[()]/g, "").trim();
 
       const imei = foundImeis[idx] || "";
 
