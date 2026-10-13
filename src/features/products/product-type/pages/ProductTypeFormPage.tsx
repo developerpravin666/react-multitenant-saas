@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,14 +13,19 @@ export function ProductTypeFormPage({ mode }: { mode: "create" | "edit" }) {
   return <ResourceFormPage {...productTypeResource} mode={mode} />;
 }
 
-type ProductTypeEntry = { name: string; hsnSac: string; description: string; isActive: boolean };
-const emptyEntry = (): ProductTypeEntry => ({ name: "", hsnSac: "", description: "", isActive: true });
+import { apiClient } from "../../../../services/apiClient";
+import { taxProfileOptions } from "../../../settings/tax/taxProfiles";
+import type { TaxRate } from "../../../settings/tax/types/tax.types";
+
+type ProductTypeEntry = { name: string; defaultTaxId: string; hsnSac: string; description: string; isActive: boolean };
+const emptyEntry = (): ProductTypeEntry => ({ name: "", defaultTaxId: "", hsnSac: "", description: "", isActive: true });
 const productTypeEntriesSchema = z.object({
   entries: z.array(z.object({
     name: z.string()
       .refine((name) => name.trim().length > 0, "Product Type is required.")
       .max(120, "Product Type must be 120 characters or fewer."),
     hsnSac: z.string().trim().refine(code => code === "" || /^(?:[0-9]{4}|[0-9]{6}|[0-9]{8})$/.test(code), "HSN/SAC must contain 4, 6 or 8 digits."),
+    defaultTaxId: z.string(),
     description: z.string(),
     isActive: z.boolean(),
   })).min(1, "Add at least one product type."),
@@ -28,6 +33,8 @@ const productTypeEntriesSchema = z.object({
 
 function ProductTypeBulkForm() {
   const navigate = useNavigate();
+  const [taxes, setTaxes] = useState<TaxRate[]>([]);
+  useEffect(() => { void apiClient.get<TaxRate[]>("/taxes/all").then(setTaxes).catch(reason => setError(reason instanceof Error ? reason.message : "Cannot load tax profiles.")); }, []);
   const [error, setError] = useState<string | null>(null);
   const { register, control, handleSubmit, formState: { errors, isSubmitting } } = useForm<z.infer<typeof productTypeEntriesSchema>>({
     resolver: zodResolver(productTypeEntriesSchema),
@@ -66,6 +73,13 @@ function ProductTypeBulkForm() {
               <span>Default HSN/SAC Code</span>
               <input className={inputClass} {...register(`entries.${index}.hsnSac`)} maxLength={8} inputMode="numeric" placeholder="4, 6 or 8 digits (optional)" aria-invalid={Boolean(errors.entries?.[index]?.hsnSac)} />
               {errors.entries?.[index]?.hsnSac?.message ? <span role="alert" className="text-xs text-red-600">{errors.entries[index]?.hsnSac?.message}</span> : null}
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+              <span>Default Tax Profile</span>
+              <select className={inputClass} {...register(`entries.${index}.defaultTaxId`)}>
+                <option value="">Choose on purchase</option>
+                {taxProfileOptions(taxes).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
             </label>
             <label className="space-y-1 text-sm font-medium text-slate-700 dark:text-slate-200">
               <span>Description</span>

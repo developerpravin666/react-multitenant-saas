@@ -53,6 +53,7 @@ test("purchase HSN defaults are editable and saved values survive reopening", as
 });
 
 test("Add Product Types saves an HSN code for each row and rejects invalid codes", async ({ page }) => {
+  await page.route("**/api/taxes/all", route => route.fulfill({ contentType: "application/json", body: JSON.stringify([{ id: "tax-profile", profileId: "tax-profile", name: "Fixture GST", effectiveFrom: "0001-01-01", totalTax: 18, cgst: 9, sgst: 9, isActive: true }]) }));
   await page.goto("/");
   await page.evaluate(async () => {
     const paths = ["/node_modules/.vite/deps/react.js", "/node_modules/.vite/deps/react-dom_client.js", "/node_modules/.vite/deps/react-router-dom.js", "/src/features/products/product-type/pages/ProductTypeFormPage.tsx", "/src/features/products/product-type/pages/productTypeResource.ts"];
@@ -79,6 +80,7 @@ test("Add Product Types saves an HSN code for each row and rejects invalid codes
   await expect(page.getByRole("alert")).toHaveText("HSN/SAC must contain 4, 6 or 8 digits.");
   expect(await page.evaluate(() => (window as any).createdTypes)).toEqual([]);
   await page.getByLabel("Default HSN/SAC Code").fill("001234");
+  await page.getByLabel("Default Tax Profile").selectOption("tax-profile");
   await page.getByRole("button", { name: "Add another", exact: true }).click();
   await expect(page.getByLabel("Default HSN/SAC Code")).toHaveCount(2);
   await page.getByPlaceholder("Example: Mobile", { exact: true }).nth(1).fill("Washing Machine");
@@ -86,6 +88,6 @@ test("Add Product Types saves an HSN code for each row and rejects invalid codes
   await page.getByRole("button", { name: "Create 2 Product Types", exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).createdTypes.length)).toBe(2);
   const saved = await page.evaluate(() => (window as any).createdTypes);
-  expect(saved[0]).toMatchObject({ name: "Mobile", hsnSac: "001234" });
+  expect(saved[0]).toMatchObject({ name: "Mobile", hsnSac: "001234", defaultTaxId: "tax-profile" });
   expect(saved[1]).toMatchObject({ name: "Washing Machine", hsnSac: "8450" });
 });

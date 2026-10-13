@@ -1,8 +1,15 @@
 import type { AutocompleteOption, FormFieldConfig, SelectOption } from "../../../../types/form";
 import type { CustomerLookupRecord, SaleProductOption } from "../types/sale.types";
 
+import { taxProfileOptions } from "../../../settings/tax/taxProfiles";
+
 export interface SaleTaxOption {
   id: string;
+  profileId?: string;
+  name?: string;
+  effectiveFrom?: string;
+  treatment?: string;
+  isActive?: boolean;
   cgst: number;
   sgst: number;
   totalTax: number;
@@ -136,13 +143,12 @@ export function createSaleFormConfig(
         dependsOn: ["productId"],
         calculate: (values) => {
           const product = products.find((item) => item.id === String(values.productId ?? ""));
-          return taxes.find((tax) => tax.cgst === product?.cgst && tax.sgst === product?.sgst)?.id
-            ?? "00000000-0000-0000-0000-000000000000";
+          return taxes.find(t => t.id === product?.taxId || t.profileId === product?.taxId)?.profileId ?? product?.taxId ?? "";
         },
       },
       options: [
         { value: "00000000-0000-0000-0000-000000000000", label: "No GST" },
-        ...taxes.map((tax) => ({ value: tax.id, label: `CGST ${tax.cgst}% + SGST ${tax.sgst}%` })),
+        ...taxProfileOptions(taxes),
       ],
     },
     {

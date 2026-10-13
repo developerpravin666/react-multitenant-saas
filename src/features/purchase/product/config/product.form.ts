@@ -1,10 +1,13 @@
 import type { FormFieldConfig, SelectOption } from "../../../../types/form";
 
+import { resolveTaxRate, taxProfileOptions, type DatedTaxRate } from "../../../settings/tax/taxProfiles";
+
 export interface ProductLookup {
   id: string;
   name: string;
   brandId?: string;
   productTypeId?: string;
+  defaultTaxId?: string | null;
   hsnSac?: string | null;
 }
 
@@ -15,6 +18,7 @@ interface ProductFormOptions {
   models: ProductLookup[];
   variants: ProductLookup[];
   colors: ProductLookup[];
+  taxes?: DatedTaxRate[];
   cgst?: number;
   sgst?: number;
 }
@@ -29,6 +33,7 @@ export function createProductFormConfig({
   models,
   variants,
   colors,
+  taxes = [],
   cgst = 0,
   sgst = 0,
 }: ProductFormOptions): FormFieldConfig[] {
@@ -81,6 +86,12 @@ export function createProductFormConfig({
       type: "text", required: true
     },
     {
+      id: "taxId", name: "taxId", label: "Tax Profile", type: "select", required: true,
+      options: taxProfileOptions(taxes),
+      description: "Rate follows the vendor invoice date. Select an explicit zero-tax profile when applicable.",
+      computed: { dependsOn: ["productTypeId"], calculate: values => productTypes.find(t => t.id === values.productTypeId)?.defaultTaxId ?? "" },
+    },
+    {
       id: "purchasePrice", name: "purchasePrice", label: "Purchase Price",
       type: "number", required: true, min: 0, step: 1
     },
@@ -117,11 +128,11 @@ export function createProductFormConfig({
     },
     {
       id: "cgst", name: "cgst", label: "CGST (%)", type: "number",
-      min: 0, step: 1, defaultValue: cgst
+      min: 0, step: 0.01, defaultValue: cgst, readOnly: true, computed: { calculate: values => resolveTaxRate(taxes, values.taxId, String(values.purchaseDate ?? ""))?.cgst ?? 0 }
     },
     {
       id: "sgst", name: "sgst", label: "SGST (%)", type: "number",
-      min: 0, step: 1, defaultValue: sgst
+      min: 0, step: 0.01, defaultValue: sgst, readOnly: true, computed: { calculate: values => resolveTaxRate(taxes, values.taxId, String(values.purchaseDate ?? ""))?.sgst ?? 0 }
     },
     {
       id: "tax", name: "tax", label: "Tax (%)", type: "number", min: 0, step: 1,

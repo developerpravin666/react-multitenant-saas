@@ -8,5 +8,6 @@ import { BaseMaster } from "../../../shared/master.types";
 // Washing Machine
 
 export interface ProductType extends BaseMaster {
+  defaultTaxId?: string | null;
   hsnSac?: string | null;
 }

@@ -248,6 +248,7 @@ function BulkProductCreateForm() {
       paymentTermsDays: bill.header.paymentTermsDays || 7,
       brandId: matchedBrandId,
       productTypeId: matchedProductTypeId,
+      taxId: currentLookups.productTypes.find(t => t.id === matchedProductTypeId)?.defaultTaxId ?? "",
       hsnSac: /^(?:[0-9]{4}|[0-9]{6}|[0-9]{8})$/.test(item.hsnCode?.trim() ?? "") ? item.hsnCode.trim() : currentLookups.productTypes.find(t => t.id === matchedProductTypeId)?.hsnSac ?? "",
       productModelId: matchedModelId,
       variantId: matchedVariantId,

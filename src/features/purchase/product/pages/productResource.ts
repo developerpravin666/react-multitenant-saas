@@ -10,6 +10,7 @@ export type ProductLookupRecord = ResourceRecord & {
   name: string;
   brandId?: string;
   productTypeId?: string;
+  defaultTaxId?: string | null;
   hsnSac?: string | null;
   gstNumber?: string;
   code?: string;
@@ -25,8 +26,7 @@ const productsApi = createResourceApi<Product>("/products");
 
 export async function getCurrentTaxRates() {
   const taxRates = await taxRatesApi.list(true);
-  const activeTax = taxRates.find((taxRate) => taxRate.isActive) ?? taxRates[0];
-  return { cgst: activeTax?.cgst ?? 0, sgst: activeTax?.sgst ?? 0 };
+  return { cgst: 0, sgst: 0, taxes: taxRates };
 }
 
 export interface ProductLookupsData {
@@ -36,7 +36,7 @@ export interface ProductLookupsData {
   models: ProductLookupRecord[];
   variants: ProductLookupRecord[];
   colors: ProductLookupRecord[];
-  taxRates: { cgst: number; sgst: number };
+  taxRates: { cgst: number; sgst: number; taxes: TaxRate[] };
 }
 
 export async function loadProductLookups(): Promise<ProductLookupsData> {
@@ -104,7 +104,7 @@ export const productResource = {
         productsApi.getById(id),
         getCurrentTaxRates(),
       ]);
-      return { ...taxRates, ...product, hsnSac: product.hsnSac ?? "" };
+      return { ...taxRates, ...product, hsnSac: product.hsnSac ?? "", taxId: product.taxId ?? "" };
     },
   },
 };

@@ -2,6 +2,18 @@ import type { FormFieldConfig } from "../../../../types/form";
 
 export const taxFormConfig: FormFieldConfig[] = [
   {
+    id: "name", name: "name", label: "Tax Profile Name", type: "text",
+    required: true, maxLength: 100, placeholder: "Example: Mobile devices GST"
+  },
+  {
+    id: "effectiveFrom", name: "effectiveFrom", label: "Effective From",
+    type: "date", required: true, defaultValue: new Date().toISOString().slice(0, 10)
+  },
+  {
+    id: "treatment", name: "treatment", label: "Tax Treatment", type:
+      "select", required: true, defaultValue: "Taxable", options: ["Taxable", "Exempt", "NilRated", "NonGst", "ZeroRated"].map(value => ({ value, label: value }))
+  },
+  {
     id: "cgst",
     name: "cgst",
     label: "CGST (%)",

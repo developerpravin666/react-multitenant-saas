@@ -6,10 +6,11 @@ import { createSaleFormConfig, type SaleTaxOption } from "../config/sale.form";
 import type { CustomerLookupRecord, SaleProductOption, SaleRecord } from "../types/sale.types";
 
 const salesApi = createResourceApi<SaleRecord>("/sales/products");
+import { resolveTaxRate } from "../../../settings/tax/taxProfiles";
 let saleTaxes: SaleTaxOption[] = [];
 
 function toInvoiceValues(values: Record<string, unknown>) {
-  const tax = saleTaxes.find((item) => item.id === values.taxId);
+  const tax = resolveTaxRate(saleTaxes, values.taxId, String(values.saleDate ?? ""));
   const factor = 1 + ((tax?.cgst ?? 0) + (tax?.sgst ?? 0)) / 100;
   const discount = Math.round(Number(values.discount || 0) / factor * 100) / 100;
   // The invoice API subtracts discount before adding GST. Convert the final
