@@ -13,13 +13,14 @@ export function ProductTypeFormPage({ mode }: { mode: "create" | "edit" }) {
   return <ResourceFormPage {...productTypeResource} mode={mode} />;
 }
 
-type ProductTypeEntry = { name: string; description: string; isActive: boolean };
-const emptyEntry = (): ProductTypeEntry => ({ name: "", description: "", isActive: true });
+type ProductTypeEntry = { name: string; hsnSac: string; description: string; isActive: boolean };
+const emptyEntry = (): ProductTypeEntry => ({ name: "", hsnSac: "", description: "", isActive: true });
 const productTypeEntriesSchema = z.object({
   entries: z.array(z.object({
     name: z.string()
       .refine((name) => name.trim().length > 0, "Product Type is required.")
       .max(120, "Product Type must be 120 characters or fewer."),
+    hsnSac: z.string().trim().refine(code => code === "" || /^(?:[0-9]{4}|[0-9]{6}|[0-9]{8})$/.test(code), "HSN/SAC must contain 4, 6 or 8 digits."),
     description: z.string(),
     isActive: z.boolean(),
   })).min(1, "Add at least one product type."),
@@ -60,6 +61,11 @@ function ProductTypeBulkForm() {
               <span>Name <span className="text-red-500">*</span></span>
               <input className={inputClass} {...register(`entries.${index}.name`)} placeholder="Example: Mobile" aria-invalid={Boolean(errors.entries?.[index]?.name)} />
               {errors.entries?.[index]?.name?.message ? <span role="alert" className="text-xs text-red-600">{errors.entries[index]?.name?.message}</span> : null}
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+              <span>Default HSN/SAC Code</span>
+              <input className={inputClass} {...register(`entries.${index}.hsnSac`)} maxLength={8} inputMode="numeric" placeholder="4, 6 or 8 digits (optional)" aria-invalid={Boolean(errors.entries?.[index]?.hsnSac)} />
+              {errors.entries?.[index]?.hsnSac?.message ? <span role="alert" className="text-xs text-red-600">{errors.entries[index]?.hsnSac?.message}</span> : null}
             </label>
             <label className="space-y-1 text-sm font-medium text-slate-700 dark:text-slate-200">
               <span>Description</span>

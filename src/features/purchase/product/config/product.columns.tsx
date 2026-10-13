@@ -77,6 +77,7 @@ function ProductStatusCell({ row }: { row: Product }) {
 }
 
 export const productColumns: GridColumn<Product>[] = [
+  { id: "hsnSac", accessor: "hsnSac", header: "HSN/SAC", sortable: true, cell: (_, row) => row.hsnSac || "-" },
   {
     id: "vendorName",
     header: "Vendor",

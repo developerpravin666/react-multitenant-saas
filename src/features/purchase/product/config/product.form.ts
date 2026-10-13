@@ -5,6 +5,7 @@ export interface ProductLookup {
   name: string;
   brandId?: string;
   productTypeId?: string;
+  hsnSac?: string | null;
 }
 
 interface ProductFormOptions {
@@ -43,6 +44,15 @@ export function createProductFormConfig({
       dependsOn: "brandId", placeholder: "Select a brand first",
       options: productTypes.map((item) => ({ label: item.name, value: item.id, parentValue: item.brandId })),
       loadOptions: async (brandId) => toOptions(productTypes.filter((item) => !item.brandId || item.brandId === brandId)),
+    },
+    {
+      id: "hsnSac", name: "hsnSac", label: "HSN/SAC Code", type: "text",
+      maxLength: 8, pattern: "^(?:[0-9]{4}|[0-9]{6}|[0-9]{8})$",
+      description: "Defaults from Product Type; editable for this purchase.",
+      computed: {
+        dependsOn: ["productTypeId"],
+        calculate: (values) => productTypes.find(t => t.id === values.productTypeId)?.hsnSac ?? "",
+      },
     },
     {
       id: "productModelId", name: "productModelId", label: "Model",

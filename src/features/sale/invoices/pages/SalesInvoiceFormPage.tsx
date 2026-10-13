@@ -128,6 +128,7 @@ export function SalesInvoiceFormPage() {
               itemType: 0,
               productId: first.id,
               itemDescription: `${first.brand} - ${first.productModel} - ${first.variant} - ${first.color}`,
+              hsnSac: first.hsnSac,
               serialNumber: first.serialNumber,
               serialNumber1: first.serialNumber1,
               quantity: 1,
@@ -359,7 +360,8 @@ export function SalesInvoiceFormPage() {
         itemDescription: nextProd
           ? `${nextProd.brand} - ${nextProd.productModel} - ${nextProd.variant} - ${nextProd.color}`
           : "Serialized Device",
-        serialNumber: nextProd?.serialNumber,
+        hsnSac: nextProd?.hsnSac,
+              serialNumber: nextProd?.serialNumber,
         serialNumber1: nextProd?.serialNumber1,
         quantity: 1,
         unitPrice: nextProd?.purchasePrice ?? 0,
@@ -413,6 +415,7 @@ export function SalesInvoiceFormPage() {
               ...line,
               ...patch,
               itemDescription: `${prod.brand} - ${prod.productModel} - ${prod.variant} - ${prod.color}`,
+              hsnSac: prod.hsnSac,
               serialNumber: prod.serialNumber,
               serialNumber1: prod.serialNumber1,
               unitPrice: prod.purchasePrice ?? 0,

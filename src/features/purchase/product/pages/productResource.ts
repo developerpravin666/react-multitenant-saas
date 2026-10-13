@@ -10,6 +10,7 @@ export type ProductLookupRecord = ResourceRecord & {
   name: string;
   brandId?: string;
   productTypeId?: string;
+  hsnSac?: string | null;
   gstNumber?: string;
   code?: string;
 };
@@ -103,7 +104,7 @@ export const productResource = {
         productsApi.getById(id),
         getCurrentTaxRates(),
       ]);
-      return { ...taxRates, ...product };
+      return { ...taxRates, ...product, hsnSac: product.hsnSac ?? "" };
     },
   },
 };

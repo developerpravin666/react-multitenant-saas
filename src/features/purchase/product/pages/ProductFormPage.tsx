@@ -248,6 +248,7 @@ function BulkProductCreateForm() {
       paymentTermsDays: bill.header.paymentTermsDays || 7,
       brandId: matchedBrandId,
       productTypeId: matchedProductTypeId,
+      hsnSac: /^(?:[0-9]{4}|[0-9]{6}|[0-9]{8})$/.test(item.hsnCode?.trim() ?? "") ? item.hsnCode.trim() : currentLookups.productTypes.find(t => t.id === matchedProductTypeId)?.hsnSac ?? "",
       productModelId: matchedModelId,
       variantId: matchedVariantId,
       colorId: matchedColorId,
@@ -425,7 +426,7 @@ function BulkProductCreateForm() {
         </div>
 
         {/* 4 Sample Bill Quick Selectors */}
-        <div className="mt-4 pt-3.5 border-t border-indigo-100/80 dark:border-slate-800">
+        {/* <div className="mt-4 pt-3.5 border-t border-indigo-100/80 dark:border-slate-800">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
               Sample Distributor Invoices (Click to test auto-fill):
@@ -463,7 +464,7 @@ function BulkProductCreateForm() {
               );
             })}
           </div>
-        </div>
+        </div> */}
 
         {/* OCR Scanning Progress Bar */}
         {isScanning && (
@@ -523,11 +524,10 @@ function BulkProductCreateForm() {
                         key={item.id}
                         type="button"
                         onClick={() => handleSwitchItem(idx)}
-                        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                          isItemActive
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${isItemActive
                             ? "bg-indigo-600 text-white shadow-xs"
                             : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700"
-                        }`}
+                          }`}
                       >
                         <span>Item {idx + 1}: {item.description}</span>
                         <span className="font-mono opacity-85">₹{item.taxableRate.toLocaleString("en-IN")}</span>
