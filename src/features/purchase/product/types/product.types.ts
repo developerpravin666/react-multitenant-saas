@@ -2,6 +2,9 @@ import { BaseMaster } from "../../../shared/master.types";
 
 
 export interface Product extends BaseMaster {
+  taxId?: string | null;
+  taxTreatment?: string;
+  hsnSac?: string | null;
   vendorId: string;
   vendorName?: string;
   billNumber?: string | null;

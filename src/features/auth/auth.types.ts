@@ -14,6 +14,7 @@ export interface AuthUser {
   username: string;
   displayName?: string;
   tenantSlug?: string;
+  tenantName?: string;
   email?: string;
   isProductOwner?: boolean;
   roles?: string[];

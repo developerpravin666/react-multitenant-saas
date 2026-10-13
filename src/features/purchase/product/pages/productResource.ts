@@ -6,20 +6,50 @@ import type { TaxRate } from "../../../settings/tax/types/tax.types";
 import { APP_ROUTES } from "../../../../config/routes";
 import { apiClient } from "../../../../services/apiClient";
 
-type LookupRecord = ResourceRecord & { name: string; brandId?: string; productTypeId?: string };
-const vendorsApi = createResourceApi<LookupRecord>("/vendors/all");
-const brandsApi = createResourceApi<LookupRecord>("/brands/all");
-const typesApi = createResourceApi<LookupRecord>("/product-types/all");
-const modelsApi = createResourceApi<LookupRecord>("/product-models/all");
-const variantsApi = createResourceApi<LookupRecord>("/variants/all");
-const colorsApi = createResourceApi<LookupRecord>("/colors/all");
+export type ProductLookupRecord = ResourceRecord & {
+  name: string;
+  brandId?: string;
+  productTypeId?: string;
+  defaultTaxId?: string | null;
+  hsnSac?: string | null;
+  gstNumber?: string;
+  code?: string;
+};
+const vendorsApi = createResourceApi<ProductLookupRecord>("/vendors/all");
+const brandsApi = createResourceApi<ProductLookupRecord>("/brands/all");
+const typesApi = createResourceApi<ProductLookupRecord>("/product-types/all");
+const modelsApi = createResourceApi<ProductLookupRecord>("/product-models/all");
+const variantsApi = createResourceApi<ProductLookupRecord>("/variants/all");
+const colorsApi = createResourceApi<ProductLookupRecord>("/colors/all");
 const taxRatesApi = createResourceApi<TaxRate>("/taxes/all");
 const productsApi = createResourceApi<Product>("/products");
 
-async function getCurrentTaxRates() {
+export async function getCurrentTaxRates() {
   const taxRates = await taxRatesApi.list(true);
-  const activeTax = taxRates.find((taxRate) => taxRate.isActive) ?? taxRates[0];
-  return { cgst: activeTax?.cgst ?? 0, sgst: activeTax?.sgst ?? 0 };
+  return { cgst: 0, sgst: 0, taxes: taxRates };
+}
+
+export interface ProductLookupsData {
+  vendors: ProductLookupRecord[];
+  brands: ProductLookupRecord[];
+  productTypes: ProductLookupRecord[];
+  models: ProductLookupRecord[];
+  variants: ProductLookupRecord[];
+  colors: ProductLookupRecord[];
+  taxRates: { cgst: number; sgst: number; taxes: TaxRate[] };
+}
+
+export async function loadProductLookups(): Promise<ProductLookupsData> {
+  const [vendors, brands, productTypes, models, variants, colors, taxRates] = await Promise.all([
+    vendorsApi.list(),
+    brandsApi.list(),
+    typesApi.list(),
+    modelsApi.list(),
+    variantsApi.list(),
+    colorsApi.list(),
+    getCurrentTaxRates(),
+  ]);
+  return { vendors, brands, productTypes, models, variants, colors, taxRates };
 }
 
 export const productResource = {
@@ -31,10 +61,16 @@ export const productResource = {
   editPath: APP_ROUTES.purchase.products.edit, columns: productColumns,
   columnsPerRow: 3 as const,
   loadFields: async () => {
-    const [vendors, brands, productTypes, models, variants, colors, taxRates] = await Promise.all([
-      vendorsApi.list(), brandsApi.list(), typesApi.list(), modelsApi.list(), variantsApi.list(), colorsApi.list(), getCurrentTaxRates(),
-    ]);
-    const fields = createProductFormConfig({ vendors, brands, productTypes, models, variants, colors, ...taxRates });
+    const lookups = await loadProductLookups();
+    const fields = createProductFormConfig({
+      vendors: lookups.vendors,
+      brands: lookups.brands,
+      productTypes: lookups.productTypes,
+      models: lookups.models,
+      variants: lookups.variants,
+      colors: lookups.colors,
+      ...lookups.taxRates,
+    });
     return fields;
   },
   api: {
@@ -68,7 +104,7 @@ export const productResource = {
         productsApi.getById(id),
         getCurrentTaxRates(),
       ]);
-      return { ...taxRates, ...product };
+      return { ...taxRates, ...product, hsnSac: product.hsnSac ?? "", taxId: product.taxId ?? "" };
     },
   },
 };

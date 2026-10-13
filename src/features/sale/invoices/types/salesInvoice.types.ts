@@ -38,6 +38,7 @@ export interface SalesInvoiceLine {
   productId?: string | null;
   skuId?: string | null;
   itemDescription: string;
+  taxTreatment?: string;
   hsnSac?: string | null;
   unitOfMeasure?: string;
   serialNumber?: string | null;
@@ -66,6 +67,8 @@ export interface SalesInvoiceReceipt {
 }
 
 export interface SalesInvoiceDetails {
+  taxPointDate?: string | null;
+  taxDateReason?: string | null;
   invoice: SalesInvoiceSummary;
   lines: SalesInvoiceLine[];
   payments: SalesInvoiceReceipt[];
@@ -76,6 +79,7 @@ export interface CreateInvoiceLineDraft {
   productId?: string | null;
   skuId?: string | null;
   itemDescription: string;
+  taxTreatment?: string;
   hsnSac?: string | null;
   unitOfMeasure?: string;
   serialNumber?: string | null;

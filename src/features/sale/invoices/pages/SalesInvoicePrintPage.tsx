@@ -121,6 +121,7 @@ export function SalesInvoicePrintPage() {
             ) : null}
           </section>
 
+          {details.taxPointDate && details.taxPointDate !== invoice.invoiceDate ? <p>Tax-effective date: {details.taxPointDate} {details.taxDateReason ? `(${details.taxDateReason})` : ""}</p> : null}
           {/* Multi-line items table */}
           <table className="customer-bill-items">
             <thead>
@@ -154,7 +155,7 @@ export function SalesInvoicePrintPage() {
                       )}
                     </td>
                   ) : null}
-                  <td>{l.hsnSac || "—"}</td><td className="number">{l.quantity} {l.unitOfMeasure || "NOS"}</td>
+                  <td>{l.hsnSac || "—"}{l.taxTreatment && l.taxTreatment !== "Taxable" ? <small> ({l.taxTreatment})</small> : null}</td><td className="number">{l.quantity} {l.unitOfMeasure || "NOS"}</td>
                   <td className="number">{currency(l.unitPrice)}</td>
                   {template.showDiscount ? (
                     <td className="number">{l.discount > 0 ? currency(l.discount) : "—"}</td>

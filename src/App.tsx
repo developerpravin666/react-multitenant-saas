@@ -39,6 +39,8 @@ import { SystemSettingsPage } from "./features/admin/SystemSettingsPage";
 import { MasterImportPage } from "./features/products/import/MasterImportPage";
 import { FeatureFlagsAdminPage } from "./features/feature-flags/FeatureFlagsAdminPage";
 import { TableManagementDashboardPage } from "./features/admin/TableManagementDashboardPage";
+import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
+import { AdminRoute } from "./features/auth/AdminRoute";
 
 function RootDashboard() {
   const { isProductOwner } = useAuth();
@@ -89,7 +91,10 @@ export default function App() {
           <Route path={APP_ROUTES.settings.customerBill} element={<CustomerBillSettingsPage />} />
           <Route path={APP_ROUTES.settings.auditLogs} element={<AuditLogsPage />} />
           <Route path={APP_ROUTES.settings.tenantApprovals} element={<TenantApprovalsPage />} />
-          <Route path={APP_ROUTES.settings.databaseTables} element={<TableManagementDashboardPage />} />
+          <Route element={<AdminRoute />}>
+            <Route path={APP_ROUTES.settings.databaseTables} element={<TableManagementDashboardPage />} />
+            <Route path={APP_ROUTES.admin.databaseTables} element={<TableManagementDashboardPage />} />
+          </Route>
 
           {/* Product Owner Console Routes */}
           <Route path="/admin" element={<Navigate to={APP_ROUTES.admin.dashboard} replace />} />
@@ -97,10 +102,10 @@ export default function App() {
           <Route path={APP_ROUTES.admin.tenants} element={<TenantDirectoryPage />} />
           <Route path={APP_ROUTES.admin.pendingApprovals} element={<TenantApprovalsPage />} />
           <Route path={APP_ROUTES.admin.databaseMigrations} element={<DatabaseMigrationsPage />} />
-          <Route path={APP_ROUTES.admin.databaseTables} element={<TableManagementDashboardPage />} />
           <Route path={APP_ROUTES.admin.systemSettings} element={<SystemSettingsPage />} />
           <Route path={APP_ROUTES.admin.featureFlags} element={<FeatureFlagsAdminPage />} />
           <Route path={APP_ROUTES.admin.mastersImport} element={<MasterImportPage isAdminMode={true} />} />
+          <Route path={APP_ROUTES.admin.emailTemplates} element={<EmailTemplatesPage />} />
 
           <Route path="**" element={<Navigate to="/" replace />} />
         </Route>

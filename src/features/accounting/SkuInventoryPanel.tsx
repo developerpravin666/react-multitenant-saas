@@ -1,8 +1,11 @@
+import { taxProfileOptions } from "../settings/tax/taxProfiles";
+import type { TaxRate } from "../settings/tax/types/tax.types";
 import { useEffect, useState, type FormEvent } from "react";
 import { apiClient, type PagedData } from "../../services/apiClient";
 import { Button } from "../../components/ui/Button";
 
 export type StockSku = {
+  defaultTaxId?: string | null;
   id: string;
   code: string;
   name: string;
@@ -22,7 +25,7 @@ const baseField =
 export function SkuInventoryPanel({ onChanged }: { onChanged: () => void }) {
   const [skus, setSkus] = useState<StockSku[]>([]);
   const [vendors, setVendors] = useState<Choice[]>([]);
-  const [taxes, setTaxes] = useState<Choice[]>([]);
+  const [taxes, setTaxes] = useState<TaxRate[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -52,11 +55,11 @@ export function SkuInventoryPanel({ onChanged }: { onChanged: () => void }) {
     void refresh().catch((e) => setError(String(e)));
     void Promise.all([
       apiClient.get<PagedData<Choice>>("/vendors?pageSize=100"),
-      apiClient.get<PagedData<Choice>>("/taxes?pageSize=100"),
+      apiClient.get<TaxRate[]>("/taxes/all"),
     ])
       .then(([v, t]) => {
         setVendors(v.items);
-        setTaxes(t.items);
+        setTaxes(t);
       })
       .catch((e) => setError(String(e)));
   }, []);
@@ -90,6 +93,7 @@ export function SkuInventoryPanel({ onChanged }: { onChanged: () => void }) {
       const costVal = Number(d.get("cost"));
 
       if (!sku) errs.receive_sku = "Choose an SKU.";
+      if (!d.get("tax") && !skus.find(s => s.id === sku)?.defaultTaxId) errs.receive_tax = "Select a tax profile (including an explicit zero-tax profile).";
       if (!vendor) errs.receive_vendor = "Select a supplier.";
       if (!bill) errs.receive_bill = "Bill number is required.";
       if (!date) errs.receive_date = "Date is required.";
@@ -139,6 +143,7 @@ export function SkuInventoryPanel({ onChanged }: { onChanged: () => void }) {
           name: String(d.get("name") || "").trim(),
           hsnSac: String(d.get("hsn") || "").trim(),
           unitOfMeasure: String(d.get("unit") || "").trim(),
+          defaultTaxId: d.get("defaultTaxId") || null,
         });
       if (action === "opening")
         await apiClient.post("/inventory/skus/opening-stock", {
@@ -327,6 +332,10 @@ export function SkuInventoryPanel({ onChanged }: { onChanged: () => void }) {
             </p>
           )}
         </div>
+        <select aria-label="Default SKU tax profile" name="defaultTaxId" className={baseField}>
+          <option value="">Choose on transaction</option>
+          {taxProfileOptions(taxes).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
         <Button type="submit" disabled={busy}>
           Create SKU
         </Button>
@@ -402,13 +411,10 @@ export function SkuInventoryPanel({ onChanged }: { onChanged: () => void }) {
           defaultValue="0"
         />
         <select aria-label="Purchase GST rate" name="tax" className={baseField}>
-          <option value="">No GST</option>
-          {taxes.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.cgst}% + {t.sgst}%
-            </option>
-          ))}
+          <option value="">Use SKU default</option>
+          {taxProfileOptions(taxes).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
+        {fieldErrors.receive_tax ? <p role="alert" className="text-xs text-red-600">{fieldErrors.receive_tax}</p> : null}
         <label className="flex items-center gap-1.5 self-center text-xs text-slate-700 dark:text-slate-300">
           <input name="interstate" type="checkbox" className="rounded" /> Interstate purchase (IGST)
         </label>

@@ -5,8 +5,10 @@ import { StockInventoryPage } from "../stock/pages/StockInventoryPage";
 import { StockGroupProductsPage } from "../stock/pages/StockGroupProductsPage";
 import { PurchaseAccountingPage } from "../accounting/pages/PurchaseAccountingPage";
 import { PurchaseBillPaymentsPage } from "../accounting/pages/PurchaseBillPaymentsPage";
+import { PurchaseBillScanPage } from "../scan-bill/pages/PurchaseBillScanPage";
 
 export const purchaseRoutes = <>
+  <Route path="/purchase/scan-bill" element={<PurchaseBillScanPage />} />
   <Route path="/purchase/accounting" element={<PurchaseAccountingPage />} />
   <Route path="/purchase/accounting/payments" element={<PurchaseBillPaymentsPage />} />
   <Route path="/purchase/stock" element={<StockInventoryPage />} />

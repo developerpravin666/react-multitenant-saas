@@ -35,11 +35,9 @@ export function Header() {
         </div>
       ) : (
         <div className="flex min-w-0 items-center gap-3">
-          <img
-            src={tenant.logoUrl}
-            alt={`${tenant.tenantName} logo`}
-            className="size-9 rounded-lg border border-slate-200 bg-white object-contain p-1 dark:border-slate-700"
-          />
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--tenant-primary)] text-lg font-semibold text-white">
+            {Array.from(tenant.tenantName.trim())[0]?.toLocaleUpperCase() || "S"}
+          </span>
           <span className="hidden max-w-44 truncate text-sm font-semibold text-slate-900 sm:block dark:text-slate-100">
             {tenant.tenantName}
           </span>

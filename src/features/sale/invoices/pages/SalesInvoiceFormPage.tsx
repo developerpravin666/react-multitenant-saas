@@ -1,3 +1,4 @@
+import { resolveTaxRate, taxProfileOptions } from "../../../settings/tax/taxProfiles";
 import type { StockSku } from "../../../accounting/SkuInventoryPanel";
 import { useState, useEffect, useMemo, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -84,11 +85,21 @@ export function SalesInvoiceFormPage() {
 
   // Invoice header state
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [taxPointDate, setTaxPointDate] = useState("");
+  const [taxDateReason, setTaxDateReason] = useState("");
+  const effectiveTaxDate = taxPointDate || invoiceDate;
   const [paymentTermsDays, setPaymentTermsDays] = useState(0);
   const [notes, setNotes] = useState("");
 
   // Line items state
   const [lines, setLines] = useState<LineFormRow[]>([]);
+
+  useEffect(() => {
+    setLines(current => current.map(line => {
+      const rate = resolveTaxRate(taxes, line.taxId, effectiveTaxDate);
+      return { ...line, taxId: rate?.profileId || line.taxId, cgstRate: rate?.cgst ?? 0, sgstRate: rate?.sgst ?? 0, igstRate: rate?.totalTax ?? 0 };
+    }));
+  }, [taxes, effectiveTaxDate]);
 
   // Initial payment state
   const [collectPayment, setCollectPayment] = useState(false);
@@ -121,19 +132,20 @@ export function SalesInvoiceFormPage() {
         // Add initial serialized row if products available
         if (prods[0]) {
           const first = prods[0];
-          const matchedTax = taxList.find((t) => t.cgst === first.cgst && t.sgst === first.sgst) ?? taxList[0];
+          const matchedTax = resolveTaxRate(taxList, first.taxId, effectiveTaxDate);
           setLines([
             {
               tempId: `row_${Date.now()}`,
               itemType: 0,
               productId: first.id,
               itemDescription: `${first.brand} - ${first.productModel} - ${first.variant} - ${first.color}`,
+              hsnSac: first.hsnSac,
               serialNumber: first.serialNumber,
               serialNumber1: first.serialNumber1,
               quantity: 1,
               unitPrice: first.purchasePrice ?? 0,
               discount: 0,
-              taxId: matchedTax?.id,
+              taxId: matchedTax?.profileId || matchedTax?.id,
               cgstRate: matchedTax?.cgst ?? 0,
               sgstRate: matchedTax?.sgst ?? 0,
               igstRate: (matchedTax?.cgst ?? 0) + (matchedTax?.sgst ?? 0),
@@ -148,10 +160,10 @@ export function SalesInvoiceFormPage() {
               quantity: 1,
               unitPrice: 0,
               discount: 0,
-              taxId: taxList[0]?.id,
-              cgstRate: taxList[0]?.cgst ?? 0,
-              sgstRate: taxList[0]?.sgst ?? 0,
-              igstRate: (taxList[0]?.cgst ?? 0) + (taxList[0]?.sgst ?? 0),
+              taxId: undefined,
+              cgstRate: 0,
+              sgstRate: 0,
+              igstRate: (0) + (0),
             },
           ]);
         }
@@ -279,7 +291,9 @@ export function SalesInvoiceFormPage() {
 
   // Line calculations taking Supply Type (IGST vs CGST+SGST) into account
   const calculatedLines = useMemo(() => {
-    return lines.map((line) => {
+    return lines.map((savedLine) => {
+      const rate = resolveTaxRate(taxes, savedLine.taxId, effectiveTaxDate);
+      const line = { ...savedLine, cgstRate: rate?.cgst ?? 0, sgstRate: rate?.sgst ?? 0, igstRate: rate?.totalTax ?? 0 };
       const gross = Math.round(Number(line.quantity || 0) * Number(line.unitPrice || 0) * 100) / 100;
       const discount = Math.min(gross, Math.max(0, Number(line.discount || 0)));
       const taxable = Math.max(0, gross - discount);
@@ -307,7 +321,7 @@ export function SalesInvoiceFormPage() {
         lineTotal,
       };
     });
-  }, [lines, isInterState]);
+  }, [lines, isInterState, taxes, effectiveTaxDate]);
 
   const totals = useMemo(() => {
     let subTotal = 0;
@@ -348,7 +362,7 @@ export function SalesInvoiceFormPage() {
     const usedProductIds = new Set(lines.filter((l) => l.productId).map((l) => l.productId));
     const nextProd = availableProducts.find((p) => !usedProductIds.has(p.id));
     if (!nextProd) { notifications.warning("All available devices are already selected."); return; }
-    const defaultTax = nextProd ? taxes.find((t) => t.cgst === nextProd.cgst && t.sgst === nextProd.sgst) ?? taxes[0] : taxes[0];
+    const defaultTax = resolveTaxRate(taxes, nextProd?.taxId, effectiveTaxDate);
 
     setLines((prev) => [
       ...prev,
@@ -359,12 +373,13 @@ export function SalesInvoiceFormPage() {
         itemDescription: nextProd
           ? `${nextProd.brand} - ${nextProd.productModel} - ${nextProd.variant} - ${nextProd.color}`
           : "Serialized Device",
+        hsnSac: nextProd?.hsnSac,
         serialNumber: nextProd?.serialNumber,
         serialNumber1: nextProd?.serialNumber1,
         quantity: 1,
         unitPrice: nextProd?.purchasePrice ?? 0,
         discount: 0,
-        taxId: defaultTax?.id,
+        taxId: defaultTax?.profileId || defaultTax?.id,
         cgstRate: defaultTax?.cgst ?? 0,
         sgstRate: defaultTax?.sgst ?? 0,
         igstRate: (defaultTax?.cgst ?? 0) + (defaultTax?.sgst ?? 0),
@@ -373,7 +388,7 @@ export function SalesInvoiceFormPage() {
   };
 
   const addStandardLine = () => {
-    const defaultTax = taxes[0];
+    const defaultTax = undefined as SaleTaxOption | undefined;
     setLines((prev) => [
       ...prev,
       {
@@ -383,7 +398,7 @@ export function SalesInvoiceFormPage() {
         quantity: 1,
         unitPrice: 0,
         discount: 0,
-        taxId: defaultTax?.id,
+        taxId: defaultTax?.profileId || defaultTax?.id,
         cgstRate: defaultTax?.cgst ?? 0,
         sgstRate: defaultTax?.sgst ?? 0,
         igstRate: (defaultTax?.cgst ?? 0) + (defaultTax?.sgst ?? 0),
@@ -408,15 +423,16 @@ export function SalesInvoiceFormPage() {
         if (patch.productId && patch.productId !== line.productId) {
           const prod = availableProducts.find((p) => p.id === patch.productId);
           if (prod) {
-            const matchedTax = taxes.find((t) => t.cgst === prod.cgst && t.sgst === prod.sgst) ?? taxes[0];
+            const matchedTax = resolveTaxRate(taxes, prod.taxId, effectiveTaxDate);
             return {
               ...line,
               ...patch,
               itemDescription: `${prod.brand} - ${prod.productModel} - ${prod.variant} - ${prod.color}`,
+              hsnSac: prod.hsnSac,
               serialNumber: prod.serialNumber,
               serialNumber1: prod.serialNumber1,
               unitPrice: prod.purchasePrice ?? 0,
-              taxId: matchedTax?.id,
+              taxId: matchedTax?.profileId || matchedTax?.id,
               cgstRate: matchedTax?.cgst ?? 0,
               sgstRate: matchedTax?.sgst ?? 0,
               igstRate: (matchedTax?.cgst ?? 0) + (matchedTax?.sgst ?? 0),
@@ -426,7 +442,7 @@ export function SalesInvoiceFormPage() {
 
         // If tax changed, update rates
         if (patch.taxId && patch.taxId !== line.taxId) {
-          const t = taxes.find((tax) => tax.id === patch.taxId);
+          const t = resolveTaxRate(taxes, patch.taxId, effectiveTaxDate);
           return {
             ...line,
             ...patch,
@@ -491,7 +507,13 @@ export function SalesInvoiceFormPage() {
     if (submitting) return;
     const ids = lines.filter(l => l.itemType === 0).map(l => l.productId);
     if (ids.some(id => !id) || new Set(ids).size !== ids.length) { notifications.error("Invalid items", "Choose a different device for every serialized line."); return; }
+    if (taxPointDate && taxPointDate !== invoiceDate && !taxDateReason.trim()) {
+      notifications.error("Tax-effective date", "Explain why the tax-effective date differs from the invoice date."); return;
+    }
     for (const l of lines) {
+      if (!resolveTaxRate(taxes, l.taxId, effectiveTaxDate)) {
+        notifications.error("Tax profile required", "Select a tax profile with an active rate for the tax-effective date on every line."); return;
+      }
       if (!l.itemDescription.trim()) {
         notifications.error("Missing Description", "Every item must have a valid description.");
         return;
@@ -514,6 +536,8 @@ export function SalesInvoiceFormPage() {
         placeOfSupplyStateName: placeOfSupplyStateName || null,
         supplyType: effectiveSupplyType,
         invoiceDate,
+        taxPointDate: taxPointDate || null,
+        taxDateReason: taxDateReason.trim() || null,
         paymentTermsDays,
         notes: notes.trim() || null,
         lines: lines.map((l) => ({
@@ -811,11 +835,10 @@ export function SalesInvoiceFormPage() {
                 }}
                 placeholder="Full Name"
                 aria-invalid={Boolean(customerErrors.customerName)}
-                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${
-                  customerErrors.customerName
+                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${customerErrors.customerName
                     ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                     : "border-slate-300 dark:border-slate-700"
-                }`}
+                  }`}
               />
               {customerErrors.customerName && (
                 <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -836,11 +859,10 @@ export function SalesInvoiceFormPage() {
                 }}
                 placeholder="10-digit mobile"
                 aria-invalid={Boolean(customerErrors.customerMobile)}
-                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${
-                  customerErrors.customerMobile
+                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${customerErrors.customerMobile
                     ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                     : "border-slate-300 dark:border-slate-700"
-                }`}
+                  }`}
               />
               {customerErrors.customerMobile && (
                 <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -861,11 +883,10 @@ export function SalesInvoiceFormPage() {
                 }}
                 placeholder="Street / Area / City"
                 aria-invalid={Boolean(customerErrors.customerAddress)}
-                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${
-                  customerErrors.customerAddress
+                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${customerErrors.customerAddress
                     ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                     : "border-slate-300 dark:border-slate-700"
-                }`}
+                  }`}
               />
               {customerErrors.customerAddress && (
                 <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -884,11 +905,10 @@ export function SalesInvoiceFormPage() {
                 }}
                 placeholder="customer@email.com"
                 aria-invalid={Boolean(customerErrors.customerEmail)}
-                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${
-                  customerErrors.customerEmail
+                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${customerErrors.customerEmail
                     ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                     : "border-slate-300 dark:border-slate-700"
-                }`}
+                  }`}
               />
               {customerErrors.customerEmail && (
                 <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -912,11 +932,10 @@ export function SalesInvoiceFormPage() {
                   clearCustomerError("customerGstin");
                 }}
                 aria-invalid={Boolean(customerErrors.customerGstin)}
-                className={`mt-1 w-full font-mono uppercase rounded-lg border px-3 py-1.5 text-sm tracking-wider dark:bg-slate-800 ${
-                  customerErrors.customerGstin
+                className={`mt-1 w-full font-mono uppercase rounded-lg border px-3 py-1.5 text-sm tracking-wider dark:bg-slate-800 ${customerErrors.customerGstin
                     ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                     : "border-slate-300 dark:border-slate-700"
-                }`}
+                  }`}
               />
               {customerErrors.customerGstin && (
                 <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -935,11 +954,10 @@ export function SalesInvoiceFormPage() {
                   clearCustomerError("placeOfSupplyStateCode");
                 }}
                 aria-invalid={Boolean(customerErrors.placeOfSupplyStateCode)}
-                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${
-                  customerErrors.placeOfSupplyStateCode
+                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${customerErrors.placeOfSupplyStateCode
                     ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                     : "border-slate-300 dark:border-slate-700"
-                }`}
+                  }`}
               >
                 <option value="">Select State / UT</option>
                 {INDIAN_GST_STATES.map((s) => (
@@ -1005,17 +1023,23 @@ export function SalesInvoiceFormPage() {
                   clearCustomerError("invoiceDate");
                 }}
                 aria-invalid={Boolean(customerErrors.invoiceDate)}
-                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${
-                  customerErrors.invoiceDate
+                className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${customerErrors.invoiceDate
                     ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                     : "border-slate-300 dark:border-slate-700"
-                }`}
+                  }`}
               />
               {customerErrors.invoiceDate && (
                 <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
                   {customerErrors.invoiceDate}
                 </p>
               )}
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Tax-effective date (optional)
+                <input aria-label="Tax-effective date" type="date" value={taxPointDate} onChange={e => setTaxPointDate(e.target.value)} className="mt-1 w-full rounded border p-1.5 dark:bg-slate-800" />
+              </label>
+              <p className="text-xs text-slate-500">Defaults to invoice date. For supply/payment timing around a GST change, enter the applicable tax date.</p>
+              <input aria-label="Tax date reason" placeholder="Reason for a different tax date" value={taxDateReason} maxLength={500} onChange={e => setTaxDateReason(e.target.value)} className="mt-1 w-full rounded border p-1.5 dark:bg-slate-800" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Payment Terms (days)</label>
@@ -1079,7 +1103,7 @@ export function SalesInvoiceFormPage() {
                 key={sku.id}
                 type="button"
                 onClick={() => {
-                  const defaultTax = taxes[0];
+                  const defaultTax = resolveTaxRate(taxes, sku.defaultTaxId, effectiveTaxDate);
                   setLines((prev) => [
                     ...prev,
                     {
@@ -1090,9 +1114,9 @@ export function SalesInvoiceFormPage() {
                       hsnSac: sku.hsnSac,
                       unitOfMeasure: sku.unitOfMeasure || "NOS",
                       quantity: 1,
-                      unitPrice: 0, // The SKU summary API does not provide a selling price.
+                      unitPrice: sku.quantity > 0 ? Math.round(sku.inventoryValue / sku.quantity * 100) / 100 : 0,
                       discount: 0,
-                      taxId: defaultTax?.id,
+                      taxId: defaultTax?.profileId || defaultTax?.id,
                       cgstRate: defaultTax?.cgst ?? 0,
                       sgstRate: defaultTax?.sgst ?? 0,
                       igstRate: (defaultTax?.cgst ?? 0) + (defaultTax?.sgst ?? 0),
@@ -1161,7 +1185,7 @@ export function SalesInvoiceFormPage() {
                     ) : line.itemType === 1 ? (
                       <select aria-label="Accessory SKU" value={line.skuId ?? ""} onChange={e => {
                         const sku = skus.find(s => s.id === e.target.value);
-                        updateLineField(line.tempId, { skuId: sku?.id, itemDescription: sku?.name ?? "", hsnSac: sku?.hsnSac, unitOfMeasure: sku?.unitOfMeasure });
+                        updateLineField(line.tempId, { skuId: sku?.id, itemDescription: sku?.name ?? "", hsnSac: sku?.hsnSac, taxId: sku?.defaultTaxId || undefined, unitOfMeasure: sku?.unitOfMeasure });
                       }} className="w-full rounded border bg-transparent p-2"><option value="">Choose stocked accessory</option>{skus.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name} · {s.quantity} available</option>)}</select>
                     ) : (
                       <input
@@ -1220,11 +1244,8 @@ export function SalesInvoiceFormPage() {
                       onChange={(e) => updateLineField(line.tempId, { taxId: e.target.value })}
                       className="rounded border border-slate-300 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
                     >
-                      {taxes.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {isInterState ? `IGST ${t.totalTax}%` : `${t.totalTax}% (${t.cgst}+${t.sgst})`}
-                        </option>
-                      ))}
+                      <option value="">Select tax profile</option>
+                      {taxProfileOptions(taxes, effectiveTaxDate).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </td>
 
@@ -1335,11 +1356,10 @@ export function SalesInvoiceFormPage() {
                       clearCustomerError("paymentAmount");
                     }}
                     aria-invalid={Boolean(customerErrors.paymentAmount)}
-                    className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${
-                      customerErrors.paymentAmount
+                    className={`mt-1 w-full rounded-lg border px-3 py-1.5 text-sm dark:bg-slate-800 ${customerErrors.paymentAmount
                         ? "border-rose-500 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:text-white"
                         : "border-slate-300 dark:border-slate-700"
-                    }`}
+                      }`}
                   />
                   {customerErrors.paymentAmount && (
                     <p role="alert" className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">

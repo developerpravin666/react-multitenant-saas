@@ -41,6 +41,8 @@ export interface SaleRecord extends ResourceRecord {
 }
 
 export interface SaleProductOption extends ResourceRecord {
+  taxId?: string | null;
+  hsnSac?: string | null;
   brand: string;
   productType: string;
   productModel: string;

@@ -80,6 +80,8 @@ export function DynamicGrid<TData>({
   onRowClick,
   onSelectionChange,
   emptyMessage = "No records match the current query.",
+  footerSummary,
+  footerLabel,
 }: DynamicGridProps<TData>) {
   const rowActions = useMemo<GridAction<TData>[]>(
     () => {
@@ -283,7 +285,7 @@ export function DynamicGrid<TData>({
   const exportCsv = () =>
     downloadCsv("grid-export.csv", toCsv(exportRows, visibleColumns));
   const colSpan = visibleColumns.length + (selectable ? 1 : 0) + (hasActions ? 1 : 0);
-  const totalColumns = visibleColumns.filter((column) => column.isAmount && column.showTotal !== false);
+  const totalColumns = visibleColumns.filter((column) => (column.isAmount || column.showTotal) && column.showTotal !== false);
   const pageTotals = new Map(totalColumns.map((column) => [
     column.id,
     rows.reduce((total, row) => {
@@ -291,7 +293,7 @@ export function DynamicGrid<TData>({
       return total + (typeof value === "number" && Number.isFinite(value) ? value : 0);
     }, 0),
   ]));
-  const totalLabelColumn = visibleColumns.findIndex((column) => !column.isAmount);
+  const totalLabelColumn = visibleColumns.findIndex((column) => !column.isAmount && !column.showTotal);
 
   return (
     <section
@@ -582,21 +584,28 @@ export function DynamicGrid<TData>({
               );
             })}
           </tbody>
-          {totalColumns.length > 0 ? (
+          {totalColumns.length > 0 || footerSummary ? (
             <tfoot>
               <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-950">
                 {selectable ? <td className="px-2 py-2" /> : null}
                 {visibleColumns.map((column, index) => {
-                  const total = pageTotals.get(column.id);
-                  const isAmountTotal = total !== undefined;
-                  const content = isAmountTotal
-                    ? column.totalFormatter?.(total)
-                    ?? `₹${total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : index === totalLabelColumn ? "Current Page Total" : "";
+                  const hasSummary = footerSummary && column.id in footerSummary;
+                  const total = hasSummary ? footerSummary[column.id] : pageTotals.get(column.id);
+                  const isTotalCol = total !== undefined;
+                  const content = isTotalCol
+                    ? (typeof total === "number"
+                        ? (column.totalFormatter?.(total)
+                          ?? (column.isAmount
+                            ? `₹${total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : total.toLocaleString()))
+                        : total)
+                    : index === totalLabelColumn
+                      ? (footerLabel ?? (footerSummary ? "Total" : "Current Page Total"))
+                      : "";
                   return (
                     <td
                       key={`total-${column.id}`}
-                      className={`whitespace-nowrap px-3 py-2 text-[13px] text-slate-900 dark:text-slate-100 ${isAmountTotal || column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : "text-left"}`}
+                      className={`whitespace-nowrap px-3 py-2 text-[13px] text-slate-900 dark:text-slate-100 ${isTotalCol || column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : "text-left"}`}
                     >
                       {content}
                     </td>

@@ -44,17 +44,15 @@ const GST_STATES = [
 ];
 
 function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return (text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 6);
 }
 
 export function RegisterTenantPage() {
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugModified, setSlugModified] = useState(false);
+  const slug = slugify(name);
   const [ownerName, setOwnerName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerMobile, setOwnerMobile] = useState("");
@@ -83,16 +81,6 @@ export function RegisterTenantPage() {
   const handleNameChange = (val: string) => {
     setName(val);
     clearFieldError("name");
-    if (!slugModified) {
-      const generatedSlug = slugify(val);
-      setSlug(generatedSlug);
-      if (generatedSlug) clearFieldError("slug");
-    }
-  };
-
-  const handleSlugChange = (val: string) => {
-    setSlugModified(true);
-    setSlug(slugify(val));
     clearFieldError("slug");
   };
 
@@ -119,7 +107,9 @@ export function RegisterTenantPage() {
     }
 
     if (!slug.trim()) {
-      errors.slug = "Store slug is required.";
+      errors.slug = "Enter a store name containing letters or numbers to generate its identifier.";
+    } else if (slug.trim().length > 6) {
+      errors.slug = "Store slug must be at most 6 characters.";
     } else if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug.trim())) {
       errors.slug = "Store slug must contain only lowercase letters, numbers, and hyphens.";
     }
@@ -324,9 +314,10 @@ export function RegisterTenantPage() {
                   <input
                     type="text"
                     aria-invalid={Boolean(fieldErrors.slug)}
-                    placeholder="e.g. abc-electronics"
+                    placeholder="e.g. sme"
                     value={slug}
-                    onChange={(e) => handleSlugChange(e.target.value)}
+                    maxLength={6}
+                    disabled
                     className={`mt-1.5 w-full rounded-xl border ${fieldErrors.slug
                       ? "border-rose-500 bg-rose-50/20 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-rose-500 dark:bg-rose-950/20 dark:focus:ring-rose-950"
                       : "border-slate-200 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-blue-950"
@@ -338,7 +329,7 @@ export function RegisterTenantPage() {
                     </p>
                   ) : (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Your login identifier: <code>app/{slug || "your-slug"}</code>
+                      Generated from store name initials (maximum 6 characters). Your login identifier: <code>app/{slug || "your-slug"}</code>
                     </p>
                   )}
                 </div>

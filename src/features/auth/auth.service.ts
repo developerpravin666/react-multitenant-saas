@@ -13,6 +13,7 @@ type LoginResponse = {
   token?: string;
   accessToken?: string;
   tenantId?: string;
+  tenantName?: string;
   access_token?: string;
   refreshToken?: string;
   refresh_token?: string;
@@ -43,6 +44,7 @@ function toSession(response: LoginResponse, input: LoginInput): AuthSession {
       username: body.user?.username ?? input.username,
       tenantSlug: isPo ? "system" : (body.user?.tenantSlug ?? input.tenantSlug),
       id: body.user?.id,
+      tenantName: body.tenantName ?? body.user?.tenantName,
       displayName: isPo ? "Product Owner" : (body.user?.displayName ?? body.user?.username ?? input.username),
       isProductOwner: isPo,
       roles: body.roles ?? (isPo ? ["ProductOwner", "SuperAdmin"] : []),

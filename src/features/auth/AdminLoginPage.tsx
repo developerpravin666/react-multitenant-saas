@@ -116,11 +116,10 @@ export function AdminLoginPage() {
                   if (fieldErrors.username) setFieldErrors((prev) => ({ ...prev, username: undefined }));
                 }}
                 placeholder="admin or developer.pravin666@gmail.com"
-                className={`w-full rounded-xl border bg-slate-800/80 py-2.5 pl-9 pr-3 text-sm text-white placeholder-slate-500 transition focus:outline-none focus:ring-2 ${
-                  fieldErrors.username
+                className={`w-full rounded-xl border bg-slate-800/80 py-2.5 pl-9 pr-3 text-sm text-white placeholder-slate-500 transition focus:outline-none focus:ring-2 ${fieldErrors.username
                     ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/30"
                     : "border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/20"
-                }`}
+                  }`}
               />
             </div>
             {fieldErrors.username && (
@@ -151,11 +150,10 @@ export function AdminLoginPage() {
                   if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
                 }}
                 placeholder="••••••••••••"
-                className={`w-full rounded-xl border bg-slate-800/80 py-2.5 pl-9 pr-10 text-sm text-white placeholder-slate-500 transition focus:outline-none focus:ring-2 ${
-                  fieldErrors.password
+                className={`w-full rounded-xl border bg-slate-800/80 py-2.5 pl-9 pr-10 text-sm text-white placeholder-slate-500 transition focus:outline-none focus:ring-2 ${fieldErrors.password
                     ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/30"
                     : "border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/20"
-                }`}
+                  }`}
               />
               <button
                 type="button"
@@ -185,7 +183,7 @@ export function AdminLoginPage() {
           </div>
 
           {/* Quick Demo Credentials Assistant */}
-          <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-3 text-xs text-slate-400">
+          {/* <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-3 text-xs text-slate-400">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-slate-300">Default Credentials</span>
               <button
@@ -200,7 +198,7 @@ export function AdminLoginPage() {
               <div>User: <span className="text-slate-200">admin</span></div>
               <div>Pass: <span className="text-slate-200">Admin@123456</span></div>
             </div>
-          </div>
+          </div> */}
 
           <div className="pt-2 border-t border-slate-800 text-center">
             <Link

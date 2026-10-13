@@ -26,6 +26,7 @@ import { Link } from "react-router-dom";
 import { APP_ROUTES } from "../../config/routes";
 import { useVoiceTyping } from "../voice-typing/VoiceTypingContext";
 import { useNotifications } from "../../context/NotificationContext";
+import { RegistrationEmailTemplateEditor } from "./RegistrationEmailTemplateEditor";
 
 interface AdminSystemSettings {
   offlineMode: boolean;
@@ -362,6 +363,8 @@ export function SystemSettingsPage() {
           <span>Refresh All</span>
         </button>
       </div>
+
+      <RegistrationEmailTemplateEditor key={activeTarget} />
 
       {/* ========================================================================= */}
       {/* 1. DUAL-DATABASE SWITCHER (LOCAL ↔ CLOUD) */}

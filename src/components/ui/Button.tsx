@@ -7,6 +7,7 @@ interface ButtonProps
   extends PropsWithChildren, ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   isLoading?: boolean;
+  size?: "sm" | "md" | "lg" | string;
 }
 
 export function Button({

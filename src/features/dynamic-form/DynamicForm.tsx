@@ -66,7 +66,7 @@ export function DynamicForm({
       createDynamicFormSchema(
         fields.map((field) =>
           field.type === "select" && field.loadOptions
-            ? { ...field, options: dependentOptions[field.name] ?? [] }
+            ? { ...field, options: dependentOptions[field.name] ?? field.options ?? [] }
             : field,
         ),
       ),
@@ -91,6 +91,12 @@ export function DynamicForm({
     mode: "onBlur",
     reValidateMode: "onChange",
   });
+
+  useEffect(() => {
+    if (initialValues && Object.keys(initialValues).length > 0) {
+      reset({ ...createDefaultValues(fields), ...initialValues });
+    }
+  }, [initialValues, fields, reset]);
   const values = useWatch({ control });
   const previousValues = useRef(values);
   const computedDependencies = useRef<Record<string, unknown[]>>({});

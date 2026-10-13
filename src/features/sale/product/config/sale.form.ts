@@ -1,11 +1,32 @@
 import type { AutocompleteOption, FormFieldConfig, SelectOption } from "../../../../types/form";
 import type { CustomerLookupRecord, SaleProductOption } from "../types/sale.types";
 
+import { taxProfileOptions } from "../../../settings/tax/taxProfiles";
+
 export interface SaleTaxOption {
   id: string;
+  profileId?: string;
+  name?: string;
+  effectiveFrom?: string;
+  treatment?: string;
+  isActive?: boolean;
   cgst: number;
   sgst: number;
   totalTax: number;
+}
+
+/** Older stock can lack a profile link. Infer only a unique profile from its saved purchase rates. */
+export function getProductTaxProfile(product: SaleProductOption | undefined, taxes: SaleTaxOption[]): string {
+  if (!product) return "";
+  if (product.taxId) {
+    const linked = taxes.find(t => t.id === product.taxId || t.profileId === product.taxId);
+    return linked ? linked.profileId || linked.id : "";
+  }
+  if (product.cgst == null || product.sgst == null) return "";
+  const matchingProfiles = new Set(taxes
+    .filter(t => t.cgst === product.cgst && t.sgst === product.sgst)
+    .map(t => t.profileId || t.id));
+  return matchingProfiles.size === 1 ? [...matchingProfiles][0] : "";
 }
 
 export function createSaleFormConfig(
@@ -136,13 +157,12 @@ export function createSaleFormConfig(
         dependsOn: ["productId"],
         calculate: (values) => {
           const product = products.find((item) => item.id === String(values.productId ?? ""));
-          return taxes.find((tax) => tax.cgst === product?.cgst && tax.sgst === product?.sgst)?.id
-            ?? "00000000-0000-0000-0000-000000000000";
+          return getProductTaxProfile(product, taxes);
         },
       },
       options: [
         { value: "00000000-0000-0000-0000-000000000000", label: "No GST" },
-        ...taxes.map((tax) => ({ value: tax.id, label: `CGST ${tax.cgst}% + SGST ${tax.sgst}%` })),
+        ...taxProfileOptions(taxes),
       ],
     },
     {

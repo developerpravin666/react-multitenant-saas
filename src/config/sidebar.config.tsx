@@ -27,6 +27,7 @@ import {
   Server,
   Clock,
   ToggleRight,
+  Mail,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -80,6 +81,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
     label: "Master Data Import",
     path: APP_ROUTES.admin.mastersImport,
     icon: FileSpreadsheet,
+  },
+  {
+    id: "admin-email-templates",
+    label: "Welcome Email Format",
+    path: APP_ROUTES.admin.emailTemplates,
+    icon: Mail,
   },
 ];
 
@@ -155,6 +162,12 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Stock Inventory",
         path: APP_ROUTES.purchase.stock,
         icon: Boxes,
+      },
+      {
+        id: "purchase-scan-bill",
+        label: "Scan / Upload Bill",
+        path: APP_ROUTES.purchase.scanBill,
+        icon: Receipt,
       },
       {
         id: "purchase-accounting",
@@ -247,12 +260,6 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Store Approvals",
         path: APP_ROUTES.settings.tenantApprovals,
         icon: ShieldCheck,
-      },
-      {
-        id: "database-tables",
-        label: "Database Tables",
-        path: APP_ROUTES.settings.databaseTables,
-        icon: Database,
       },
     ],
   },

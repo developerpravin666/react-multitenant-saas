@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { apiClient } from "../../../services/apiClient";
 import { useNotifications } from "../../../context/NotificationContext";
+import { APP_ROUTES } from "../../../config/routes";
 import {
   Building2,
   CheckCircle2,
@@ -150,6 +152,14 @@ export function TenantApprovalsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            to={APP_ROUTES.admin.emailTemplates}
+            className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300"
+          >
+            <Mail className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Welcome Email Format</span>
+          </Link>
+
           <button
             onClick={copyRegistrationLink}
             className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
