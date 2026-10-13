@@ -229,4 +229,10 @@ export interface DynamicGridProps<TData> {
   onDelete?: (row: TData) => void | Promise<void>;
 
   onRowClick?: (row: TData) => void;
+
+  /** Custom or database-aggregated summary totals to display in the grid footer. */
+  footerSummary?: Record<string, number | ReactNode>;
+
+  /** Custom label for the footer total row (default: "Current Page Total" or "Total"). */
+  footerLabel?: string;
 }

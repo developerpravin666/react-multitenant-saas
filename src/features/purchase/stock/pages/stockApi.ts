@@ -1,6 +1,6 @@
 import { apiClient, type PagedData } from "../../../../services/apiClient";
 import type { GridServerSource } from "../../../../types/grid";
-import type { AvailableStockProduct, StockGroup } from "../types/stock.types";
+import type { AvailableStockProduct, StockGroup, StockTotalsSummary } from "../types/stock.types";
 
 function createPagedSource<T>(endpoint: (query: URLSearchParams) => string): GridServerSource<T> {
   return {
@@ -36,4 +36,8 @@ export function availableProductsSource(brandId: string, productModelId: string,
     params.set("variantId", variantId);
     return `/inventory/stock/products?${params}`;
   });
+}
+
+export async function fetchStockSummary(): Promise<StockTotalsSummary> {
+  return await apiClient.get<StockTotalsSummary>("/inventory/stock/summary");
 }
