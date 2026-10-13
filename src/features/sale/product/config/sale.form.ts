@@ -15,6 +15,20 @@ export interface SaleTaxOption {
   totalTax: number;
 }
 
+/** Older stock can lack a profile link. Infer only a unique profile from its saved purchase rates. */
+export function getProductTaxProfile(product: SaleProductOption | undefined, taxes: SaleTaxOption[]): string {
+  if (!product) return "";
+  if (product.taxId) {
+    const linked = taxes.find(t => t.id === product.taxId || t.profileId === product.taxId);
+    return linked ? linked.profileId || linked.id : "";
+  }
+  if (product.cgst == null || product.sgst == null) return "";
+  const matchingProfiles = new Set(taxes
+    .filter(t => t.cgst === product.cgst && t.sgst === product.sgst)
+    .map(t => t.profileId || t.id));
+  return matchingProfiles.size === 1 ? [...matchingProfiles][0] : "";
+}
+
 export function createSaleFormConfig(
   products: SaleProductOption[],
   searchCustomers: (query: string) => Promise<CustomerLookupRecord[]>,
@@ -143,7 +157,7 @@ export function createSaleFormConfig(
         dependsOn: ["productId"],
         calculate: (values) => {
           const product = products.find((item) => item.id === String(values.productId ?? ""));
-          return taxes.find(t => t.id === product?.taxId || t.profileId === product?.taxId)?.profileId ?? product?.taxId ?? "";
+          return getProductTaxProfile(product, taxes);
         },
       },
       options: [

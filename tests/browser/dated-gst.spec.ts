@@ -54,3 +54,43 @@ test("tax maintenance schedules a new version under the existing profile", async
   await expect.poll(() => payload?.profileId).toBe(profileId);
   expect(payload).toMatchObject({ effectiveFrom: "2026-11-01", cgst: 5, sgst: 5, treatment: "Taxable" });
 });
+
+test("selecting a sale product auto-selects its GST profile and preserves manual overrides", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(async (fixtureRates) => {
+    const paths = ["/node_modules/.vite/deps/react.js", "/node_modules/.vite/deps/react-dom_client.js", "/src/features/dynamic-form/DynamicForm.tsx", "/src/features/sale/product/config/sale.form.ts"];
+    const [rm, dm, form, config] = await Promise.all(paths.map(path => import(/* @vite-ignore */ path)));
+    const React = rm.default ?? rm; const { createRoot } = dm.default ?? dm;
+    const taxes = [...fixtureRates,
+      { id: "other", profileId: "other", name: "Other GST", effectiveFrom: "2026-01-01", cgst: 4, sgst: 4, totalTax: 8 },
+      { id: "ambiguous", profileId: "ambiguous", name: "Another GST", effectiveFrom: "2026-01-01", cgst: 4, sgst: 4, totalTax: 8 },
+    ];
+    const products = [
+      { id: "linked", brand: "Linked phone", productModel: "A", variant: "128GB", color: "Blue", taxId: fixtureRates[1].id, cgst: 5, sgst: 5 },
+      { id: "legacy", brand: "Legacy phone", productModel: "B", variant: "128GB", color: "Blue", taxId: null, cgst: 9, sgst: 9 },
+      { id: "uncertain", brand: "Ambiguous phone", productModel: "C", variant: "128GB", color: "Blue", taxId: null, cgst: 4, sgst: 4 },
+    ];
+    const app = document.getElementById("root"); if (app) app.style.display = "none";
+    const host = document.createElement("div"); document.body.append(host);
+    const fields = config.createSaleFormConfig(products, async () => [], taxes)
+      .filter((f: { name: string }) => ["productId", "taxId", "saleDate"].includes(f.name));
+    createRoot(host).render(React.createElement(form.DynamicForm, { fields, title: "Sales GST fixture", initialValues: { saleDate: "2026-11-01" }, onSubmit: (values: Record<string, unknown>) => { (window as any).saleGstSaved = values; } }));
+  }, rates);
+  const product = page.getByLabel("Product (name or serial number)");
+  const gst = page.getByLabel("GST rate", { exact: false });
+  await product.fill("Linked phone");
+  await page.getByRole("option", { name: /Linked phone/ }).click();
+  await expect(gst).toHaveValue(/Fixture GST/);
+  await page.getByRole("button", { name: "Submit", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).saleGstSaved?.taxId)).toBe(profileId);
+  await gst.fill("Other GST");
+  await page.getByRole("option", { name: /^Other GST/ }).click();
+  await page.getByLabel("Sale Date", { exact: false }).fill("2026-10-31");
+  await expect(gst).toHaveValue(/Other GST/);
+  await product.fill("Legacy phone");
+  await page.getByRole("option", { name: /Legacy phone/ }).click();
+  await expect(gst).toHaveValue(/Fixture GST/);
+  await product.fill("Ambiguous phone");
+  await page.getByRole("option", { name: /Ambiguous phone/ }).click();
+  await expect(gst).toHaveValue("");
+});

@@ -14,6 +14,7 @@ export interface StockGroup {
   brandName: string;
   modelName: string;
   variantName: string;
+  colorName: string;
   totalQuantity: number;
   totalProductCostWithoutGst: number;
   totalGstAmount: number;

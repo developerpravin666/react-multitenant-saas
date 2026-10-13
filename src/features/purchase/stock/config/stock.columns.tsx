@@ -26,6 +26,13 @@ export const stockColumns: GridColumn<StockGroup>[] = [
     sortable: true,
   },
   {
+    id: "colorName",
+    header: "Color",
+    accessor: "colorName",
+    searchable: true,
+    sortable: true,
+  },
+  {
     id: "totalQuantity",
     header: "Available Qty",
     accessor: "totalQuantity",
