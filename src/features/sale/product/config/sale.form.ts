@@ -26,7 +26,7 @@ export function getProductTaxProfile(product: SaleProductOption | undefined, tax
   const matchingProfiles = new Set(taxes
     .filter(t => t.cgst === product.cgst && t.sgst === product.sgst)
     .map(t => t.profileId || t.id));
-  return matchingProfiles.size === 1 ? [...matchingProfiles][0] : "";
+  return matchingProfiles.size === 1 ? ([...matchingProfiles][0] ?? "") : "";
 }
 
 export function createSaleFormConfig(

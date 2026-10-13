@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { LoginPage } from "./features/auth/LoginPage";
 import { RegisterTenantPage } from "./features/auth/RegisterTenantPage";
 import { TenantApprovalsPage } from "./features/settings/tenants/TenantApprovalsPage";
@@ -107,9 +108,10 @@ export default function App() {
           <Route path={APP_ROUTES.admin.mastersImport} element={<MasterImportPage isAdminMode={true} />} />
           <Route path={APP_ROUTES.admin.emailTemplates} element={<EmailTemplatesPage />} />
 
-          <Route path="**" element={<Navigate to="/" replace />} />
         </Route>
       </Route>
+      <Route path="/not-found" element={<NotFoundPage />} />
+      <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
   );
 }
