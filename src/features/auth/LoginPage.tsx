@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type FieldValues } from "react-hook-form";
-import { LogIn, ShieldCheck } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import { ApiError } from "../../services/apiClient";
@@ -14,6 +14,13 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState("");
+  const [useTenantSlug, setUseTenantSlug] = useState(false);
+  const fields = loginFormFields
+    .filter((field) => useTenantSlug || field.name !== "tenantSlug")
+    .map((field) => useTenantSlug
+      ? { ...field, label: field.name === "username" ? "Username" : field.name === "tenantSlug" ? "Tenant slug" : field.label,
+          required: true }
+      : field);
   const resetMessage = (location.state as { message?: string } | null)?.message;
   const {
     register,
@@ -21,7 +28,7 @@ export function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<FieldValues>({
-    resolver: zodResolver(createDynamicFormSchema(loginFormFields)),
+    resolver: zodResolver(createDynamicFormSchema(fields)),
     defaultValues: { tenantSlug: "", username: "", password: "" },
     mode: "onBlur",
     reValidateMode: "onChange",
@@ -35,7 +42,7 @@ export function LoginPage() {
     setError("");
     try {
       await login({
-        tenantSlug: String(values.tenantSlug).trim(),
+        tenantSlug: useTenantSlug ? String(values.tenantSlug ?? "").trim() : undefined,
         username: String(values.username).trim(),
         password: String(values.password),
       });
@@ -51,14 +58,17 @@ export function LoginPage() {
         <div className="mb-7">
           <div className="mb-4 grid size-11 place-items-center rounded-xl bg-[var(--tenant-primary)] text-white"><LogIn className="size-5" /></div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Sign in</h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Enter your tenant workspace and account credentials.</p>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Sign in with your email or mobile and password. Your store is selected automatically.</p>
         </div>
         <form className="space-y-4" onSubmit={submit} noValidate autoComplete="off">
           {resetMessage && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">{resetMessage}</p>}
-          {loginFormFields.map((field) => {
+          {fields.map((field) => {
             const Field = getFieldComponent(field.type);
             return <Field key={field.id} field={field} register={register} control={control} errors={errors} />;
           })}
+          <button type="button" onClick={() => { setUseTenantSlug(!useTenantSlug); setError(""); }} className="text-sm font-medium text-[var(--tenant-primary)] hover:underline">
+            {useTenantSlug ? "Use email or mobile instead" : "Use tenant slug and username"}
+          </button>
           {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-200">{error}</p>}
           <button disabled={isSubmitting} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--tenant-primary)] px-4 py-2.5 font-semibold text-white transition hover:bg-[var(--tenant-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? "Signing in…" : "Sign in"}</button>
           <div className="flex items-center justify-between text-xs pt-1">

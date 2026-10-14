@@ -1,5 +1,5 @@
 export interface LoginInput {
-  tenantSlug: string;
+  tenantSlug?: string;
   username: string;
   password: string;
 }

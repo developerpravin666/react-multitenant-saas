@@ -15,6 +15,8 @@ import {
   Copy,
   Check,
   Eye,
+  Pencil,
+  KeyRound,
   Ban,
   Play,
   Mail,
@@ -24,6 +26,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
+import { TenantManagementDialog } from "./TenantManagementDialog";
 
 interface AdminTenant {
   id: string;
@@ -54,6 +57,7 @@ export function TenantDirectoryPage() {
 
   // Details Modal
   const [selectedTenant, setSelectedTenant] = useState<AdminTenant | null>(null);
+  const [management, setManagement] = useState<{ tenant: AdminTenant; mode: "profile" | "password" } | null>(null);
 
   // Reject Modal
   const [rejectTenant, setRejectTenant] = useState<AdminTenant | null>(null);
@@ -374,6 +378,15 @@ export function TenantDirectoryPage() {
                             <Eye className="size-3.5" />
                           </button>
 
+                          <button type="button" title="Edit tenant profile" onClick={() => setManagement({ tenant: t, mode: "profile" })}
+                            className="rounded-lg border border-slate-200 p-1.5 text-indigo-600 dark:border-slate-700">
+                            <Pencil className="size-3.5" />
+                          </button>
+                          {!isRejected && <button type="button" title="Reset owner password" onClick={() => setManagement({ tenant: t, mode: "password" })}
+                            className="rounded-lg border border-slate-200 p-1.5 text-indigo-600 dark:border-slate-700">
+                            <KeyRound className="size-3.5" />
+                          </button>}
+
                           {isActive && (
                             <button
                               onClick={() => handleSuspend(t)}
@@ -429,6 +442,9 @@ export function TenantDirectoryPage() {
           </table>
         </div>
       </div>
+
+      {management && <TenantManagementDialog tenant={management.tenant} mode={management.mode}
+        onClose={() => setManagement(null)} onSaved={async message => { await fetchTenants(); setSuccessMsg(message); }} />}
 
       {/* Details View Modal */}
       {selectedTenant && (
