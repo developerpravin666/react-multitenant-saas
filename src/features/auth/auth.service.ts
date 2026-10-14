@@ -14,6 +14,8 @@ type LoginResponse = {
   accessToken?: string;
   tenantId?: string;
   tenantName?: string;
+  tenantSlug?: string;
+  userName?: string;
   access_token?: string;
   refreshToken?: string;
   refresh_token?: string;
@@ -31,8 +33,8 @@ function toSession(response: LoginResponse, input: LoginInput): AuthSession {
 
   const isPo = Boolean(
     body.isProductOwner ||
-    input.tenantSlug.toLowerCase() === "system" ||
-    input.tenantSlug.toLowerCase() === "admin"
+    input.tenantSlug?.toLowerCase() === "system" ||
+    input.tenantSlug?.toLowerCase() === "admin"
   );
 
   return {
@@ -41,11 +43,11 @@ function toSession(response: LoginResponse, input: LoginInput): AuthSession {
     tenantId: body.tenantId,
     isProductOwner: isPo,
     user: {
-      username: body.user?.username ?? input.username,
-      tenantSlug: isPo ? "system" : (body.user?.tenantSlug ?? input.tenantSlug),
+      username: body.user?.username ?? body.userName ?? input.username,
+      tenantSlug: isPo ? "system" : (body.user?.tenantSlug ?? body.tenantSlug ?? input.tenantSlug),
       id: body.user?.id,
       tenantName: body.tenantName ?? body.user?.tenantName,
-      displayName: isPo ? "Product Owner" : (body.user?.displayName ?? body.user?.username ?? input.username),
+      displayName: isPo ? "Product Owner" : (body.user?.displayName ?? body.user?.username ?? body.userName ?? input.username),
       isProductOwner: isPo,
       roles: body.roles ?? (isPo ? ["ProductOwner", "SuperAdmin"] : []),
       permissions: body.permissions ?? (isPo ? ["Tenants.Manage", "System.Manage", "Database.Manage"] : []),
