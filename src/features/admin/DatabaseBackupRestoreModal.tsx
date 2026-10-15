@@ -320,6 +320,84 @@ export function DatabaseBackupRestoreModal({
     setExpandedTableDiffs((prev) => ({ ...prev, [table]: !prev[table] }));
   };
 
+  const handleDownloadRestoreLog = () => {
+    if (!restoreResult) return;
+
+    const timestamp = new Date(restoreResult.restoredAtUtc).toISOString();
+    const divider = "=".repeat(88);
+    const subDivider = "-".repeat(88);
+
+    const lines: string[] = [
+      divider,
+      ` DATABASE RESTORE AUDIT LOG REPORT`,
+      divider,
+      ` Timestamp (UTC)  : ${timestamp}`,
+      ` Target Schema    : ${restoreResult.targetSchema}`,
+      ` Backup Source    : ${restoreResult.backupFileName}`,
+      ` Status           : ${restoreResult.success ? "SUCCESS" : "PARTIAL / COMPLETED WITH WARNINGS"}`,
+      ` Summary Message  : ${restoreResult.message}`,
+      ...(restoreResult.auditLogId ? [` Audit Log Ref    : ${restoreResult.auditLogId}`] : []),
+      divider,
+      ` EXECUTIVE METRICS`,
+      divider,
+      ` Total Tables Restored : ${restoreResult.selectedTablesCount} of ${restoreResult.totalTablesInFile}`,
+      ` Total Rows Processed  : ${restoreResult.totalRowsProcessed}`,
+      ` Total Rows Inserted   : ${restoreResult.totalInserted}`,
+      ` Total Rows Updated    : ${restoreResult.totalUpdated}`,
+      ` Total Rows Unchanged  : ${restoreResult.totalUnchanged}`,
+      ` Total Errors / Skips  : ${restoreResult.totalErrors}`,
+      divider,
+      ` TABLE-BY-TABLE BREAKDOWN`,
+      divider,
+      String("TABLE").padEnd(32) +
+        String("STATUS").padEnd(12) +
+        String("ROWS").padStart(8) +
+        String("INSERTED").padStart(10) +
+        String("UPDATED").padStart(10) +
+        String("UNCHANGED").padStart(10) +
+        String("ERRORS").padStart(8),
+      subDivider,
+    ];
+
+    for (const audit of restoreResult.tableAudits) {
+      lines.push(
+        audit.tableName.padEnd(32) +
+          audit.status.padEnd(12) +
+          String(audit.rowsInFile).padStart(8) +
+          String(audit.insertedCount).padStart(10) +
+          String(audit.updatedCount).padStart(10) +
+          String(audit.unchangedCount).padStart(10) +
+          String(audit.errorCount).padStart(8)
+      );
+
+      if (audit.sampleDifferences && audit.sampleDifferences.length > 0) {
+        lines.push(`    [MODIFICATIONS / CORRECTIONS]`);
+        for (const diff of audit.sampleDifferences) {
+          lines.push(`      * ${diff}`);
+        }
+      }
+
+      if (audit.errorMessage) {
+        lines.push(`    [ERROR]: ${audit.errorMessage}`);
+      }
+    }
+
+    lines.push(divider);
+    lines.push(` END OF RESTORE AUDIT LOG`);
+    lines.push(divider);
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const cleanFileName = restoreResult.backupFileName.replace(/\.xlsx$/i, "");
+    link.download = `RestoreAudit_${cleanFileName}_${new Date().toISOString().slice(0, 10)}.log`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="relative w-full max-w-4xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-8 overflow-hidden flex flex-col max-h-[90vh]">
@@ -390,26 +468,36 @@ export function DatabaseBackupRestoreModal({
                     : "border-amber-200 bg-amber-50/70 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200"
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  {restoreResult.success ? (
-                    <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="size-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1">
-                    <h3 className="font-bold text-base">
-                      {restoreResult.success ? "Database Restore Succeeded" : "Restore Completed with Warnings"}
-                    </h3>
-                    <p className="text-xs mt-1 opacity-90">{restoreResult.message}</p>
-                    <div className="mt-2 text-xs font-medium flex flex-wrap gap-4 opacity-80">
-                      <span>File: {restoreResult.backupFileName}</span>
-                      <span>Target: {restoreResult.targetSchema}</span>
-                      <span>Completed: {new Date(restoreResult.restoredAtUtc).toLocaleTimeString()}</span>
-                      {restoreResult.auditLogId && (
-                        <span>Audit Log ID: {restoreResult.auditLogId.slice(0, 8)}…</span>
-                      )}
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    {restoreResult.success ? (
+                      <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="size-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1">
+                      <h3 className="font-bold text-base">
+                        {restoreResult.success ? "Database Restore Succeeded" : "Restore Completed with Warnings"}
+                      </h3>
+                      <p className="text-xs mt-1 opacity-90">{restoreResult.message}</p>
+                      <div className="mt-2 text-xs font-medium flex flex-wrap gap-4 opacity-80">
+                        <span>File: {restoreResult.backupFileName}</span>
+                        <span>Target: {restoreResult.targetSchema}</span>
+                        <span>Completed: {new Date(restoreResult.restoredAtUtc).toLocaleTimeString()}</span>
+                        {restoreResult.auditLogId && (
+                          <span>Audit Log ID: {restoreResult.auditLogId.slice(0, 8)}…</span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <button
+                    onClick={handleDownloadRestoreLog}
+                    className="flex items-center gap-1.5 self-start sm:self-auto rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shrink-0 transition"
+                    title="Download Formatted Log File"
+                  >
+                    <Download className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>Download Log (.log)</span>
+                  </button>
                 </div>
               </div>
 
@@ -757,12 +845,23 @@ export function DatabaseBackupRestoreModal({
 
         {/* Modal Footer */}
         <div className="border-t border-slate-200 px-6 py-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
-          <button
-            onClick={onClose}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 transition"
-          >
-            {restoreResult ? "Done" : "Cancel"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 transition"
+            >
+              {restoreResult ? "Done" : "Cancel"}
+            </button>
+            {restoreResult && (
+              <button
+                onClick={handleDownloadRestoreLog}
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-4 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 transition"
+              >
+                <FileText className="size-3.5" />
+                <span>Save Full Log Report (.log)</span>
+              </button>
+            )}
+          </div>
 
           {!restoreResult && mode === "export" && (
             <button
