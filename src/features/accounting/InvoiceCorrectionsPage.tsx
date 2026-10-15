@@ -5,17 +5,48 @@ import { useAccountingAccess } from "./AccountingAccess";
 import { CorrectionDocument, type CorrectionNote, type CorrectionSnapshot, type NoteRefund } from "./CorrectionDocument";
 
 type Note = CorrectionNote;
-type Source = { id: string; billNumber: string; serialNumber: string; productName?: string; customerName?: string; totalAmount: number; paymentStatus?: string; isActive?: boolean; isSold?: boolean };
+type Source = {
+  id: string;
+  billNumber?: string;
+  serialNumber?: string;
+  productName?: string;
+  customerName?: string;
+  vendorName?: string;
+  brandName?: string;
+  productModelName?: string;
+  variantName?: string;
+  colorName?: string;
+  totalAmount: number;
+  paymentStatus?: string;
+  isActive?: boolean;
+  isSold?: boolean;
+};
+type SkuPurchase = { id: string; billNumber: string; description: string; quantity: number; date: string; totalAmount?: number };
 const input = "w-full rounded border border-slate-300 bg-transparent p-2";
 const money = (n: number) => n.toLocaleString("en-IN", { style: "currency", currency: "INR" });
 export function InvoiceCorrectionsPage() {
   const { can } = useAccountingAccess();
   const [notes, setNotes] = useState<Note[]>([]); const [sources, setSources] = useState<Source[]>([]);
   const [kind, setKind] = useState("Sale"); const [search, setSearch] = useState(""); const [source, setSource] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [refund, setRefund] = useState<Note | null>(null); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const [document, setDocument] = useState<{ note: Note; snapshot: CorrectionSnapshot; refunds: NoteRefund[] } | null>(null);
   const viewNote = async (note: Note) => {
-    try { const [snapshot, refunds] = await Promise.all([apiClient.get<CorrectionSnapshot>(`/accounting/snapshots/${note.kind}/${note.sourceId}`), apiClient.get<NoteRefund[]>(`/accounting/corrections/${note.id}/refunds`)]); setDocument({ note, snapshot, refunds }); }
+    try {
+      const [snapshot, refunds] = await Promise.all([
+        apiClient.get<CorrectionSnapshot>(`/accounting/snapshots/${note.kind}/${note.sourceId}`)
+          .catch(() => ({
+            partyName: note.kind === "Sale" ? "Customer" : "Supplier",
+            partyMobile: "",
+            partyAddress: "",
+            productName: note.billNumber,
+            serialNumber: "",
+            reconstructed: true
+          })),
+        apiClient.get<NoteRefund[]>(`/accounting/corrections/${note.id}/refunds`).catch(() => [])
+      ]);
+      setDocument({ note, snapshot, refunds });
+    }
     catch (e) { setError(e instanceof Error ? e.message : "Could not load the note."); }
   };
   const load = useCallback(async () => setNotes(await apiClient.get<Note[]>("/accounting/corrections")), []);
@@ -25,13 +56,48 @@ export function InvoiceCorrectionsPage() {
     const timeout = window.setTimeout(() => {
       const endpoint = kind === "Sale" ? "/sales/accounting/bills" : "/products";
       const query = new URLSearchParams({ page: "1", pageSize: "100", search });
-      void Promise.all([apiClient.get<PagedData<Source>>(`${endpoint}?${query}`), kind === "Sale" ? apiClient.get<PagedData<Source>>(`/sales/invoices?${query}`) : Promise.resolve({ items: [] as Source[] })])
-        .then(([legacy, invoices]) => ({ ...legacy, items: [...invoices.items, ...legacy.items] }))
-        .then(page => { if (!cancelled) { setSources(page.items.filter(s => kind === "Sale" ? s.paymentStatus !== "Returned" && s.paymentStatus !== "Cancelled" : s.isActive && !s.isSold)); setSource(""); } })
-        .catch(e => { if (!cancelled) setError(e.message); });
+      if (kind === "Sale") {
+        void Promise.all([
+          apiClient.get<PagedData<Source>>(`${endpoint}?${query}`).catch(() => ({ items: [] as Source[] })),
+          apiClient.get<PagedData<Source>>(`/sales/invoices?${query}`).catch(() => ({ items: [] as Source[] }))
+        ])
+          .then(([legacy, invoices]) => {
+            if (!cancelled) {
+              const combined = [...invoices.items, ...legacy.items].filter(s => s.paymentStatus !== "Returned" && s.paymentStatus !== "Cancelled");
+              setSources(combined);
+              setSource("");
+            }
+          })
+          .catch(e => { if (!cancelled) setError(e.message); });
+      } else {
+        void Promise.all([
+          apiClient.get<PagedData<Source>>(`${endpoint}?${query}`).catch(() => ({ items: [] as Source[] })),
+          apiClient.get<SkuPurchase[]>("/inventory/skus/purchases").catch(() => [] as SkuPurchase[])
+        ])
+          .then(([products, skus]) => {
+            if (!cancelled) {
+              const term = search.trim().toLowerCase();
+              const filteredSkus: Source[] = skus
+                .filter(sku => !term || (sku.billNumber?.toLowerCase().includes(term) || sku.description?.toLowerCase().includes(term)))
+                .map(sku => ({
+                  id: sku.id,
+                  billNumber: sku.billNumber,
+                  serialNumber: "Accessory / SKU",
+                  productName: `${sku.description} (Qty: ${sku.quantity})`,
+                  totalAmount: sku.totalAmount ?? 0,
+                  isActive: true,
+                  isSold: false
+                }));
+              const availableProducts = products.items.filter(s => s.isActive && !s.isSold);
+              setSources([...availableProducts, ...filteredSkus]);
+              setSource("");
+            }
+          })
+          .catch(e => { if (!cancelled) setError(e.message); });
+      }
     }, 250);
     return () => { cancelled = true; window.clearTimeout(timeout); };
-  }, [kind, search]);
+  }, [kind, search, refreshKey]);
   const [noteDate, setNoteDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [noteReason, setNoteReason] = useState("");
   const [noteDisposition, setNoteDisposition] = useState("Restock");
@@ -51,7 +117,7 @@ export function InvoiceCorrectionsPage() {
   };
 
   const run = async (work: () => Promise<unknown>) => {
-    setBusy(true); setError(""); try { await work(); await load(); setRefund(null); setSource(""); setNoteReason(""); }
+    setBusy(true); setError(""); try { await work(); await load(); setRefund(null); setSource(""); setNoteReason(""); setRefreshKey(k => k + 1); }
     catch (e) { setError(e instanceof Error ? e.message : "Action failed."); } finally { setBusy(false); }
   };
   const postNote = (event: FormEvent<HTMLFormElement>) => {
@@ -108,7 +174,11 @@ export function InvoiceCorrectionsPage() {
           onChange={e => { setSource(e.target.value); clearNoteError("source"); }}
         >
           <option value="">Choose a unit</option>
-          {sources.map(s => <option key={s.id} value={s.id}>{s.billNumber} · {s.serialNumber} · {s.customerName || s.productName} · {money(s.totalAmount)}</option>)}
+          {sources.map(s => {
+            const desc = s.customerName || s.productName || [s.brandName, s.productModelName, s.variantName, s.colorName].filter(Boolean).join(" ") || s.vendorName;
+            const parts = [s.billNumber, s.serialNumber, desc, money(s.totalAmount)].filter(Boolean);
+            return <option key={s.id} value={s.id}>{parts.join(" · ")}</option>;
+          })}
         </select>
         {noteErrors.source && <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">{noteErrors.source}</p>}
       </div>
@@ -150,7 +220,7 @@ export function InvoiceCorrectionsPage() {
         <Button type="submit" disabled={busy || !source}>Post {kind === "Sale" ? "credit" : "debit"} note</Button>
       </div>
     </form>}
-    <div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th>Note / invoice</th><th>Date</th><th>Reason / stock</th><th>Credit</th><th>Refunded</th><th>Actions</th></tr></thead><tbody>{notes.map(n => <tr key={n.id} className="border-t"><td className="py-3">{n.noteNumber}<div>{n.kind} · {n.billNumber}</div></td><td>{n.noteDate}</td><td>{n.reason}<div>{n.disposition}</div></td><td>{money(n.totalAmount)}</td><td>{money(n.refunded)}</td><td><Button variant="secondary" onClick={() => void viewNote(n)}>View note</Button>{can(n.kind === "Sale" ? "sales.manage" : "purchases.manage") && n.refundAvailable > 0 && <Button onClick={() => { setRefund(n); setRefundAmount(String(n.refundAvailable)); setRefundErrors({}); }}>Record refund</Button>}</td></tr>)}</tbody></table></div>
+    <div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th>Note / invoice</th><th>Date</th><th>Reason / stock</th><th>Credit</th><th>Refunded</th><th>Actions</th></tr></thead><tbody>{notes.map(n => <tr key={n.id} className="border-t"><td className="py-3">{n.noteNumber}<div>{n.kind} · {n.billNumber}</div></td><td>{n.noteDate}</td><td>{n.reason}<div>{n.disposition}</div></td><td>{money(n.totalAmount)}</td><td>{money(n.refunded)}</td><td><Button variant="secondary" onClick={() => void viewNote(n)}>View note</Button>{can(n.kind === "Sale" ? "sales.manage" : "purchases.manage") && n.refundAvailable > 0 && <Button onClick={() => { setRefund(n); setRefundAmount(String(n.refundAvailable)); const today = new Date().toISOString().slice(0, 10); setRefundDate(today < n.noteDate ? n.noteDate : today); setRefundErrors({}); }}>Record refund</Button>}</td></tr>)}</tbody></table></div>
     {document && <CorrectionDocument {...document} onClose={() => setDocument(null)} />}
     {refund && <form onSubmit={postRefund} noValidate className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 md:grid-cols-2">
       <h2 className="md:col-span-2 font-semibold">{refund.kind === "Sale" ? "Refund customer" : "Refund received from supplier"} · available {money(refund.refundAvailable)}</h2>
