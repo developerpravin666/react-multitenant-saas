@@ -248,6 +248,10 @@ function withJsonBody(
   config: ApiRequestConfig,
 ): ApiRequestConfig {
   const headers = new Headers(config.headers);
+  if (body instanceof FormData) {
+    headers.delete("Content-Type");
+    return { ...config, headers, body };
+  }
   headers.set("Content-Type", "application/json");
   return { ...config, headers, body: JSON.stringify(body) };
 }
@@ -269,7 +273,7 @@ export const apiClient = {
     config: ApiRequestConfig = {},
   ): Promise<void> => {
     const headers = new Headers(config.headers);
-    let finalConfig: ApiRequestConfig = { ...config, headers, method: "GET" };
+    let finalConfig: ApiRequestConfig = { ...config, headers, method: config.method ?? "GET" };
 
     for (const interceptor of requestInterceptors)
       finalConfig = await interceptor(toUrl(path), finalConfig);
@@ -285,7 +289,7 @@ export const apiClient = {
         unauthorizedHandler
       ) {
         if (await unauthorizedHandler()) {
-          const retryConfig = { ...config, headers: new Headers(headers), method: "GET" };
+          const retryConfig = { ...config, headers: new Headers(headers), method: config.method ?? "GET" };
           for (const interceptor of requestInterceptors)
             finalConfig = await interceptor(toUrl(path), retryConfig);
           response = await fetch(toUrl(path), finalConfig);

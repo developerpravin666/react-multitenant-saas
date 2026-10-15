@@ -48,16 +48,32 @@ import type {
   ExtractedBillHeader,
   ExtractedBillItem,
 } from "../../scan-bill/types/purchaseBillScanner.types";
+import {
+  detectInvoiceMasters,
+  syncInvoiceMastersToDatabase,
+  extractMastersFromRowsAndHeader,
+  canonicalizeVariantName,
+  areVariantsEquivalent,
+  type DetectedInvoiceMasters,
+} from "../../scan-bill/services/invoiceMasterResolver";
+import {
+  InvoiceMastersSummaryBanner,
+} from "../../scan-bill/components/InvoiceMastersReviewModal";
+import { InlineMasterField } from "../../scan-bill/components/InlineMasterField";
 
 interface ProductRowItem {
   id: string;
   lineNumber: number;
   description: string;
   brandId: string;
+  brandName?: string;
   productTypeId: string;
   productModelId: string;
+  modelName?: string;
   variantId: string;
+  variantName?: string;
   colorId: string;
+  colorName?: string;
   serialNumber: string;
   serialNumber1: string;
   purchasePrice: number;
@@ -106,7 +122,7 @@ function matchVendor(header: ExtractedBillHeader, vendors: ProductLookupRecord[]
     }
   }
 
-  return vendors[0]?.id ?? "";
+  return "";
 }
 
 function escapeRegex(str: string): string {
@@ -174,15 +190,14 @@ function matchBrand(itemBrand: string, brands: ProductLookupRecord[], itemDesc?:
     if (partial) return partial.id;
   }
 
-  return brands[0]?.id ?? "";
+  return "";
 }
 
 function matchProductType(matchedBrandId: string, productTypes: ProductLookupRecord[]): string {
   if (!productTypes.length) return "";
   const brandTypes = productTypes.filter((pt) => !pt.brandId || pt.brandId === matchedBrandId);
   const phoneType = brandTypes.find((pt) => /smart\s*phone|mobile|phone|handset/i.test(pt.name));
-  if (phoneType) return phoneType.id;
-  return brandTypes[0]?.id ?? productTypes[0]?.id ?? "";
+  return phoneType?.id ?? brandTypes[0]?.id ?? "";
 }
 
 function cleanDescForModelMatching(desc: string): string {
@@ -267,25 +282,28 @@ function matchModelRecord(
 
 function matchVariant(itemVariant: string, itemDesc: string, variants: ProductLookupRecord[]): string {
   if (!variants.length) return "";
-  const vClean = (itemVariant || "").replace(/[()\s]/g, "").toLowerCase();
+  const vClean = (itemVariant || "").trim();
+  const canonical = canonicalizeVariantName(vClean);
   const dClean = (itemDesc || "").replace(/[()\s]/g, "").toLowerCase();
 
-  // 1. Exact match on variant name
-  if (vClean && vClean !== "standard") {
-    const exact = variants.find((v) => v.name.replace(/[()\s]/g, "").toLowerCase() === vClean);
-    if (exact) return exact.id;
+  // 1. Equivalent match on variant name or canonical (e.g. 8+128G matches 8+128GB)
+  if (vClean && vClean.toLowerCase() !== "standard") {
+    const equiv = variants.find(
+      (v) => areVariantsEquivalent(v.name, vClean) || areVariantsEquivalent(v.name, canonical)
+    );
+    if (equiv) return equiv.id;
   }
 
   // 2. Exact word boundary or contained in description
   const matched = variants.find((v) => {
     const nameClean = v.name.replace(/[()\s]/g, "").toLowerCase();
     return (
-      (vClean && (nameClean === vClean || nameClean.includes(vClean) || vClean.includes(nameClean))) ||
-      dClean.includes(nameClean)
+      (nameClean && dClean.includes(nameClean)) ||
+      areVariantsEquivalent(v.name, itemDesc)
     );
   });
 
-  return matched?.id ?? variants[0]?.id ?? "";
+  return matched?.id ?? "";
 }
 
 function matchColor(itemColor: string, itemDesc: string, colors: ProductLookupRecord[]): string {
@@ -339,8 +357,7 @@ function matchColor(itemColor: string, itemDesc: string, colors: ProductLookupRe
     if (partial) return partial.id;
   }
 
-  // Fallback to first color
-  return colors[0]?.id ?? "";
+  return "";
 }
 
 function createRowFromBillItem(
@@ -370,7 +387,7 @@ function createRowFromBillItem(
     const candidateModels = lookups.models.filter(
       (m) => !m.brandId || m.brandId === finalBrandId
     );
-    productModelId = candidateModels[0]?.id ?? lookups.models[0]?.id ?? "";
+    productModelId = candidateModels[0]?.id ?? "";
     const chosenModel = lookups.models.find((m) => m.id === productModelId);
     if (chosenModel) {
       if (chosenModel.brandId) finalBrandId = chosenModel.brandId;
@@ -399,10 +416,14 @@ function createRowFromBillItem(
     lineNumber: index + 1,
     description: item.description,
     brandId: finalBrandId,
+    brandName: item.brand || lookups.brands.find((b) => b.id === finalBrandId)?.name || "",
     productTypeId,
     productModelId,
+    modelName: item.model || lookups.models.find((m) => m.id === productModelId)?.name || "",
     variantId,
+    variantName: item.variant || lookups.variants.find((v) => v.id === variantId)?.name || "",
     colorId,
+    colorName: item.color || lookups.colors.find((c) => c.id === colorId)?.name || "",
     serialNumber: s1,
     serialNumber1: s2,
     purchasePrice: rate,
@@ -415,32 +436,27 @@ function createRowFromBillItem(
   };
 }
 
-function createEmptyRow(lookups: ProductLookupsData, index: number): ProductRowItem {
-  const defaultModel = lookups.models[0];
-  const defaultBrandId = defaultModel?.brandId ?? lookups.brands[0]?.id ?? "";
-  const defaultTypeId = defaultModel?.productTypeId ?? lookups.productTypes[0]?.id ?? "";
-  const defaultModelId = defaultModel?.id ?? "";
-  const defaultVariantId = lookups.variants[0]?.id ?? "";
-  const defaultColorId = lookups.colors[0]?.id ?? "";
-  const cgst = lookups.taxRates.cgst ?? 9;
-  const sgst = lookups.taxRates.sgst ?? 9;
-
+function createEmptyRow(_lookups: ProductLookupsData | null, index: number): ProductRowItem {
   return {
     id: `row-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
     lineNumber: index + 1,
     description: "",
-    brandId: defaultBrandId,
-    productTypeId: defaultTypeId,
-    productModelId: defaultModelId,
-    variantId: defaultVariantId,
-    colorId: defaultColorId,
+    brandId: "",
+    brandName: "",
+    productTypeId: "",
+    productModelId: "",
+    modelName: "",
+    variantId: "",
+    variantName: "",
+    colorId: "",
+    colorName: "",
     serialNumber: "",
     serialNumber1: "",
     purchasePrice: 0,
     discount: 0,
-    cgst,
-    sgst,
-    tax: cgst + sgst,
+    cgst: 0,
+    sgst: 0,
+    tax: 0,
     totalAmount: 0,
     isActive: true,
   };
@@ -459,12 +475,17 @@ function BulkProductCreateForm() {
   const [header, setHeader] = useState<PurchaseHeaderState>({
     vendorId: "",
     billNumber: "",
-    purchaseDate: new Date().toISOString().slice(0, 10),
-    paymentTermsDays: 7,
+    purchaseDate: "",
+    paymentTermsDays: 0,
   });
 
   // Product Rows
   const [rows, setRows] = useState<ProductRowItem[]>([]);
+
+  // Master detection & review state
+  const [detectedMasters, setDetectedMasters] = useState<DetectedInvoiceMasters | null>(null);
+  const [isSyncingMasters, setIsSyncingMasters] = useState(false);
+  const [hasSyncedMasters, setHasSyncedMasters] = useState(false);
 
   // Invoice Upload & Scanning
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -487,7 +508,7 @@ function BulkProductCreateForm() {
         setLookups(loaded);
         setHeader((prev) => ({
           ...prev,
-          vendorId: prev.vendorId || loaded.vendors[0]?.id || "",
+          vendorId: prev.vendorId || "",
         }));
         setRows((prev) => (prev.length === 0 ? [createEmptyRow(loaded, 0)] : prev));
       })
@@ -498,6 +519,76 @@ function BulkProductCreateForm() {
       active = false;
     };
   }, []);
+
+  // Detect invoice masters whenever uploadedBill or lookups change
+  useEffect(() => {
+    if (!uploadedBill || !lookups) {
+      setDetectedMasters(null);
+      setHasSyncedMasters(false);
+      return;
+    }
+    const detected = detectInvoiceMasters(uploadedBill, lookups);
+    setDetectedMasters(detected);
+    setHasSyncedMasters(!detected.hasNewEntities);
+  }, [uploadedBill, lookups]);
+
+  // Synchronize new/updated masters to database and refresh controls & rows
+  const handleSyncMasters = async (mastersToSync?: DetectedInvoiceMasters) => {
+    const target = mastersToSync || detectedMasters;
+    if (!target || !lookups) return;
+    setIsSyncingMasters(true);
+    try {
+      const { updatedLookups, syncResult } = await syncInvoiceMastersToDatabase(
+        target,
+        lookups
+      );
+
+      const nextLookups: ProductLookupsData = {
+        ...updatedLookups,
+        taxRates: lookups.taxRates,
+      };
+      setLookups(nextLookups);
+
+      if (syncResult.vendorId) {
+        setHeader((prev) => ({ ...prev, vendorId: syncResult.vendorId }));
+      } else if (target.vendor?.matchedDbId) {
+        setHeader((prev) => ({ ...prev, vendorId: target.vendor!.matchedDbId! }));
+      }
+
+      // Re-map rows so that newly created brand, model, variant, color are selected
+      if (uploadedBill) {
+        applyExtractedBillToAllItems(uploadedBill, nextLookups);
+      }
+
+      setHasSyncedMasters(true);
+
+      const totalCreated =
+        syncResult.createdCounts.vendors +
+        syncResult.createdCounts.brands +
+        syncResult.createdCounts.models +
+        syncResult.createdCounts.variants +
+        syncResult.createdCounts.colors;
+
+      const totalUpdated =
+        syncResult.updatedCounts.vendors +
+        syncResult.updatedCounts.brands +
+        syncResult.updatedCounts.models +
+        syncResult.updatedCounts.variants +
+        syncResult.updatedCounts.colors;
+
+      notifications.success(
+        "Masters Synced Successfully!",
+        `Populated ${totalCreated} new record(s) and updated ${totalUpdated} record(s) into database and form controls.`
+      );
+    } catch (err) {
+      notifications.error(
+        "Master Sync Failed",
+        err instanceof Error ? err.message : "Failed to sync masters to database."
+      );
+    } finally {
+      setIsSyncingMasters(false);
+    }
+  };
 
   // Populate all multi-line items from invoice
   const applyExtractedBillToAllItems = useCallback((bill: ExtractedPurchaseBill, currentLookups = lookups) => {
@@ -696,18 +787,19 @@ function BulkProductCreateForm() {
     setInvoicePreviewUrl(null);
     setShowDocPreview(false);
     setHeader({
-      vendorId: lookups.vendors[0]?.id || "",
+      vendorId: "",
       billNumber: "",
-      purchaseDate: new Date().toISOString().slice(0, 10),
-      paymentTermsDays: 7,
+      purchaseDate: "",
+      paymentTermsDays: 0,
     });
     setRows([createEmptyRow(lookups, 0)]);
   };
 
   // Save All Products
   const handleSaveAll = async () => {
-    if (!header.vendorId) {
-      notifications.error("Vendor Required", "Please select a vendor.");
+    const enteredVendorName = detectedMasters?.vendor?.name?.trim() || "";
+    if (!header.vendorId && !enteredVendorName) {
+      notifications.error("Vendor Required", "Please select or enter a vendor.");
       return;
     }
     if (!header.billNumber.trim()) {
@@ -729,8 +821,8 @@ function BulkProductCreateForm() {
         );
         return;
       }
-      if (!r.productModelId) {
-        notifications.error("Model Missing", `Unit row #${i + 1} requires a selected model.`);
+      if (!r.productModelId && !(r.modelName || "").trim()) {
+        notifications.error("Model Missing", `Unit row #${i + 1} requires a selected or entered model.`);
         return;
       }
     }
@@ -747,8 +839,122 @@ function BulkProductCreateForm() {
 
     setIsSubmitting(true);
     try {
-      const productsPayload = rows.map((r) => ({
-        vendorId: header.vendorId,
+      if (!lookups) throw new Error("Lookups are not loaded yet.");
+
+      // 1. Ensure masters to sync (from detectedMasters or extracted dynamically from current rows/header)
+      let mastersToSync = detectedMasters;
+      if (!mastersToSync) {
+        mastersToSync = extractMastersFromRowsAndHeader(header, rows, lookups);
+      }
+
+      // Sync masters to database
+      const syncOut = await syncInvoiceMastersToDatabase(mastersToSync, lookups);
+      const nextLookups: ProductLookupsData = {
+        ...syncOut.updatedLookups,
+        taxRates: lookups.taxRates,
+      };
+      setLookups(nextLookups);
+      setHasSyncedMasters(true);
+
+      const syncResult = syncOut.syncResult;
+      const activeVendorId =
+        syncResult.vendorId ||
+        header.vendorId ||
+        nextLookups.vendors.find((v) => v.name.toLowerCase() === enteredVendorName.toLowerCase())?.id ||
+        nextLookups.vendors[0]?.id;
+
+      if (!activeVendorId) {
+        throw new Error("Unable to establish an active vendor record for this purchase.");
+      }
+      setHeader((prev) => ({ ...prev, vendorId: activeVendorId }));
+
+      // 2. Remap every row to genuine DB GUIDs
+      const defaultTypeId =
+        nextLookups.productTypes.find((pt) => /smart\s*phone|mobile|phone/i.test(pt.name))?.id ||
+        nextLookups.productTypes[0]?.id ||
+        "";
+
+      const updatedRows: ProductRowItem[] = rows.map((r) => {
+        const rawBrandLower = (r.brandName || "").trim().toLowerCase();
+        const rawModelLower = (r.modelName || "").trim().toLowerCase();
+        const rawVariantLower = (r.variantName || "").trim().toLowerCase();
+        const canonicalVariant = canonicalizeVariantName(r.variantName).toLowerCase();
+        const rawColorLower = (r.colorName || "").trim().toLowerCase();
+
+        // Resolve Brand ID
+        let resolvedBrandId =
+          syncResult.brandsMap[rawBrandLower] ||
+          syncResult.brandsMap[r.brandId] ||
+          nextLookups.brands.find((b) => b.name.toLowerCase() === rawBrandLower)?.id ||
+          (nextLookups.brands.some((b) => b.id === r.brandId) ? r.brandId : "") ||
+          nextLookups.brands[0]?.id ||
+          "";
+
+        // Resolve Model ID
+        const mKey = `${rawBrandLower}__${rawModelLower}`;
+        let resolvedModelId =
+          syncResult.modelsMap[mKey] ||
+          syncResult.modelsMap[rawModelLower] ||
+          syncResult.modelsMap[r.productModelId] ||
+          nextLookups.models.find((m) => m.name.toLowerCase() === rawModelLower)?.id ||
+          (nextLookups.models.some((m) => m.id === r.productModelId) ? r.productModelId : "") ||
+          nextLookups.models[0]?.id ||
+          "";
+
+        const matchedModel = nextLookups.models.find((m) => m.id === resolvedModelId);
+        if (matchedModel?.brandId && !resolvedBrandId) {
+          resolvedBrandId = matchedModel.brandId;
+        }
+
+        // Resolve Product Type ID
+        const resolvedProductTypeId =
+          matchedModel?.productTypeId ||
+          (nextLookups.productTypes.some((pt) => pt.id === r.productTypeId) ? r.productTypeId : "") ||
+          defaultTypeId;
+
+        // Resolve Variant ID
+        let resolvedVariantId =
+          syncResult.variantsMap[canonicalVariant] ||
+          syncResult.variantsMap[rawVariantLower] ||
+          syncResult.variantsMap[r.variantId] ||
+          nextLookups.variants.find((v) => areVariantsEquivalent(v.name, r.variantName))?.id ||
+          (nextLookups.variants.some((v) => v.id === r.variantId) ? r.variantId : "") ||
+          nextLookups.variants[0]?.id ||
+          "";
+
+        // Resolve Color ID
+        let resolvedColorId =
+          syncResult.colorsMap[rawColorLower] ||
+          syncResult.colorsMap[r.colorId] ||
+          nextLookups.colors.find((c) => c.name.toLowerCase() === rawColorLower)?.id ||
+          (nextLookups.colors.some((c) => c.id === r.colorId) ? r.colorId : "") ||
+          nextLookups.colors[0]?.id ||
+          "";
+
+        return {
+          ...r,
+          brandId: resolvedBrandId,
+          productModelId: resolvedModelId,
+          productTypeId: resolvedProductTypeId,
+          variantId: resolvedVariantId,
+          colorId: resolvedColorId,
+        };
+      });
+
+      setRows(updatedRows);
+
+      // Verify no row has unresolved empty GUIDs
+      for (let i = 0; i < updatedRows.length; i++) {
+        const u = updatedRows[i]!;
+        if (!u.brandId) throw new Error(`Unit row #${i + 1} has an invalid or missing Brand.`);
+        if (!u.productModelId) throw new Error(`Unit row #${i + 1} has an invalid or missing Model.`);
+        if (!u.productTypeId) throw new Error(`Unit row #${i + 1} has an invalid or missing Product Type.`);
+        if (!u.variantId) throw new Error(`Unit row #${i + 1} has an invalid or missing Variant.`);
+        if (!u.colorId) throw new Error(`Unit row #${i + 1} has an invalid or missing Color.`);
+      }
+
+      const productsPayload = updatedRows.map((r) => ({
+        vendorId: activeVendorId,
         billNumber: header.billNumber.trim(),
         purchaseDate: header.purchaseDate,
         paymentTermsDays: Number(header.paymentTermsDays) || 0,
@@ -771,12 +977,12 @@ function BulkProductCreateForm() {
 
       notifications.success(
         "Purchase Saved Successfully!",
-        `Saved ${rows.length} product unit(s) from Invoice "${header.billNumber}" into stock inventory!`
+        `Saved ${updatedRows.length} product unit(s) from Invoice "${header.billNumber}" into stock inventory!`
       );
 
       navigate(
         `${APP_ROUTES.purchase.accountingPayment}?vendorId=${encodeURIComponent(
-          header.vendorId
+          activeVendorId
         )}&billNumber=${encodeURIComponent(header.billNumber.trim())}`
       );
     } catch (err) {
@@ -1087,6 +1293,18 @@ function BulkProductCreateForm() {
         )}
       </section>
 
+      {/* Invoice Masters Analysis & Sync Banner with Inline Master Specs Drawer */}
+      {detectedMasters && lookups && (
+        <InvoiceMastersSummaryBanner
+          masters={detectedMasters}
+          onUpdateMasters={setDetectedMasters}
+          existingLookups={lookups}
+          onSyncNow={() => handleSyncMasters()}
+          isSyncing={isSyncingMasters}
+          hasSynced={hasSyncedMasters}
+        />
+      )}
+
       {/* Invoice Header Form Details */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4 dark:border-slate-800">
@@ -1098,22 +1316,69 @@ function BulkProductCreateForm() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* Vendor */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Vendor / Supplier <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={header.vendorId}
-              onChange={(e) => setHeader((prev) => ({ ...prev, vendorId: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            >
-              <option value="">-- Select Vendor --</option>
-              {lookups.vendors.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name} {v.gstNumber ? `(${v.gstNumber})` : ""}
-                </option>
-              ))}
-            </select>
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Vendor / Supplier <span className="text-red-500">*</span>
+              </label>
+              {detectedMasters?.vendor?.isNew ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.2 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  New Vendor (will be created in DB)
+                </span>
+              ) : (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.2 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  Matched Database Vendor
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={detectedMasters?.vendor?.name || lookups.vendors.find((v) => v.id === header.vendorId)?.name || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (detectedMasters?.vendor) {
+                    setDetectedMasters({
+                      ...detectedMasters,
+                      vendor: {
+                        ...detectedMasters.vendor,
+                        name: val,
+                        isEdited: true,
+                      },
+                    });
+                  }
+                }}
+                placeholder="Vendor Name"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+              <select
+                value={header.vendorId}
+                onChange={(e) => {
+                  setHeader((prev) => ({ ...prev, vendorId: e.target.value }));
+                  const matched = lookups.vendors.find((v) => v.id === e.target.value);
+                  if (matched && detectedMasters?.vendor) {
+                    setDetectedMasters({
+                      ...detectedMasters,
+                      vendor: {
+                        ...detectedMasters.vendor,
+                        name: matched.name,
+                        matchedDbId: matched.id,
+                        matchedDbName: matched.name,
+                        isNew: false,
+                      },
+                    });
+                  }
+                }}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="">-- Match Store Vendor --</option>
+                {lookups.vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} {v.gstNumber ? `(${v.gstNumber})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Invoice / Bill No */}
@@ -1227,62 +1492,80 @@ function BulkProductCreateForm() {
 
                     {/* Brand */}
                     <td className="py-2 px-3">
-                      <select
-                        value={row.brandId}
-                        onChange={(e) => updateRowField(row.id, "brandId", e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                      >
-                        {lookups.brands.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                          </option>
-                        ))}
-                      </select>
+                      <InlineMasterField
+                        value={row.brandName || lookups.brands.find((b) => b.id === row.brandId)?.name || ""}
+                        options={lookups.brands}
+                        onChange={(val, _isNew, matchedId) => {
+                          updateRowField(row.id, "brandName", val);
+                          if (matchedId) {
+                            updateRowField(row.id, "brandId", matchedId);
+                          } else {
+                            updateRowField(row.id, "brandId", `temp-brand-${val.toLowerCase()}`);
+                          }
+                        }}
+                        placeholder="Brand"
+                        typeLabel="Brand"
+                      />
                     </td>
 
                     {/* Model */}
                     <td className="py-2 px-3">
-                      <select
-                        value={row.productModelId}
-                        onChange={(e) => updateRowField(row.id, "productModelId", e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                      >
-                        {displayModels.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}
-                          </option>
-                        ))}
-                      </select>
+                      <InlineMasterField
+                        value={row.modelName || lookups.models.find((m) => m.id === row.productModelId)?.name || ""}
+                        options={displayModels}
+                        onChange={(val, _isNew, matchedId) => {
+                          updateRowField(row.id, "modelName", val);
+                          if (matchedId) {
+                            updateRowField(row.id, "productModelId", matchedId);
+                            const m = lookups.models.find((x) => x.id === matchedId);
+                            if (m?.brandId) {
+                              updateRowField(row.id, "brandId", m.brandId);
+                              const b = lookups.brands.find((bx) => bx.id === m.brandId);
+                              if (b) updateRowField(row.id, "brandName", b.name);
+                            }
+                          } else {
+                            updateRowField(row.id, "productModelId", `temp-model-${val.toLowerCase()}`);
+                          }
+                        }}
+                        placeholder="Model"
+                        typeLabel="Model"
+                      />
                     </td>
 
                     {/* Variant */}
                     <td className="py-2 px-3">
-                      <select
-                        value={row.variantId}
-                        onChange={(e) => updateRowField(row.id, "variantId", e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                      >
-                        {lookups.variants.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.name}
-                          </option>
-                        ))}
-                      </select>
+                      <InlineMasterField
+                        value={row.variantName || lookups.variants.find((v) => v.id === row.variantId)?.name || ""}
+                        options={lookups.variants}
+                        onChange={(val, _isNew, matchedId) => {
+                          updateRowField(row.id, "variantName", val);
+                          if (matchedId) {
+                            updateRowField(row.id, "variantId", matchedId);
+                          } else {
+                            updateRowField(row.id, "variantId", `temp-variant-${val.toLowerCase()}`);
+                          }
+                        }}
+                        placeholder="Variant"
+                        typeLabel="Variant"
+                      />
                     </td>
 
                     {/* Color */}
                     <td className="py-2 px-3">
-                      <select
-                        value={row.colorId}
-                        onChange={(e) => updateRowField(row.id, "colorId", e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                      >
-                        {lookups.colors.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
+                      <InlineMasterField
+                        value={row.colorName || lookups.colors.find((c) => c.id === row.colorId)?.name || ""}
+                        options={lookups.colors}
+                        onChange={(val, _isNew, matchedId) => {
+                          updateRowField(row.id, "colorName", val);
+                          if (matchedId) {
+                            updateRowField(row.id, "colorId", matchedId);
+                          } else {
+                            updateRowField(row.id, "colorId", `temp-color-${val.toLowerCase()}`);
+                          }
+                        }}
+                        placeholder="Color"
+                        typeLabel="Color"
+                      />
                     </td>
 
                     {/* Serial Number 1 */}

@@ -2,6 +2,7 @@ export interface ExtractedBillHeader {
   vendorName: string;
   vendorGstin: string;
   vendorAddress: string;
+  vendorPhone?: string;
   vendorEmail: string;
   vendorState: string;
   vendorStateCode: string;

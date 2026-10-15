@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiClient } from "../../../../services/apiClient";
 import { Button } from "../../../../components/ui/Button";
 import type { UnpaidCustomerInvoice } from "../types/salesInvoice.types";
+import { formatDate, todayForInput } from "../../../../lib/date";
 
 type Advance = { id: string; paymentDate: string; remainingAmount: number; referenceNumber?: string };
 export function CustomerAdvancePanel({ customerId, invoices, onChanged }: { customerId: string; invoices: UnpaidCustomerInvoice[]; onChanged: () => void }) {
@@ -9,7 +10,7 @@ export function CustomerAdvancePanel({ customerId, invoices, onChanged }: { cust
   const [selected, setSelected] = useState("");
   const [invoiceId, setInvoiceId] = useState("");
   const [amount, setAmount] = useState(0);
-  const [date, setDate] = useState(new Date().toLocaleDateString("en-CA"));
+  const [date, setDate] = useState(todayForInput());
   const [mode, setMode] = useState("Cash");
   const [reference, setReference] = useState("");
   const [error, setError] = useState("");
@@ -44,7 +45,7 @@ export function CustomerAdvancePanel({ customerId, invoices, onChanged }: { cust
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
     <div className="grid gap-2 sm:grid-cols-2">
       <select aria-label="Customer advance" className={field} value={selected} onChange={e => { setSelected(e.target.value); setAmount(advances.find(a => a.id === e.target.value)?.remainingAmount ?? 0); }}>
-        <option value="">Choose an advance</option>{advances.map(a => <option key={a.id} value={a.id}>{a.paymentDate} · ₹{a.remainingAmount.toFixed(2)} · {a.referenceNumber}</option>)}
+        <option value="">Choose an advance</option>{advances.map(a => <option key={a.id} value={a.id}>{formatDate(a.paymentDate)} · ₹{a.remainingAmount.toFixed(2)} · {a.referenceNumber}</option>)}
       </select>
       <select aria-label="Invoice for advance" className={field} value={invoiceId} onChange={e => setInvoiceId(e.target.value)}>
         <option value="">Choose invoice to apply credit</option>{invoices.map(i => <option key={i.invoiceId} value={i.invoiceId}>{i.billNumber} · ₹{i.balance.toFixed(2)}</option>)}

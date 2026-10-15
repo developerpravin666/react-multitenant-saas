@@ -110,6 +110,12 @@ export interface GridColumn<TData> {
 
   filterOptions?: GridOption[];
 
+  /** Column data type hint for automatic formatting and rendering. */
+  type?: "text" | "number" | "date" | "datetime" | "currency" | "boolean";
+
+  /** Quick flag indicating this column is a date, auto-formatting as DD-MM-YYYY */
+  isDate?: boolean;
+
   align?: GridAlign;
 
   /** Include this monetary column in the grid's current-page total footer. */

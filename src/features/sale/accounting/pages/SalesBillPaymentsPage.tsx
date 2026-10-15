@@ -5,6 +5,7 @@ import { Button } from "../../../../components/ui/Button";
 import { APP_ROUTES } from "../../../../config/routes";
 import { apiClient } from "../../../../services/apiClient";
 import type { SalesBillDetails, SalesReceipt } from "../types/salesAccounting.types";
+import { formatDate } from "../../../../lib/date";
 
 type PaymentMode = "Cash" | "UPI" | "OnlineTransfer" | "Cheque" | "Other";
 const currency = (amount: number) => `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -214,7 +215,7 @@ export function SalesBillPaymentsPage() {
         {payments.length === 0 ? <p className="p-4 text-sm text-slate-500">No payments have been recorded.</p> : (
           <div className="overflow-x-auto"><table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-[11px] uppercase text-slate-500 dark:bg-slate-950"><tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">Method</th><th className="px-3 py-2">Reference</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2">Note</th></tr></thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{payments.map((payment) => <tr key={payment.id}><td className="px-3 py-2">{payment.paymentDate}</td><td className="px-3 py-2">{payment.paymentMode === "OnlineTransfer" ? "Online transfer" : payment.paymentMode}</td><td className="px-3 py-2">{payment.referenceNumber || "—"}</td><td className="px-3 py-2 text-right">{currency(payment.amount)}</td><td className="px-3 py-2">{payment.note || "—"}</td></tr>)}</tbody>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{payments.map((payment) => <tr key={payment.id}><td className="px-3 py-2">{formatDate(payment.paymentDate)}</td><td className="px-3 py-2">{payment.paymentMode === "OnlineTransfer" ? "Online transfer" : payment.paymentMode}</td><td className="px-3 py-2">{payment.referenceNumber || "—"}</td><td className="px-3 py-2 text-right">{currency(payment.amount)}</td><td className="px-3 py-2">{payment.note || "—"}</td></tr>)}</tbody>
           </table></div>
         )}
       </section>

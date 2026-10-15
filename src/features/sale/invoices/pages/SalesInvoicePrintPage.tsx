@@ -8,6 +8,7 @@ import type { CustomerBillTemplate } from "../../accounting/types/customerBill.t
 import { defaultCustomerBillTemplate } from "../../accounting/types/customerBill.types";
 import type { SalesInvoiceDetails } from "../types/salesInvoice.types";
 import "../../accounting/components/customerBill.css";
+import { formatDate } from "../../../../lib/date";
 
 const currency = (amount: number) =>
   `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -100,8 +101,8 @@ export function SalesInvoicePrintPage() {
             <div className="customer-bill-title">
               <h2>{template.billTitle || "TAX INVOICE"}</h2>
               <strong>{invoice.billNumber}</strong>
-              <span>Date: {invoice.invoiceDate}</span>
-              {invoice.dueDate !== invoice.invoiceDate ? <span>Due Date: {invoice.dueDate}</span> : null}
+              <span>Date: {formatDate(invoice.invoiceDate)}</span>
+              {invoice.dueDate !== invoice.invoiceDate ? <span>Due Date: {formatDate(invoice.dueDate)}</span> : null}
               <span className="mt-1 inline-block text-[11px] font-semibold text-slate-600">
                 Supply: {invoice.supplyType === 1 ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}
               </span>
@@ -121,7 +122,7 @@ export function SalesInvoicePrintPage() {
             ) : null}
           </section>
 
-          {details.taxPointDate && details.taxPointDate !== invoice.invoiceDate ? <p>Tax-effective date: {details.taxPointDate} {details.taxDateReason ? `(${details.taxDateReason})` : ""}</p> : null}
+          {details.taxPointDate && details.taxPointDate !== invoice.invoiceDate ? <p>Tax-effective date: {formatDate(details.taxPointDate)} {details.taxDateReason ? `(${details.taxDateReason})` : ""}</p> : null}
           {/* Multi-line items table */}
           <table className="customer-bill-items">
             <thead>
@@ -176,7 +177,7 @@ export function SalesInvoicePrintPage() {
                   {payments.length > 0 ? (
                     payments.map((p) => (
                       <p key={p.id}>
-                        {p.paymentDate} · {p.paymentMode}
+                        {formatDate(p.paymentDate)} · {p.paymentMode}
                         {p.referenceNumber ? ` · ${p.referenceNumber}` : ""}
                         <strong>{currency(p.amount)}</strong>
                       </p>

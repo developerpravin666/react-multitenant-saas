@@ -7,7 +7,7 @@ export const taxFormConfig: FormFieldConfig[] = [
   },
   {
     id: "effectiveFrom", name: "effectiveFrom", label: "Effective From",
-    type: "date", required: true, defaultValue: new Date().toISOString().slice(0, 10)
+    type: "date", required: true
   },
   {
     id: "treatment", name: "treatment", label: "Tax Treatment", type:

@@ -40,26 +40,35 @@ import {
   type BillPresetInfo,
   getNatrajTelecomBill,
 } from "../services/purchaseBillParser";
-
-interface LookupRecord {
-  id: string;
-  name: string;
-  code?: string;
-  gstNumber?: string;
-  brandId?: string;
-}
+import {
+  detectInvoiceMasters,
+  syncInvoiceMastersToDatabase,
+  canonicalizeVariantName,
+  areVariantsEquivalent,
+  type DetectedInvoiceMasters,
+  type LookupItem,
+} from "../services/invoiceMasterResolver";
+import {
+  InvoiceMastersSummaryBanner,
+} from "../components/InvoiceMastersReviewModal";
+import { InlineMasterField } from "../components/InlineMasterField";
 
 export function PurchaseBillScanPage() {
   const navigate = useNavigate();
   const notifications = useNotifications();
 
   // Lookups
-  const [vendors, setVendors] = useState<LookupRecord[]>([]);
-  const [brands, setBrands] = useState<LookupRecord[]>([]);
-  const [models, setModels] = useState<LookupRecord[]>([]);
-  const [variants, setVariants] = useState<LookupRecord[]>([]);
-  const [colors, setColors] = useState<LookupRecord[]>([]);
-  const [productTypes, setProductTypes] = useState<LookupRecord[]>([]);
+  const [vendors, setVendors] = useState<LookupItem[]>([]);
+  const [brands, setBrands] = useState<LookupItem[]>([]);
+  const [models, setModels] = useState<LookupItem[]>([]);
+  const [variants, setVariants] = useState<LookupItem[]>([]);
+  const [colors, setColors] = useState<LookupItem[]>([]);
+  const [productTypes, setProductTypes] = useState<LookupItem[]>([]);
+
+  // Master detection & review state
+  const [detectedMasters, setDetectedMasters] = useState<DetectedInvoiceMasters | null>(null);
+  const [isSyncingMasters, setIsSyncingMasters] = useState(false);
+  const [hasSyncedMasters, setHasSyncedMasters] = useState(false);
 
   // State
   const defaultPreset = BILL_PRESETS[0] || {
@@ -98,12 +107,12 @@ export function PurchaseBillScanPage() {
     async function loadLookups() {
       try {
         const [vList, bList, mList, vrList, cList, ptList] = await Promise.allSettled([
-          apiClient.get<LookupRecord[]>("/vendors/all"),
-          apiClient.get<LookupRecord[]>("/brands/all"),
-          apiClient.get<LookupRecord[]>("/product-models/all"),
-          apiClient.get<LookupRecord[]>("/variants/all"),
-          apiClient.get<LookupRecord[]>("/colors/all"),
-          apiClient.get<LookupRecord[]>("/product-types/all"),
+          apiClient.get<LookupItem[]>("/vendors/all"),
+          apiClient.get<LookupItem[]>("/brands/all"),
+          apiClient.get<LookupItem[]>("/product-models/all"),
+          apiClient.get<LookupItem[]>("/variants/all"),
+          apiClient.get<LookupItem[]>("/colors/all"),
+          apiClient.get<LookupItem[]>("/product-types/all"),
         ]);
 
         if (!active) return;
@@ -123,21 +132,84 @@ export function PurchaseBillScanPage() {
     };
   }, []);
 
-  // When bill changes, try to auto-match vendor
+  // Detect invoice masters whenever bill or lookups change
   useEffect(() => {
-    if (!bill?.header) return;
-    const gstin = bill.header.vendorGstin.toUpperCase().trim();
-    const name = bill.header.vendorName.toLowerCase().trim();
-
-    const matched = vendors.find(
-      (v) =>
-        (gstin && (v.gstNumber?.toUpperCase().trim() === gstin || v.code?.toUpperCase().trim() === gstin)) ||
-        (name && v.name.toLowerCase().includes(name.split(" ")[0] || ""))
-    );
-    if (matched) {
-      setSelectedVendorId(matched.id);
+    if (!bill) {
+      setDetectedMasters(null);
+      setHasSyncedMasters(false);
+      return;
     }
-  }, [bill, vendors]);
+    const detected = detectInvoiceMasters(bill, {
+      vendors,
+      brands,
+      models,
+      variants,
+      colors,
+      productTypes,
+    });
+    setDetectedMasters(detected);
+    // If all masters already exist in DB, consider synced
+    setHasSyncedMasters(!detected.hasNewEntities);
+
+    // Auto-match vendor if existing
+    if (detected.vendor && !detected.vendor.isNew && detected.vendor.matchedDbId) {
+      setSelectedVendorId(detected.vendor.matchedDbId);
+    }
+  }, [bill, vendors, brands, models, variants, colors, productTypes]);
+
+  // Synchronize new/updated masters to database and refresh controls
+  const handleSyncMasters = async (mastersToSync?: DetectedInvoiceMasters) => {
+    const target = mastersToSync || detectedMasters;
+    if (!target) return;
+    setIsSyncingMasters(true);
+    try {
+      const { updatedLookups, syncResult } = await syncInvoiceMastersToDatabase(
+        target,
+        { vendors, brands, models, variants, colors, productTypes }
+      );
+
+      setVendors(updatedLookups.vendors);
+      setBrands(updatedLookups.brands);
+      setModels(updatedLookups.models);
+      setVariants(updatedLookups.variants);
+      setColors(updatedLookups.colors);
+      setProductTypes(updatedLookups.productTypes);
+
+      if (syncResult.vendorId) {
+        setSelectedVendorId(syncResult.vendorId);
+      } else if (target.vendor?.matchedDbId) {
+        setSelectedVendorId(target.vendor.matchedDbId);
+      }
+
+      setHasSyncedMasters(true);
+
+      const totalCreated =
+        syncResult.createdCounts.vendors +
+        syncResult.createdCounts.brands +
+        syncResult.createdCounts.models +
+        syncResult.createdCounts.variants +
+        syncResult.createdCounts.colors;
+
+      const totalUpdated =
+        syncResult.updatedCounts.vendors +
+        syncResult.updatedCounts.brands +
+        syncResult.updatedCounts.models +
+        syncResult.updatedCounts.variants +
+        syncResult.updatedCounts.colors;
+
+      notifications.success(
+        "Masters Synced Successfully!",
+        `Populated ${totalCreated} new record(s) and updated ${totalUpdated} record(s) into database and form controls.`
+      );
+    } catch (err) {
+      notifications.error(
+        "Master Sync Failed",
+        err instanceof Error ? err.message : "Failed to sync masters to database."
+      );
+    } finally {
+      setIsSyncingMasters(false);
+    }
+  };
 
   // Select one of the 4 sample bills
   const handleSelectPreset = (preset: BillPresetInfo) => {
@@ -337,42 +409,142 @@ export function PurchaseBillScanPage() {
 
     setSavingInventory(true);
     try {
-      // 1. Resolve or create vendor ID
-      let finalVendorId = selectedVendorId;
-      if (!finalVendorId && vendors.length > 0 && vendors[0]) {
-        finalVendorId = vendors[0].id;
+      // 1. Sync any new/edited masters to ensure all database foreign keys exist
+      let currentVendors = vendors;
+      let currentBrands = brands;
+      let currentModels = models;
+      let currentVariants = variants;
+      let currentColors = colors;
+      let currentProductTypes = productTypes;
+      let brandsMap: Record<string, string> = {};
+      let modelsMap: Record<string, string> = {};
+      let variantsMap: Record<string, string> = {};
+      let colorsMap: Record<string, string> = {};
+
+      if (detectedMasters && (!hasSyncedMasters || detectedMasters.hasNewEntities)) {
+        const syncOut = await syncInvoiceMastersToDatabase(detectedMasters, {
+          vendors: currentVendors,
+          brands: currentBrands,
+          models: currentModels,
+          variants: currentVariants,
+          colors: currentColors,
+          productTypes: currentProductTypes,
+        });
+
+        currentVendors = syncOut.updatedLookups.vendors;
+        currentBrands = syncOut.updatedLookups.brands;
+        currentModels = syncOut.updatedLookups.models;
+        currentVariants = syncOut.updatedLookups.variants;
+        currentColors = syncOut.updatedLookups.colors;
+        currentProductTypes = syncOut.updatedLookups.productTypes;
+
+        brandsMap = syncOut.syncResult.brandsMap;
+        modelsMap = syncOut.syncResult.modelsMap;
+        variantsMap = syncOut.syncResult.variantsMap;
+        colorsMap = syncOut.syncResult.colorsMap;
+
+        setVendors(currentVendors);
+        setBrands(currentBrands);
+        setModels(currentModels);
+        setVariants(currentVariants);
+        setColors(currentColors);
+        setProductTypes(currentProductTypes);
+
+        if (syncOut.syncResult.vendorId) {
+          setSelectedVendorId(syncOut.syncResult.vendorId);
+        }
+        setHasSyncedMasters(true);
       }
 
-      // Default lookups fallback
-      const defaultBrandId = brands[0]?.id || "00000000-0000-0000-0000-000000000001";
-      const defaultModelId = models[0]?.id || "00000000-0000-0000-0000-000000000001";
-      const defaultVariantId = variants[0]?.id || "00000000-0000-0000-0000-000000000001";
-      const defaultColorId = colors[0]?.id || "00000000-0000-0000-0000-000000000001";
-      const defaultProductTypeId = productTypes[0]?.id || "00000000-0000-0000-0000-000000000001";
+      // Resolve final vendor ID
+      let finalVendorId = selectedVendorId;
+      if (!finalVendorId && detectedMasters?.vendor?.matchedDbId) {
+        finalVendorId = detectedMasters.vendor.matchedDbId;
+      }
+      if (!finalVendorId && currentVendors.length > 0 && currentVendors[0]) {
+        finalVendorId = currentVendors[0].id;
+      }
 
-      // 2. Prepare payload for /products/bulk
-      const productsPayload = bill.items.map((item) => {
-        // Try match brand
-        const matchedBrand = brands.find(
-          (b) => b.name.toLowerCase() === item.brand.toLowerCase()
-        );
-        const matchedModel = models.find(
-          (m) => m.name.toLowerCase().includes(item.model.toLowerCase())
-        );
-        const matchedVariant = variants.find(
-          (v) => v.name.toLowerCase() === item.variant.toLowerCase()
-        );
-        const matchedColor = colors.find(
-          (c) => c.name.toLowerCase().includes(item.color.toLowerCase())
-        );
+      const defaultProductTypeId =
+        currentProductTypes.find((pt) => /smart\s*phone|mobile|phone/i.test(pt.name))?.id ||
+        currentProductTypes[0]?.id ||
+        "";
+
+      // 2. Prepare payload for /products/bulk with real database IDs
+      const productsPayload = bill.items.map((item, idx) => {
+        const rawBrandLower = item.brand.trim().toLowerCase();
+        const rawModelLower = item.model.trim().toLowerCase();
+        const rawVariantLower = item.variant.trim().toLowerCase();
+        const rawColorLower = item.color.trim().toLowerCase();
+
+        // 1. Brand ID
+        let resolvedBrandId = brandsMap[rawBrandLower] || brandsMap[item.brand];
+        if (!resolvedBrandId) {
+          const matchedBrand = currentBrands.find((b) => {
+            const bName = b.name.trim().toLowerCase();
+            return (
+              bName === rawBrandLower ||
+              (rawBrandLower === "iphone" && bName === "apple") ||
+              (rawBrandLower === "apple" && bName === "iphone") ||
+              (rawBrandLower.includes("tecno") && bName.includes("techno"))
+            );
+          });
+          resolvedBrandId = matchedBrand?.id || currentBrands[0]?.id || "";
+        }
+
+        // 2. Model ID
+        const mKey = `${rawBrandLower}__${rawModelLower}`;
+        let resolvedModelId = modelsMap[mKey] || modelsMap[rawModelLower] || modelsMap[item.model];
+        let matchedModel: LookupItem | undefined;
+        if (!resolvedModelId) {
+          matchedModel = currentModels.find((m) => {
+            const mName = m.name.trim().toLowerCase();
+            return (
+              mName === rawModelLower ||
+              mName.includes(rawModelLower) ||
+              rawModelLower.includes(mName) ||
+              item.description.toLowerCase().includes(mName)
+            );
+          });
+          resolvedModelId = matchedModel?.id || currentModels[0]?.id || "";
+        } else {
+          matchedModel = currentModels.find((m) => m.id === resolvedModelId);
+        }
+
+        // 3. Variant ID
+        const canonicalVariant = canonicalizeVariantName(item.variant);
+        let resolvedVariantId =
+          variantsMap[canonicalVariant.toLowerCase()] ||
+          variantsMap[rawVariantLower];
+        if (!resolvedVariantId) {
+          const matchedVariant = currentVariants.find(
+            (v) =>
+              areVariantsEquivalent(v.name, item.variant) ||
+              areVariantsEquivalent(v.name, canonicalVariant)
+          );
+          resolvedVariantId = matchedVariant?.id || currentVariants[0]?.id || "";
+        }
+
+        // 4. Color ID
+        let resolvedColorId = colorsMap[rawColorLower] || colorsMap[item.color];
+        if (!resolvedColorId) {
+          const matchedColor = currentColors.find(
+            (c) =>
+              c.name.trim().toLowerCase() === rawColorLower ||
+              item.description.toLowerCase().includes(c.name.toLowerCase())
+          );
+          resolvedColorId = matchedColor?.id || currentColors[0]?.id || "";
+        }
+
+        const resolvedTypeId = matchedModel?.productTypeId || defaultProductTypeId;
 
         return {
-          vendorId: finalVendorId || defaultBrandId,
-          brandId: matchedBrand?.id || defaultBrandId,
-          productTypeId: defaultProductTypeId,
-          productModelId: matchedModel?.id || defaultModelId,
-          variantId: matchedVariant?.id || defaultVariantId,
-          colorId: matchedColor?.id || defaultColorId,
+          vendorId: finalVendorId || currentVendors[0]?.id || "",
+          brandId: resolvedBrandId,
+          productTypeId: resolvedTypeId,
+          productModelId: resolvedModelId,
+          variantId: resolvedVariantId,
+          colorId: resolvedColorId,
           serialNumber: item.serialNumber.trim(),
           serialNumber1: item.serialNumber1.trim() || item.serialNumber.trim(),
           purchasePrice: item.taxableRate,
@@ -385,6 +557,14 @@ export function PurchaseBillScanPage() {
           paymentTermsDays: bill.header.paymentTermsDays || 0,
         };
       });
+
+      // Verify no item has missing IDs
+      for (let i = 0; i < productsPayload.length; i++) {
+        const p = productsPayload[i]!;
+        if (!p.vendorId || !p.brandId || !p.productModelId || !p.productTypeId || !p.variantId || !p.colorId) {
+          throw new Error(`Item line #${i + 1} has unresolved master references. Please ensure Brand, Model, Variant, and Color are recognized.`);
+        }
+      }
 
       await apiClient.post("/products/bulk", { products: productsPayload });
       setSaveSuccess(true);
@@ -693,9 +873,22 @@ export function PurchaseBillScanPage() {
                 <div className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                   {/* Vendor Name */}
                   <div className="space-y-1 sm:col-span-2">
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                      Supplier / Vendor Name
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        Supplier / Vendor Name
+                      </label>
+                      {bill.header.vendorName && (
+                        detectedMasters?.vendor?.isNew ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.2 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                            New Vendor - will be created in DB
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.2 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            Matched Store Vendor
+                          </span>
+                        )
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={bill.header.vendorName}
@@ -768,8 +961,54 @@ export function PurchaseBillScanPage() {
                       className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
+
+                  {/* Vendor Phone */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                      Vendor Mobile / Phone
+                    </label>
+                    <input
+                      type="text"
+                      value={bill.header.vendorPhone || ""}
+                      onChange={(e) => handleHeaderChange("vendorPhone", e.target.value)}
+                      placeholder="e.g. 9826012345"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+
+                  {/* Vendor Address */}
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                      Vendor Address
+                    </label>
+                    <input
+                      type="text"
+                      value={bill.header.vendorAddress || ""}
+                      onChange={(e) => handleHeaderChange("vendorAddress", e.target.value)}
+                      placeholder="e.g. Main Market, Kukshi"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Invoice Masters Analysis & Sync Banner with Inline Master Specs Drawer */}
+              {detectedMasters && (
+                <InvoiceMastersSummaryBanner
+                  masters={detectedMasters}
+                  onUpdateMasters={setDetectedMasters}
+                  existingLookups={{
+                    vendors,
+                    brands,
+                    models,
+                    variants,
+                    colors,
+                  }}
+                  onSyncNow={() => handleSyncMasters()}
+                  isSyncing={isSyncingMasters}
+                  hasSynced={hasSyncedMasters}
+                />
+              )}
 
               {/* Card 2: Extracted Items Data Grid */}
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -796,49 +1035,81 @@ export function PurchaseBillScanPage() {
                   <table className="w-full border-collapse text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-                        <th className="py-2.5 px-3">#</th>
-                        <th className="py-2.5 px-3 min-w-[200px]">Description & Specs</th>
-                        <th className="py-2.5 px-3 min-w-[150px]">Serial / IMEI 1</th>
-                        <th className="py-2.5 px-3 min-w-[150px]">Serial / IMEI 2</th>
-                        <th className="py-2.5 px-3">Qty</th>
-                        <th className="py-2.5 px-3 text-right">Taxable Rate</th>
-                        <th className="py-2.5 px-3 text-center">GST %</th>
-                        <th className="py-2.5 px-3 text-right">Net Total</th>
-                        <th className="py-2.5 px-2 text-center"></th>
+                        <th className="py-2.5 px-2 text-center w-8">#</th>
+                        <th className="py-2.5 px-2 min-w-[120px]">Brand</th>
+                        <th className="py-2.5 px-2 min-w-[140px]">Model</th>
+                        <th className="py-2.5 px-2 min-w-[110px]">Variant</th>
+                        <th className="py-2.5 px-2 min-w-[110px]">Color</th>
+                        <th className="py-2.5 px-2 min-w-[140px]">Serial / IMEI 1</th>
+                        <th className="py-2.5 px-2 min-w-[140px]">Serial / IMEI 2</th>
+                        <th className="py-2.5 px-2 w-14 text-center">Qty</th>
+                        <th className="py-2.5 px-2 text-right">Taxable Rate</th>
+                        <th className="py-2.5 px-2 text-center">GST %</th>
+                        <th className="py-2.5 px-2 text-right">Net Total</th>
+                        <th className="py-2.5 px-2 text-center w-8"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {bill.items.map((item, index) => (
-                        <tr
-                          key={item.id}
-                          className="transition hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
-                        >
-                          <td className="py-3 px-3 font-mono text-slate-400">
-                            {index + 1}
-                          </td>
+                      {bill.items.map((item, index) => {
+                        const matchedBrand = brands.find(
+                          (b) => b.name.toLowerCase() === item.brand.toLowerCase()
+                        );
+                        const availableModels = matchedBrand
+                          ? models.filter((m) => !m.brandId || m.brandId === matchedBrand.id)
+                          : models;
 
-                          {/* Description & Model Details */}
-                          <td className="py-3 px-3">
-                            <input
-                              type="text"
-                              value={item.description}
-                              onChange={(e) =>
-                                handleItemChange(item.id, "description", e.target.value)
-                              }
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                            />
-                            <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-400">
-                              <span className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800">
-                                {item.brand}
-                              </span>
-                              <span className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800">
-                                {item.variant}
-                              </span>
-                              <span className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800">
-                                {item.color}
-                              </span>
-                            </div>
-                          </td>
+                        return (
+                          <tr
+                            key={item.id}
+                            className="transition hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                          >
+                            <td className="py-2.5 px-2 font-mono text-center text-slate-400">
+                              {index + 1}
+                            </td>
+
+                            {/* Brand */}
+                            <td className="py-2.5 px-2">
+                              <InlineMasterField
+                                value={item.brand}
+                                options={brands}
+                                onChange={(val) => handleItemChange(item.id, "brand", val)}
+                                placeholder="Brand"
+                                typeLabel="Brand"
+                              />
+                            </td>
+
+                            {/* Model */}
+                            <td className="py-2.5 px-2">
+                              <InlineMasterField
+                                value={item.model}
+                                options={availableModels}
+                                onChange={(val) => handleItemChange(item.id, "model", val)}
+                                placeholder="Model"
+                                typeLabel="Model"
+                              />
+                            </td>
+
+                            {/* Variant */}
+                            <td className="py-2.5 px-2">
+                              <InlineMasterField
+                                value={item.variant}
+                                options={variants}
+                                onChange={(val) => handleItemChange(item.id, "variant", val)}
+                                placeholder="Variant"
+                                typeLabel="Variant"
+                              />
+                            </td>
+
+                            {/* Color */}
+                            <td className="py-2.5 px-2">
+                              <InlineMasterField
+                                value={item.color}
+                                options={colors}
+                                onChange={(val) => handleItemChange(item.id, "color", val)}
+                                placeholder="Color"
+                                typeLabel="Color"
+                              />
+                            </td>
 
                           {/* Serial Number 1 */}
                           <td className="py-3 px-3">
@@ -931,8 +1202,9 @@ export function PurchaseBillScanPage() {
                             </button>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
+                      );
+                    })}
+                  </tbody>
                   </table>
                 </div>
               </div>

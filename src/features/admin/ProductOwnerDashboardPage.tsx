@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { APP_ROUTES } from "../../config/routes";
+import { formatDate } from "../../lib/date";
 
 interface TenantMetrics {
   totalTenants: number;
@@ -406,7 +407,7 @@ export function ProductOwnerDashboardPage() {
                       <div className="text-[11px] text-slate-400">{t.ownerEmail || t.ownerMobile || "—"}</div>
                     </td>
                     <td className="px-5 py-3.5 text-slate-500">
-                      {new Date(t.createdAt).toLocaleDateString()}
+                      {formatDate(t.createdAt)}
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <button

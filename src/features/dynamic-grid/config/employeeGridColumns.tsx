@@ -1,6 +1,7 @@
 import { MoreHorizontal } from "lucide-react";
 import type { GridColumn } from "../../../types/grid";
 import type { EmployeeRow } from "../data/employees";
+import { formatDateTime } from "../../../lib/date";
 
 export const employeeGridColumns: GridColumn<EmployeeRow>[] = [
   {
@@ -105,11 +106,8 @@ export const employeeGridColumns: GridColumn<EmployeeRow>[] = [
     sortable: true,
     searchable: false,
     minWidth: 170,
-    cell: (value) =>
-      new Intl.DateTimeFormat("en-IN", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(new Date(String(value))),
+    type: "datetime",
+    cell: (value) => formatDateTime(value as string),
   },
   {
     id: "actions",

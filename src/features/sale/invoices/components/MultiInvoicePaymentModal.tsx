@@ -9,6 +9,7 @@ import type {
   UnpaidCustomerInvoice,
   PaymentAllocationResult
 } from "../types/salesInvoice.types";
+import { formatDate } from "../../../../lib/date";
 
 interface Props {
   initialCustomerId?: string;
@@ -209,7 +210,7 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
               Payment Successfully Allocated
             </h2>
             <p className="text-xs text-slate-500">
-              Received {currency(result.totalPaymentAmount)} from <strong>{result.customerName}</strong> via {result.paymentMode} on {result.paymentDate}.
+              Received {currency(result.totalPaymentAmount)} from <strong>{result.customerName}</strong> via {result.paymentMode} on {formatDate(result.paymentDate)}.
             </p>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left dark:border-slate-800 dark:bg-slate-950">
@@ -516,7 +517,7 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
                             <td className="py-2 pl-3 font-semibold text-slate-900 dark:text-slate-100">
                               {inv.billNumber}
                             </td>
-                            <td className="py-2 text-slate-500">{inv.invoiceDate}</td>
+                            <td className="py-2 text-slate-500">{formatDate(inv.invoiceDate)}</td>
                             <td className="py-2 text-right text-slate-500">{currency(inv.totalAmount)}</td>
                             <td className="py-2 text-right font-medium text-slate-900 dark:text-slate-100">
                               {currency(inv.balance)}

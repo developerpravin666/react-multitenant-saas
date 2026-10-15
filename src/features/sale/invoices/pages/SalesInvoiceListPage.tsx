@@ -10,6 +10,7 @@ import { apiClient } from "../../../../services/apiClient";
 import { useNotifications } from "../../../../context/NotificationContext";
 import type { SalesInvoiceSummary } from "../types/salesInvoice.types";
 import { MultiInvoicePaymentModal } from "../components/MultiInvoicePaymentModal";
+import { formatDate } from "../../../../lib/date";
 
 const invoicesApi = createResourceApi<SalesInvoiceSummary>("/sales/invoices");
 const currency = (amount: number) =>
@@ -77,6 +78,8 @@ export function SalesInvoiceListPage() {
       header: "Date",
       accessor: "invoiceDate",
       sortable: true,
+      type: "date",
+      cell: (value) => formatDate(value as string),
     },
     {
       id: "customerName",

@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import { formatDate } from "../../../../lib/date";
 
 type PaymentMode = "Cash" | "Finance";
 type CashMethod = "Cash" | "UPI" | "OnlineTransfer" | "Cheque" | "Other";
@@ -202,7 +203,7 @@ export function SalesPaymentPage() {
   const reminderText = useMemo(() => {
     if (!sale) return "";
     const nextDate = nextDueEmi?.dueDate
-      ? new Date(nextDueEmi.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+      ? formatDate(nextDueEmi.dueDate)
       : "your upcoming due date";
     return `Dear ${sale.customerName}, this is a reminder regarding your finance EMI for ${sale.productName} (Sales Bill #${sale.billNumber}). Your monthly installment of ${formatCurrency(emiAmount)} is due on ${nextDate}. Please maintain sufficient balance in your linked bank account to ensure smooth auto-debit (ECS/NACH) and avoid bounce charges. Thank you!`;
   }, [sale, nextDueEmi, emiAmount]);
@@ -453,7 +454,7 @@ export function SalesPaymentPage() {
                   {receiptsList.map((receipt, index) => (
                     <tr key={receipt.id || index} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-300">
-                        {receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString("en-IN") : "—"}
+                        {receipt.paymentDate ? formatDate(receipt.paymentDate) : "—"}
                       </td>
                       <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">
                         <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -687,7 +688,7 @@ export function SalesPaymentPage() {
                         <span>Customer Auto-Debit & Due Date Reminder Notice</span>
                         {nextDueEmi && (
                           <span className="rounded-full bg-indigo-200/80 px-2 py-0.2 text-[10px] font-extrabold text-indigo-900 dark:bg-indigo-900 dark:text-indigo-200">
-                            Upcoming Due: {new Date(nextDueEmi.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            Upcoming Due: {formatDate(nextDueEmi.dueDate)}
                           </span>
                         )}
                       </div>
@@ -727,11 +728,7 @@ export function SalesPaymentPage() {
                           EMI Installment #{item.installmentNumber}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-slate-700 dark:text-slate-300">
-                          {new Date(item.dueDate).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
+                          {formatDate(item.dueDate)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white">
                           {formatCurrency(item.amount)}
