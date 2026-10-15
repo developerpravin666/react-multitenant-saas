@@ -254,13 +254,7 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Audit Logs",
         path: APP_ROUTES.settings.auditLogs,
         icon: ClipboardList,
-      },
-      {
-        id: "tenant-approvals",
-        label: "Store Approvals",
-        path: APP_ROUTES.settings.tenantApprovals,
-        icon: ShieldCheck,
-      },
+      }
     ],
   },
 ];
