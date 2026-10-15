@@ -12,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react";
 import type { SaleRecord, EmiScheduleItem } from "../types/sale.types";
+import { formatDate } from "../../../../lib/date";
 
 interface FinanceEmiModalProps {
   sale: SaleRecord;
@@ -73,7 +74,7 @@ export function FinanceEmiModal({ sale, onClose }: FinanceEmiModalProps) {
   }, [schedule]);
 
   const reminderMessage = useMemo(() => {
-    const nextDate = nextDueEmi?.dueDate ? new Date(nextDueEmi.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "the upcoming due date";
+    const nextDate = nextDueEmi?.dueDate ? formatDate(nextDueEmi.dueDate) : "the upcoming due date";
     return `Dear ${sale.customerName}, this is a gentle reminder regarding your EMI for ${sale.productName} (Bill #${sale.billNumber}). Your upcoming monthly installment of ${formatCurrency(emiAmount)} is scheduled for ${nextDate}. Kindly ensure sufficient balance in your linked bank account for smooth auto-debit (ECS/NACH) to avoid bank bounce charges and maintain a healthy credit score. Thank you!`;
   }, [sale, nextDueEmi, emiAmount]);
 
@@ -152,7 +153,7 @@ export function FinanceEmiModal({ sale, onClose }: FinanceEmiModalProps) {
                   <span>Customer EMI & Auto-Debit Reminder</span>
                   {nextDueEmi && (
                     <span className="rounded-full bg-indigo-200/80 px-2 py-0.2 text-[10px] font-extrabold text-indigo-900 dark:bg-indigo-900 dark:text-indigo-200">
-                      Next Due: {new Date(nextDueEmi.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      Next Due: {formatDate(nextDueEmi.dueDate)}
                     </span>
                   )}
                 </div>
@@ -182,7 +183,7 @@ export function FinanceEmiModal({ sale, onClose }: FinanceEmiModalProps) {
               <span>Installment Schedule ({schedule.length} Months)</span>
             </h3>
             <span className="text-[11px] text-slate-400">
-              1st EMI: {sale.firstInstallmentDate ? new Date(sale.firstInstallmentDate).toLocaleDateString("en-IN") : "Not specified"}
+              1st EMI: {sale.firstInstallmentDate ? formatDate(sale.firstInstallmentDate) : "Not specified"}
             </span>
           </div>
 
@@ -203,11 +204,7 @@ export function FinanceEmiModal({ sale, onClose }: FinanceEmiModalProps) {
                       EMI #{item.installmentNumber}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">
-                      {new Date(item.dueDate).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatDate(item.dueDate)}
                     </td>
                     <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white">
                       {formatCurrency(item.amount)}

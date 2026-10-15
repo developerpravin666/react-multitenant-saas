@@ -24,6 +24,7 @@ import { Button } from "../../components/ui/Button";
 import { inputClass } from "../../components/ui/inputClass";
 import { useNotifications } from "../../context/NotificationContext";
 import { useAccountingAccess } from "./AccountingAccess";
+import { formatDate } from "../../lib/date";
 
 type Account = { id: string; code: string; name: string; type: number };
 type Party = { id: string; name: string };
@@ -480,7 +481,7 @@ export function OpeningBalancesPage() {
                 Control Accounts Breakdown
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Detailed comparison between subledgers and respective General Ledger control accounts as of {date}.
+                Detailed comparison between subledgers and respective General Ledger control accounts as of {formatDate(date)}.
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -674,7 +675,7 @@ export function OpeningBalancesPage() {
                         {item.reference}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-slate-500 dark:text-slate-400">
-                        {item.dueDate}
+                        {formatDate(item.dueDate)}
                       </td>
                       <td className="px-5 py-3.5 text-right font-medium text-slate-700 dark:text-slate-300">
                         {money(item.amount)}
@@ -1128,7 +1129,7 @@ export function OpeningBalancesPage() {
                 <div>
                   <span className="text-slate-500 dark:text-slate-400">Cutover Date:</span>{" "}
                   <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {settlement.cutoverDate}
+                    {formatDate(settlement.cutoverDate)}
                   </span>
                 </div>
                 <div>
@@ -1154,7 +1155,7 @@ export function OpeningBalancesPage() {
                   className={inputClass}
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
-                  Must be after cutover date ({afterCutover(settlement.cutoverDate)})
+                  Must be after cutover date ({formatDate(afterCutover(settlement.cutoverDate))})
                 </p>
               </div>
 

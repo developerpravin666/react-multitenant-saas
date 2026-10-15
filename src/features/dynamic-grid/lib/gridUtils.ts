@@ -5,6 +5,7 @@ import type {
   GridQuery,
   GridSort,
 } from "../../../types/grid";
+import { formatDate, isIsoDateString } from "../../../lib/date";
 
 export function getColumnValue<TData>(
   row: TData,
@@ -18,7 +19,10 @@ export function getColumnValue<TData>(
 
 function normalize(value: unknown): string {
   if (value === null || value === undefined) return "";
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return `${value.toISOString()} ${formatDate(value)}`.toLocaleLowerCase();
+  if (typeof value === "string" && isIsoDateString(value)) {
+    return `${value} ${formatDate(value)}`.toLocaleLowerCase();
+  }
   if (Array.isArray(value)) return value.join(" ").toLocaleLowerCase();
   return String(value).toLocaleLowerCase();
 }
@@ -140,15 +144,24 @@ export function toCsv<TData>(
   const visible = columns.filter(
     (column) => column.exportable !== false && !column.hidden,
   );
-  const escape = (value: unknown) => {
-    const text = value === null || value === undefined ? "" : String(value);
+  const escape = (value: unknown, column?: GridColumn<TData>) => {
+    if (value === null || value === undefined) return '""';
+    if (
+      column?.type === "date" ||
+      column?.isDate ||
+      value instanceof Date ||
+      (typeof value === "string" && isIsoDateString(value))
+    ) {
+      return `"${formatDate(value as string | Date)}"`;
+    }
+    const text = String(value);
     return `"${text.replaceAll('"', '""')}"`;
   };
 
   return [
     visible.map((column) => escape(column.header)).join(","),
     ...rows.map((row) =>
-      visible.map((column) => escape(getColumnValue(row, column))).join(","),
+      visible.map((column) => escape(getColumnValue(row, column), column)).join(","),
     ),
   ].join("\n");
 }

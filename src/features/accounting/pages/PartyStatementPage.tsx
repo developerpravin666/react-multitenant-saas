@@ -31,6 +31,7 @@ import type {
   PartyLookupOption
 } from "../types/statementOfAccount.types";
 import { APP_ROUTES } from "../../../config/routes";
+import { formatDate, todayDisplay } from "../../../lib/date";
 
 const currency = (amount: number) =>
   `₹${Math.abs(amount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -184,7 +185,7 @@ export function PartyStatementPage() {
 
     const headers = ["Date", "Voucher Type", "Voucher #", "Particulars", "Debit", "Credit", "Running Balance", "Side"];
     const rows = statement.transactions.map((t) => [
-      t.date,
+      formatDate(t.date),
       `"${t.voucherType}"`,
       `"${t.voucherNumber}"`,
       `"${t.particulars.replace(/"/g, '""')}"`,
@@ -196,7 +197,7 @@ export function PartyStatementPage() {
 
     const csvContent = "data:text/csv;charset=utf-8," + [
       [`Statement of Account - ${statement.partyName} (${statement.partyType})`],
-      [`Period: ${statement.fromDate} to ${statement.toDate}`],
+      [`Period: ${formatDate(statement.fromDate)} to ${formatDate(statement.toDate)}`],
       [`Opening Balance: ${statement.openingBalance.toFixed(2)} ${statement.openingBalanceSide}`],
       [],
       headers,
@@ -503,7 +504,7 @@ export function PartyStatementPage() {
                 {currency(statement.openingBalance)}
                 <span className="ml-1 text-xs font-semibold text-slate-500">{statement.openingBalanceSide}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Before {statement.fromDate}</p>
+              <p className="mt-1 text-[11px] text-slate-400">Before {formatDate(statement.fromDate)}</p>
             </div>
 
             {/* Total Period Debits Card */}
@@ -548,7 +549,7 @@ export function PartyStatementPage() {
                 {currency(statement.closingBalance)}
                 <span className="ml-1 text-xs font-semibold text-slate-500">{statement.closingBalanceSide}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">As of {statement.toDate}</p>
+              <p className="mt-1 text-[11px] text-slate-400">As of {formatDate(statement.toDate)}</p>
             </div>
           </div>
 
@@ -622,10 +623,10 @@ export function PartyStatementPage() {
                     STATEMENT OF ACCOUNT
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
-                    Statement Period: <strong className="text-slate-800 dark:text-slate-200">{statement.fromDate}</strong> to <strong className="text-slate-800 dark:text-slate-200">{statement.toDate}</strong>
+                    Statement Period: <strong className="text-slate-800 dark:text-slate-200">{formatDate(statement.fromDate)}</strong> to <strong className="text-slate-800 dark:text-slate-200">{formatDate(statement.toDate)}</strong>
                   </p>
                   <p className="text-xs text-slate-400">
-                    Generated on: {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                    Generated on: {todayDisplay()}
                   </p>
                 </div>
               </div>
@@ -654,7 +655,7 @@ export function PartyStatementPage() {
                       </p>
                     )}
                     <div className="mt-2 inline-block rounded border border-slate-200 bg-white px-2.5 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
-                      Opening Balance ({statement.fromDate}): <strong>{currency(statement.openingBalance)} {statement.openingBalanceSide}</strong>
+                      Opening Balance ({formatDate(statement.fromDate)}): <strong>{currency(statement.openingBalance)} {statement.openingBalanceSide}</strong>
                     </div>
                   </div>
                 </div>
@@ -678,7 +679,7 @@ export function PartyStatementPage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {/* Opening Balance Line */}
                   <tr className="bg-slate-50/50 font-medium text-slate-600 dark:bg-slate-800/20 dark:text-slate-400">
-                    <td className="py-2 pl-2">{statement.fromDate}</td>
+                    <td className="py-2 pl-2">{formatDate(statement.fromDate)}</td>
                     <td>Opening Balance</td>
                     <td>—</td>
                     <td>Balance brought forward</td>
@@ -693,7 +694,7 @@ export function PartyStatementPage() {
                   {statement.transactions.map((t, idx) => (
                     <tr key={`${t.voucherNumber}_${idx}`} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                       <td className="py-2.5 pl-2 font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                        {t.date}
+                        {formatDate(t.date)}
                       </td>
                       <td>
                         <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${

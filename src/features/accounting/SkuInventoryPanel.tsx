@@ -3,6 +3,7 @@ import type { TaxRate } from "../settings/tax/types/tax.types";
 import { useEffect, useState, type FormEvent } from "react";
 import { apiClient, type PagedData } from "../../services/apiClient";
 import { Button } from "../../components/ui/Button";
+import { todayForInput } from "../../lib/date";
 
 export type StockSku = {
   defaultTaxId?: string | null;
@@ -220,7 +221,7 @@ export function SkuInventoryPanel({ onChanged }: { onChanged: () => void }) {
         className={getFieldClass(`${actionPrefix}_date`)}
         name="date"
         type="date"
-        defaultValue={new Date().toLocaleDateString("en-CA")}
+        defaultValue={todayForInput()}
         onChange={() => clearFieldError(`${actionPrefix}_date`)}
         aria-invalid={Boolean(fieldErrors[`${actionPrefix}_date`])}
       />

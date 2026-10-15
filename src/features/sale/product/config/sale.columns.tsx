@@ -5,6 +5,7 @@ import { APP_ROUTES } from "../../../../config/routes";
 import type { SaleRecord } from "../types/sale.types";
 import { FinanceEmiModal } from "../components/FinanceEmiModal";
 import { Calendar, CreditCard } from "lucide-react";
+import { formatDate } from "../../../../lib/date";
 
 const currency = (value?: number | null) =>
   `₹${(value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -43,7 +44,7 @@ function PlanDetailsCell({ row }: { row: SaleRecord }) {
           {row.financeVendorName || "Finance"} · {row.numberOfEmi || 0} EMIs × {currency(row.emiAmount)}
           {row.firstInstallmentDate && (
             <span className="block text-[10px] text-indigo-600 dark:text-indigo-400">
-              1st Due: {new Date(row.firstInstallmentDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              1st Due: {formatDate(row.firstInstallmentDate)}
             </span>
           )}
         </span>
@@ -132,7 +133,14 @@ export const saleColumns: GridColumn<SaleRecord>[] = [
   { id: "customerName", header: "Customer", accessor: "customerName", searchable: true, sortable: true },
   { id: "customerMobile", header: "Mobile", accessor: "customerMobile", searchable: true },
   { id: "customerEmail", header: "Email", accessor: "customerEmail", hidden: true },
-  { id: "saleDate", header: "Sale Date", accessor: "saleDate", sortable: true },
+  {
+    id: "saleDate",
+    header: "Sale Date",
+    accessor: "saleDate",
+    sortable: true,
+    type: "date",
+    cell: (value) => formatDate(value as string),
+  },
   {
     id: "totalAmount",
     header: "Selling Price",

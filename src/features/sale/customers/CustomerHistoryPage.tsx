@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/Button";
 import { APP_ROUTES } from "../../../config/routes";
 import { apiClient } from "../../../services/apiClient";
 import type { CustomerHistory } from "./customer.types";
+import { formatDate } from "../../../lib/date";
 
 const currency = (amount: number) => `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -67,14 +68,14 @@ export function CustomerHistoryPage() {
             <Button variant="secondary" onClick={() => navigate(sale.isMultiLineInvoice ? APP_ROUTES.sale.invoices.print(sale.id) : APP_ROUTES.sale.accountingPayment(sale.id))}>Open bill</Button>
           </div>
           <div className="grid grid-cols-2 gap-3 px-4 py-3 text-sm sm:grid-cols-3 xl:grid-cols-6">
-            <div><p className="text-xs text-slate-500">Purchase date</p><p className="font-medium">{sale.saleDate}</p></div>
+            <div><p className="text-xs text-slate-500">Purchase date</p><p className="font-medium">{formatDate(sale.saleDate)}</p></div>
             <div><p className="text-xs text-slate-500">Selling price</p><p className="font-medium">{currency(sale.sellingPrice)}</p></div>
             <div><p className="text-xs text-slate-500">Discount</p><p className="font-medium">{currency(sale.discount)}</p></div>
             <div><p className="text-xs text-slate-500">Bill total</p><p className="font-medium">{currency(sale.totalAmount)}</p></div>
             <div><p className="text-xs text-slate-500">Received</p><p className="font-medium">{currency(sale.amountPaid)}</p></div>
             <div><p className="text-xs text-slate-500">Balance</p><p className="font-medium">{currency(sale.balance)}</p></div>
           </div>
-          {sale.payments.length ? <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-800"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Payment history</p><div className="space-y-1.5">{sale.payments.map((payment) => <div key={payment.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs"><span>{payment.paymentDate} · {payment.paymentMode}{payment.referenceNumber ? ` · ${payment.referenceNumber}` : ""}{payment.note ? ` · ${payment.note}` : ""}</span><span className="font-semibold">{currency(payment.amount)}</span></div>)}</div></div> : <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 dark:border-slate-800">No payments have been recorded for this bill.</p>}
+          {sale.payments.length ? <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-800"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Payment history</p><div className="space-y-1.5">{sale.payments.map((payment) => <div key={payment.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs"><span>{formatDate(payment.paymentDate)} · {payment.paymentMode}{payment.referenceNumber ? ` · ${payment.referenceNumber}` : ""}{payment.note ? ` · ${payment.note}` : ""}</span><span className="font-semibold">{currency(payment.amount)}</span></div>)}</div></div> : <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 dark:border-slate-800">No payments have been recorded for this bill.</p>}
         </article>
       ))}
     </section>

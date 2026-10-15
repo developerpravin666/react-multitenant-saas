@@ -38,13 +38,18 @@ import {
   processClientRows,
   toCsv,
 } from "./lib/gridUtils";
+import { formatDate, isIsoDateString } from "../../lib/date";
 
 const EMPTY_DATA: never[] = [];
 
 function formatTooltipValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
-  if (value instanceof Date) return value.toLocaleString();
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+  if (value instanceof Date) return formatDate(value);
+  if (typeof value === "string") {
+    if (isIsoDateString(value)) return formatDate(value);
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean")
     return String(value);
   try {
     return JSON.stringify(value, null, 2) ?? String(value);
@@ -544,8 +549,14 @@ export function DynamicGrid<TData>({
                   })} */}
                   {visibleColumns.map((column, rowIndex) => {
                     const value = getValue(row, column);
+                    const isDateCol =
+                      column.type === "date" ||
+                      column.isDate ||
+                      (typeof column.id === "string" && (column.id.toLowerCase().includes("date") || column.id.endsWith("At")));
                     const cellContent = column.cell
                       ? column.cell(value, row, { row, value, rowIndex })
+                      : isDateCol && (value instanceof Date || (typeof value === "string" && isIsoDateString(value)))
+                      ? formatDate(value as string | Date)
                       : String(value ?? "");
                     const tooltipDetail = column.tooltip?.(value, row);
 

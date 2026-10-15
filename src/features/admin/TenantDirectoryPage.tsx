@@ -27,6 +27,7 @@ import {
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
 import { TenantManagementDialog } from "./TenantManagementDialog";
+import { formatDate } from "../../lib/date";
 
 interface AdminTenant {
   id: string;
@@ -365,7 +366,7 @@ export function TenantDirectoryPage() {
                       </td>
 
                       <td className="px-5 py-3.5 text-slate-500">
-                        {new Date(t.createdAt).toLocaleDateString()}
+                        {formatDate(t.createdAt)}
                       </td>
 
                       <td className="px-5 py-3.5 text-right">

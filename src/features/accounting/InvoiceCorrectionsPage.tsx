@@ -3,6 +3,7 @@ import { apiClient, type PagedData } from "../../services/apiClient";
 import { Button } from "../../components/ui/Button";
 import { useAccountingAccess } from "./AccountingAccess";
 import { CorrectionDocument, type CorrectionNote, type CorrectionSnapshot, type NoteRefund } from "./CorrectionDocument";
+import { formatDate } from "../../lib/date";
 
 type Note = CorrectionNote;
 type Source = {
@@ -220,7 +221,7 @@ export function InvoiceCorrectionsPage() {
         <Button type="submit" disabled={busy || !source}>Post {kind === "Sale" ? "credit" : "debit"} note</Button>
       </div>
     </form>}
-    <div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th>Note / invoice</th><th>Date</th><th>Reason / stock</th><th>Credit</th><th>Refunded</th><th>Actions</th></tr></thead><tbody>{notes.map(n => <tr key={n.id} className="border-t"><td className="py-3">{n.noteNumber}<div>{n.kind} · {n.billNumber}</div></td><td>{n.noteDate}</td><td>{n.reason}<div>{n.disposition}</div></td><td>{money(n.totalAmount)}</td><td>{money(n.refunded)}</td><td><Button variant="secondary" onClick={() => void viewNote(n)}>View note</Button>{can(n.kind === "Sale" ? "sales.manage" : "purchases.manage") && n.refundAvailable > 0 && <Button onClick={() => { setRefund(n); setRefundAmount(String(n.refundAvailable)); const today = new Date().toISOString().slice(0, 10); setRefundDate(today < n.noteDate ? n.noteDate : today); setRefundErrors({}); }}>Record refund</Button>}</td></tr>)}</tbody></table></div>
+    <div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th>Note / invoice</th><th>Date</th><th>Reason / stock</th><th>Credit</th><th>Refunded</th><th>Actions</th></tr></thead><tbody>{notes.map(n => <tr key={n.id} className="border-t"><td className="py-3">{n.noteNumber}<div>{n.kind} · {n.billNumber}</div></td><td>{formatDate(n.noteDate)}</td><td>{n.reason}<div>{n.disposition}</div></td><td>{money(n.totalAmount)}</td><td>{money(n.refunded)}</td><td><Button variant="secondary" onClick={() => void viewNote(n)}>View note</Button>{can(n.kind === "Sale" ? "sales.manage" : "purchases.manage") && n.refundAvailable > 0 && <Button onClick={() => { setRefund(n); setRefundAmount(String(n.refundAvailable)); const today = new Date().toISOString().slice(0, 10); setRefundDate(today < n.noteDate ? n.noteDate : today); setRefundErrors({}); }}>Record refund</Button>}</td></tr>)}</tbody></table></div>
     {document && <CorrectionDocument {...document} onClose={() => setDocument(null)} />}
     {refund && <form onSubmit={postRefund} noValidate className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 md:grid-cols-2">
       <h2 className="md:col-span-2 font-semibold">{refund.kind === "Sale" ? "Refund customer" : "Refund received from supplier"} · available {money(refund.refundAvailable)}</h2>

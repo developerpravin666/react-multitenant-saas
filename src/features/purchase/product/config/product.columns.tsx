@@ -3,6 +3,7 @@ import type { GridColumn } from "../../../../types/grid";
 import type { Product } from "../types/product.types";
 import { apiClient } from "../../../../services/apiClient";
 import { Check, Power } from "lucide-react";
+import { formatDate } from "../../../../lib/date";
 
 function ProductStatusCell({ row }: { row: Product }) {
   const [isActive, setIsActive] = useState(row.isActive);
@@ -81,6 +82,22 @@ export const productColumns: GridColumn<Product>[] = [
     , hidden: true
   },
   {
+    id: "billNumber",
+    header: "Bill Number",
+    accessor: "billNumber",
+    searchable: true,
+    sortable: true,
+  },
+  {
+    id: "purchaseDate",
+    header: "Purchase Date",
+    accessor: "purchaseDate",
+    searchable: true,
+    sortable: true,
+    type: "date",
+    cell: (value) => formatDate(value as string),
+  },
+  {
     id: "vendorName",
     header: "Vendor",
     accessor: "vendorName",
@@ -101,6 +118,8 @@ export const productColumns: GridColumn<Product>[] = [
     header: "Model",
     accessor: "productModelName",
     searchable: true,
+    cell: (_, row) => row.brandName + "-" + row.productModelName
+
   },
   {
     id: "variantName",
@@ -125,6 +144,7 @@ export const productColumns: GridColumn<Product>[] = [
     header: "Serial Number 1",
     accessor: "serialNumber1",
     searchable: true,
+    hidden: true,
   },
   {
     id: "purchasePrice",

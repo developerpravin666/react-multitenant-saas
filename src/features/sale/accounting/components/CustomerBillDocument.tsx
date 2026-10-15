@@ -1,5 +1,6 @@
 import type { CustomerBillTemplate, PrintableSalesBill } from "../types/customerBill.types";
 import "./customerBill.css";
+import { formatDate } from "../../../../lib/date";
 
 const currency = (amount: number) => `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -17,7 +18,7 @@ export function CustomerBillDocument({ template, bill }: { template: CustomerBil
         <div className="customer-bill-title">
           <h2>{template.billTitle || "SALES INVOICE"}</h2>
           <strong>{bill.billNumber}</strong>
-          <span>Date: {bill.billDate}</span>
+          <span>Date: {formatDate(bill.billDate)}</span>
         </div>
       </header>
 
@@ -38,7 +39,7 @@ export function CustomerBillDocument({ template, bill }: { template: CustomerBil
         <div className="customer-bill-payment-history">
           {template.showPaymentHistory ? <>
             <h3>Payment history</h3>
-            {bill.payments.length ? bill.payments.map((payment) => <p key={payment.id}>{payment.paymentDate} · {payment.paymentMode}{payment.referenceNumber ? ` · ${payment.referenceNumber}` : ""}<strong>{currency(payment.amount)}</strong></p>) : <p>No payments recorded</p>}
+            {bill.payments.length ? bill.payments.map((payment) => <p key={payment.id}>{formatDate(payment.paymentDate)} · {payment.paymentMode}{payment.referenceNumber ? ` · ${payment.referenceNumber}` : ""}<strong>{currency(payment.amount)}</strong></p>) : <p>No payments recorded</p>}
           </> : null}
         </div>
         <dl>

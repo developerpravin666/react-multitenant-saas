@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { apiClient } from "../../services/apiClient";
 import { Button } from "../../components/ui/Button";
 import { useNotifications } from "../../context/NotificationContext";
+import { formatDate } from "../../lib/date";
 
 type Account = { id: string; code: string; name: string; type: number; normalBalance: number };
 type Approval = { id: string; action: number; resourceId: string; summary: string; status: number; requestedBy?: string; decidedBy?: string; decisionNote?: string; createdAt: string };
@@ -231,7 +232,7 @@ export function AccountingControlsPage() {
         <Button type="submit" disabled={busy}>Submit for review</Button>
       </form>
       <div className="mt-5 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="py-2">Action</th><th>Summary</th><th>State</th><th>Requested</th><th className="text-right">Actions</th></tr></thead><tbody>
-        {approvals.map(item => <tr key={item.id} className="border-b border-slate-100 dark:border-slate-800"><td className="py-2">{actionNames[item.action] ?? "Unknown"}</td><td>{item.summary}<div className="text-xs text-slate-500">{item.resourceId}</div></td><td>{statusNames[item.status]}</td><td>{new Date(item.createdAt).toLocaleDateString()}</td><td className="space-x-2 text-right">
+        {approvals.map(item => <tr key={item.id} className="border-b border-slate-100 dark:border-slate-800"><td className="py-2">{actionNames[item.action] ?? "Unknown"}</td><td>{item.summary}<div className="text-xs text-slate-500">{item.resourceId}</div></td><td>{statusNames[item.status]}</td><td>{formatDate(item.createdAt)}</td><td className="space-x-2 text-right">
           {item.status === 0 && <><Button type="button" disabled={busy} onClick={() => void run(() => apiClient.post(`/accounting-approvals/${item.id}/decision`, { approve: true }), "Approval accepted")}>Approve</Button><Button type="button" disabled={busy} onClick={() => void run(() => apiClient.post(`/accounting-approvals/${item.id}/decision`, { approve: false }), "Approval rejected")}>Reject</Button></>}
           {item.status === 1 && <Button type="button" disabled={busy} onClick={() => void run(() => apiClient.post(`/accounting-approvals/${item.id}/apply`, {}), "Approved action applied")}>Apply</Button>}
         </td></tr>)}
@@ -362,7 +363,7 @@ export function AccountingControlsPage() {
         </div>
         <div className="self-end"><Button type="submit" disabled={busy}>Save budget</Button></div>
       </form>
-      <div className="mt-5 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="py-2">Account / dimension</th><th>Period</th><th>Budget</th><th>Actual</th><th>Variance</th></tr></thead><tbody>{budgets.map(b => <tr key={b.id} className="border-b border-slate-100 dark:border-slate-800"><td className="py-2">{b.accountCode} · {b.accountName}{b.dimensionCode ? ` (${b.dimensionCode})` : ""}</td><td>{b.startDate} – {b.endDate}</td><td>{money(b.amount)}</td><td>{money(b.actual)}</td><td>{money(b.variance)}</td></tr>)}</tbody></table></div>
+      <div className="mt-5 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="py-2">Account / dimension</th><th>Period</th><th>Budget</th><th>Actual</th><th>Variance</th></tr></thead><tbody>{budgets.map(b => <tr key={b.id} className="border-b border-slate-100 dark:border-slate-800"><td className="py-2">{b.accountCode} · {b.accountName}{b.dimensionCode ? ` (${b.dimensionCode})` : ""}</td><td>{formatDate(b.startDate)} – {formatDate(b.endDate)}</td><td>{money(b.amount)}</td><td>{money(b.actual)}</td><td>{money(b.variance)}</td></tr>)}</tbody></table></div>
     </section>
   </div>;
 }
