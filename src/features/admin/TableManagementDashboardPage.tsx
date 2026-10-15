@@ -20,10 +20,13 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
-  CheckSquare
+  CheckSquare,
+  FileSpreadsheet,
+  Upload
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
+import { DatabaseBackupRestoreModal } from "./DatabaseBackupRestoreModal";
 
 export interface TableColumnMeta {
   name: string;
@@ -100,6 +103,10 @@ export function TableManagementDashboardPage() {
   const [maintenance, setMaintenance] = useState<"selected" | "restore" | null>(null);
   const [maintenanceConfirmation, setMaintenanceConfirmation] = useState("");
   const [maintaining, setMaintaining] = useState(false);
+  const [backupModalState, setBackupModalState] = useState<{
+    isOpen: boolean;
+    mode: "export" | "restore";
+  }>({ isOpen: false, mode: "export" });
   useEffect(() => { setSelectedTables([]); }, [selectedSchema]);
   const saveRecovery = (schema: string, operationId?: string) => {
     if (!operationId) return;
@@ -522,6 +529,28 @@ export function TableManagementDashboardPage() {
           >
             <RefreshCw className={`size-3.5 ${syncing ? "animate-spin text-indigo-600" : ""}`} />
             {syncing ? "Scanning DB…" : "Scan & Sync DB"}
+          </button>
+
+          {/* Export to Excel Button */}
+          <button
+            onClick={() => setBackupModalState({ isOpen: true, mode: "export" })}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
+            title="Export database tables to multi-sheet formatted Excel workbook"
+          >
+            <FileSpreadsheet className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Export to Excel</span>
+          </button>
+
+          {/* Restore from Excel Button */}
+          <button
+            onClick={() => setBackupModalState({ isOpen: true, mode: "restore" })}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+            title="Restore tables from Excel file with audit difference counts"
+          >
+            <Upload className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Restore from Excel</span>
           </button>
 
           {/* Selective Delete Button */}
@@ -1740,6 +1769,16 @@ export function TableManagementDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Database Excel Backup & Restore Modal */}
+      <DatabaseBackupRestoreModal
+        isOpen={backupModalState.isOpen}
+        onClose={() => setBackupModalState((prev) => ({ ...prev, isOpen: false }))}
+        schema={selectedSchema || data?.activeSchema || "tenant"}
+        availableTables={data?.tables}
+        initialMode={backupModalState.mode}
+        onSuccess={() => void fetchTables(selectedSchema || data?.activeSchema)}
+      />
     </div>
   );
 }
