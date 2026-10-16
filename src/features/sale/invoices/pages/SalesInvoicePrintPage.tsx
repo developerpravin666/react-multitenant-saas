@@ -9,6 +9,9 @@ import { defaultCustomerBillTemplate } from "../../accounting/types/customerBill
 import type { SalesInvoiceDetails } from "../types/salesInvoice.types";
 import "../../accounting/components/customerBill.css";
 import { formatDate } from "../../../../lib/date";
+import { complianceApi } from "../../../compliance/services/complianceApi";
+import type { EInvoiceDto, EWayBillDto } from "../../../compliance/types/compliance.types";
+import { QrCodeSvg } from "../../../../components/ui/QrCodeSvg";
 
 const currency = (amount: number) =>
   `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -18,6 +21,8 @@ export function SalesInvoicePrintPage() {
   const navigate = useNavigate();
   const [details, setDetails] = useState<SalesInvoiceDetails | null>(null);
   const [template, setTemplate] = useState<CustomerBillTemplate>(defaultCustomerBillTemplate);
+  const [eInvoice, setEInvoice] = useState<EInvoiceDto | null>(null);
+  const [eWayBill, setEWayBill] = useState<EWayBillDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,14 +30,18 @@ export function SalesInvoicePrintPage() {
     if (!id) return;
     try {
       setError(null);
-      const [invoiceData, snapshot] = await Promise.all([
+      const [invoiceData, snapshot, einv, ewb] = await Promise.all([
         apiClient.get<SalesInvoiceDetails>(`/sales/invoices/${encodeURIComponent(id)}`),
         apiClient.get<{ partyName: string; partyMobile: string; partyAddress: string; partyEmail?: string; detailsJson: string }>(`/accounting/snapshots/Sale/${encodeURIComponent(id)}`),
+        complianceApi.getEInvoiceByInvoiceId(id).catch(() => null),
+        complianceApi.getEWayBillByInvoiceId(id).catch(() => null),
       ]);
       const frozen = JSON.parse(snapshot.detailsJson) as { seller?: CustomerBillTemplate | null };
       setDetails({ ...invoiceData, invoice: { ...invoiceData.invoice, customerName: snapshot.partyName,
         customerMobile: snapshot.partyMobile, customerAddress: snapshot.partyAddress, customerEmail: snapshot.partyEmail } });
       setTemplate({ ...defaultCustomerBillTemplate, ...frozen.seller });
+      setEInvoice(einv);
+      setEWayBill(ewb);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load invoice details.");
     } finally {
@@ -107,7 +116,45 @@ export function SalesInvoicePrintPage() {
                 Supply: {invoice.supplyType === 1 ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}
               </span>
             </div>
+            {eInvoice && eInvoice.status === "Generated" ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <QrCodeSvg value={eInvoice.signedQrCode} size={template.paperSize === "Thermal80" ? 72 : 88} />
+                <span style={{ fontSize: "8px", color: "#6b7280", marginTop: "2px" }}>GST Signed QR</span>
+              </div>
+            ) : null}
           </header>
+
+          {/* Statutory Compliance Bar */}
+          {((eInvoice && eInvoice.status === "Generated") || (eWayBill && eWayBill.status === "Generated")) && (
+            <div style={{
+              margin: "8px 0 12px 0",
+              padding: "6px 8px",
+              background: "#f8fafc",
+              border: "1px dashed #cbd5e1",
+              borderRadius: "4px",
+              fontSize: "9px",
+              color: "#334155"
+            }}>
+              {eInvoice && eInvoice.status === "Generated" && (
+                <div style={{ marginBottom: eWayBill && eWayBill.status === "Generated" ? "4px" : "0" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "6px" }}>
+                    <span>Ack No: <strong>{eInvoice.ackNo}</strong></span>
+                    <span>Ack Date: <strong>{formatDate(eInvoice.ackDate.split("T")[0])}</strong></span>
+                  </div>
+                  <div style={{ marginTop: "2px", wordBreak: "break-all", fontFamily: "monospace", fontSize: "8.5px" }}>
+                    IRN: <strong>{eInvoice.irn}</strong>
+                  </div>
+                </div>
+              )}
+              {eWayBill && eWayBill.status === "Generated" && (
+                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "6px", borderTop: eInvoice && eInvoice.status === "Generated" ? "1px solid #e2e8f0" : "none", paddingTop: eInvoice && eInvoice.status === "Generated" ? "4px" : "0" }}>
+                  <span>E-Way Bill No: <strong>{eWayBill.ewbNumber}</strong></span>
+                  {eWayBill.validUpto && <span>Valid Upto: <strong>{formatDate(eWayBill.validUpto.split("T")[0])}</strong></span>}
+                  {eWayBill.vehicleNo && <span>Vehicle No: <strong>{eWayBill.vehicleNo}</strong></span>}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Customer / Bill To */}
           <section className="customer-bill-customer">

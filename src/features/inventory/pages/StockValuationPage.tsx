@@ -36,7 +36,7 @@ export const StockValuationPage: React.FC = () => {
   // Valuation Tab State
   const [valuationData, setValuationData] = useState<StockValuationSummaryDto | null>(null);
   const [method, setMethod] = useState<string>("FIFO");
-  const [asOfDate, setAsOfDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [asOfDate, setAsOfDate] = useState<string>(new Date().toISOString().split("T")[0] || "");
   const [selectedGodownId, setSelectedGodownId] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -45,9 +45,9 @@ export const StockValuationPage: React.FC = () => {
   const [cogsData, setCogsData] = useState<TradingProfitLossValuationDto | null>(null);
   const [fromDate, setFromDate] = useState<string>(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0] || "";
   });
-  const [toDate, setToDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [toDate, setToDate] = useState<string>(new Date().toISOString().split("T")[0] || "");
   const [cogsLoading, setCogsLoading] = useState<boolean>(false);
 
   // UOM Tab State

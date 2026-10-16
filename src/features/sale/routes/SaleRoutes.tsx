@@ -12,12 +12,15 @@ import { CustomerBillPrintPage } from "../accounting/pages/CustomerBillPrintPage
 import { SalesInvoiceListPage } from "../invoices/pages/SalesInvoiceListPage";
 import { SalesInvoiceFormPage } from "../invoices/pages/SalesInvoiceFormPage";
 import { SalesInvoicePrintPage } from "../invoices/pages/SalesInvoicePrintPage";
+import { EWayBillAndEInvoicePage } from "../../compliance/pages/EWayBillAndEInvoicePage";
 
 export const saleRoutes = (
   <>
     <Route path="/sales/invoices" element={withPageTitle("Sales Invoices", <SalesInvoiceListPage />)} />
     <Route path="/sales/invoices/new" element={withPageTitle("New Sales Invoice", <SalesInvoiceFormPage />)} />
     <Route path="/sales/invoices/:id/print" element={withPageTitle("Print Sales Invoice", <SalesInvoicePrintPage />)} />
+    <Route path="/sales/compliance" element={withPageTitle("E-Way Bill & E-Invoice", <EWayBillAndEInvoicePage />)} />
+    <Route path="/compliance/eway-einvoice" element={withPageTitle("E-Way Bill & E-Invoice", <EWayBillAndEInvoicePage />)} />
     <Route path="/sales/accounting" element={withPageTitle("Sales Accounting", <SalesAccountingPage />)} />
     <Route path="/sales/accounting/payments/:id" element={withPageTitle("Sales Bill Payments", <SalesBillPaymentsPage />)} />
     <Route path="/sales/accounting/print/:id" element={withPageTitle("Print Customer Bill", <CustomerBillPrintPage />)} />

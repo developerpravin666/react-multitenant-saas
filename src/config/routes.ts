@@ -77,6 +77,7 @@ export const APP_ROUTES = {
       add: "/sales/invoices/new",
       print: (id: string) => `/sales/invoices/${id}/print`,
     },
+    compliance: "/sales/compliance",
     accounting: "/sales/accounting",
     customers: {
       list: "/sales/customers/list",

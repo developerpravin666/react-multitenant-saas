@@ -223,6 +223,12 @@ export const sidebarConfiguration: NavigationItem[] = [
         icon: FileText,
       },
       {
+        id: "sales-compliance",
+        label: "E-Way Bill & E-Invoice",
+        path: APP_ROUTES.sale.compliance,
+        icon: ShieldCheck,
+      },
+      {
         id: "sale-products",
         label: "Products",
         path: APP_ROUTES.sale.products.list,
