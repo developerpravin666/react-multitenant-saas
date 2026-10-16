@@ -10,6 +10,7 @@ export const APP_ROUTES = {
   accountingControls: "/accounting/controls",
   bankReconciliation: "/accounting/bank-reconciliation",
   stockMovements: "/purchase/stock-movements",
+  godowns: "/inventory/godowns",
 
   products: {
     root: "/products",

@@ -23,6 +23,7 @@ import { AccountingPeriodsPage } from "./features/accounting/AccountingPeriodsPa
 import { BankReconciliationPage } from "./features/accounting/BankReconciliationPage";
 import { StockMovementsPage } from "./features/accounting/StockMovementsPage";
 import { TaxReportsPage } from "./features/accounting/TaxReportsPage";
+import { GodownsPage } from "./features/inventory/pages/GodownsPage";
 import { PartyStatementPage } from "./features/accounting/pages/PartyStatementPage";
 import { AccountingControlsPage } from "./features/accounting/AccountingControlsPage";
 import { InvoiceCorrectionsPage } from "./features/accounting/InvoiceCorrectionsPage";
@@ -76,6 +77,7 @@ export default function App() {
           <Route path={APP_ROUTES.accountingPeriods} element={withPageTitle("Accounting Periods", <AccountingPeriodsPage />)} />
           <Route path={APP_ROUTES.bankReconciliation} element={withPageTitle("Bank Reconciliation", <BankReconciliationPage />)} />
           <Route path={APP_ROUTES.stockMovements} element={withPageTitle("Stock Movements", <StockMovementsPage />)} />
+          <Route path={APP_ROUTES.godowns} element={withPageTitle("Godowns & Stock Journal", <GodownsPage />)} />
           <Route path={APP_ROUTES.accountingControls} element={withPageTitle("Accounting Controls", <AccountingControlsPage />)} />
           <Route path="/accounting/corrections" element={withPageTitle("Invoice Corrections", <InvoiceCorrectionsPage />)} />
           <Route path="/accounting/opening-balances" element={withPageTitle("Opening Balances", <OpeningBalancesPage />)} />

@@ -28,6 +28,7 @@ import {
   Clock,
   ToggleRight,
   Mail,
+  Warehouse,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -162,6 +163,12 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Stock Inventory",
         path: APP_ROUTES.purchase.stock,
         icon: Boxes,
+      },
+      {
+        id: "godowns-stock-journal",
+        label: "Godowns & Stock Journal",
+        path: APP_ROUTES.godowns,
+        icon: Warehouse,
       },
       {
         id: "purchase-scan-bill",
