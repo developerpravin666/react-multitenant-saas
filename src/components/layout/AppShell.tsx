@@ -20,19 +20,25 @@ export function AppShell() {
         dark:text-slate-100
       "
     >
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((current) => !current)}
-      />
+      <div className="no-print">
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((current) => !current)}
+        />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header />
+        <div className="no-print">
+          <Header />
+        </div>
 
-        <main className="flex-1 p-3 md:p-4">
+        <main className="flex-1 p-3 md:p-4 print:p-0">
           <Outlet />
         </main>
 
-        <Footer />
+        <div className="no-print">
+          <Footer />
+        </div>
       </div>
     </div>
   );

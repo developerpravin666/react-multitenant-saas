@@ -26,3 +26,16 @@ body {
   outline: 2px solid var(--tenant-ring);
   outline-offset: 2px;
 }
+
+@media print {
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
+

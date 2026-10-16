@@ -1,3 +1,4 @@
+import { withPageTitle } from "../../../components/layout/PageTitle";
 import { Navigate, Route } from "react-router-dom";
 import { SaleProductFormPage } from "../product/pages/SaleProductFormPage";
 import { SaleProductListPage } from "../product/pages/SaleProductListPage";
@@ -14,25 +15,25 @@ import { SalesInvoicePrintPage } from "../invoices/pages/SalesInvoicePrintPage";
 
 export const saleRoutes = (
   <>
-    <Route path="/sales/invoices" element={<SalesInvoiceListPage />} />
-    <Route path="/sales/invoices/new" element={<SalesInvoiceFormPage />} />
-    <Route path="/sales/invoices/:id/print" element={<SalesInvoicePrintPage />} />
-    <Route path="/sales/accounting" element={<SalesAccountingPage />} />
-    <Route path="/sales/accounting/payments/:id" element={<SalesBillPaymentsPage />} />
-    <Route path="/sales/accounting/print/:id" element={<CustomerBillPrintPage />} />
+    <Route path="/sales/invoices" element={withPageTitle("Sales Invoices", <SalesInvoiceListPage />)} />
+    <Route path="/sales/invoices/new" element={withPageTitle("New Sales Invoice", <SalesInvoiceFormPage />)} />
+    <Route path="/sales/invoices/:id/print" element={withPageTitle("Print Sales Invoice", <SalesInvoicePrintPage />)} />
+    <Route path="/sales/accounting" element={withPageTitle("Sales Accounting", <SalesAccountingPage />)} />
+    <Route path="/sales/accounting/payments/:id" element={withPageTitle("Sales Bill Payments", <SalesBillPaymentsPage />)} />
+    <Route path="/sales/accounting/print/:id" element={withPageTitle("Print Customer Bill", <CustomerBillPrintPage />)} />
     <Route path="/sales/customers">
       <Route index element={<Navigate to="list" replace />} />
-      <Route path="list" element={<CustomerListPage />} />
-      <Route path="add" element={<CustomerFormPage mode="create" />} />
-      <Route path=":id/edit" element={<CustomerFormPage mode="edit" />} />
-      <Route path=":id/history" element={<CustomerHistoryPage />} />
+      <Route path="list" element={withPageTitle("Customers", <CustomerListPage />)} />
+      <Route path="add" element={withPageTitle("Add Customer", <CustomerFormPage mode="create" />)} />
+      <Route path=":id/edit" element={withPageTitle("Edit Customer", <CustomerFormPage mode="edit" />)} />
+      <Route path=":id/history" element={withPageTitle("Customer History", <CustomerHistoryPage />)} />
     </Route>
     <Route path="/sales/products">
       <Route index element={<Navigate to="list" replace />} />
-      <Route path="list" element={<SaleProductListPage />} />
-      <Route path="add" element={<SaleProductFormPage mode="create" />} />
-      <Route path=":id/payment" element={<SalesPaymentPage />} />
-      <Route path=":id/edit" element={<SaleProductFormPage mode="edit" />} />
+      <Route path="list" element={withPageTitle("Sales", <SaleProductListPage />)} />
+      <Route path="add" element={withPageTitle("Add Sale", <SaleProductFormPage mode="create" />)} />
+      <Route path=":id/payment" element={withPageTitle("Sales Payment", <SalesPaymentPage />)} />
+      <Route path=":id/edit" element={withPageTitle("Edit Sale", <SaleProductFormPage mode="edit" />)} />
     </Route>
   </>
 );

@@ -1,3 +1,4 @@
+import { withPageTitle } from "./components/layout/PageTitle";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -45,72 +46,74 @@ import { AdminRoute } from "./features/auth/AdminRoute";
 
 function RootDashboard() {
   const { isProductOwner } = useAuth();
-  return isProductOwner ? <ProductOwnerDashboardPage /> : <DashboardPage />;
+  return isProductOwner
+    ? withPageTitle("Platform Dashboard", <ProductOwnerDashboardPage />)
+    : withPageTitle("Dashboard", <DashboardPage />);
 }
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/admin/login" element={<AdminLoginPage />} />
-      <Route path="/register-tenant" element={<RegisterTenantPage />} />
-      <Route path="/register" element={<RegisterTenantPage />} />
-      <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/login" element={withPageTitle("Sign In", <LoginPage />)} />
+      <Route path="/admin/login" element={withPageTitle("Administrator Sign In", <AdminLoginPage />)} />
+      <Route path="/register-tenant" element={withPageTitle("Register Business", <RegisterTenantPage />)} />
+      <Route path="/register" element={withPageTitle("Register Business", <RegisterTenantPage />)} />
+      <Route path="/accept-invitation" element={withPageTitle("Accept Invitation", <AcceptInvitationPage />)} />
+      <Route path="/forgot-password" element={withPageTitle("Forgot Password", <ForgotPasswordPage />)} />
+      <Route path="/reset-password" element={withPageTitle("Reset Password", <ResetPasswordPage />)} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<RootDashboard />} />
-          <Route path="/account/change-password" element={<ChangePasswordPage />} />
-          <Route path={APP_ROUTES.generalLedger} element={<GeneralLedgerPage />} />
-          <Route path={APP_ROUTES.accountingAging} element={<AgingReportPage />} />
-          <Route path={APP_ROUTES.taxReports} element={<TaxReportsPage />} />
-          <Route path={APP_ROUTES.partyStatement} element={<PartyStatementPage />} />
-          <Route path={APP_ROUTES.accountingPeriods} element={<AccountingPeriodsPage />} />
-          <Route path={APP_ROUTES.bankReconciliation} element={<BankReconciliationPage />} />
-          <Route path={APP_ROUTES.stockMovements} element={<StockMovementsPage />} />
-          <Route path={APP_ROUTES.accountingControls} element={<AccountingControlsPage />} />
-          <Route path="/accounting/corrections" element={<InvoiceCorrectionsPage />} />
-          <Route path="/accounting/opening-balances" element={<OpeningBalancesPage />} />
-          <Route path="/accounting/opening-stock/add" element={<OpeningStockFormPage />} />
-          <Route path="/accounting/staff" element={<StaffAccessPage />} />
+          <Route path="/account/change-password" element={withPageTitle("Change Password", <ChangePasswordPage />)} />
+          <Route path={APP_ROUTES.generalLedger} element={withPageTitle("General Ledger", <GeneralLedgerPage />)} />
+          <Route path={APP_ROUTES.accountingAging} element={withPageTitle("Aging Report", <AgingReportPage />)} />
+          <Route path={APP_ROUTES.taxReports} element={withPageTitle("Tax Reports", <TaxReportsPage />)} />
+          <Route path={APP_ROUTES.partyStatement} element={withPageTitle("Party Statement", <PartyStatementPage />)} />
+          <Route path={APP_ROUTES.accountingPeriods} element={withPageTitle("Accounting Periods", <AccountingPeriodsPage />)} />
+          <Route path={APP_ROUTES.bankReconciliation} element={withPageTitle("Bank Reconciliation", <BankReconciliationPage />)} />
+          <Route path={APP_ROUTES.stockMovements} element={withPageTitle("Stock Movements", <StockMovementsPage />)} />
+          <Route path={APP_ROUTES.accountingControls} element={withPageTitle("Accounting Controls", <AccountingControlsPage />)} />
+          <Route path="/accounting/corrections" element={withPageTitle("Invoice Corrections", <InvoiceCorrectionsPage />)} />
+          <Route path="/accounting/opening-balances" element={withPageTitle("Opening Balances", <OpeningBalancesPage />)} />
+          <Route path="/accounting/opening-stock/add" element={withPageTitle("Add Opening Stock", <OpeningStockFormPage />)} />
+          <Route path="/accounting/staff" element={withPageTitle("Staff Access", <StaffAccessPage />)} />
           {productRoutes}
           {purchaseRoutes}
           {saleRoutes}
           <Route path="/settings/taxes">
             <Route index element={<Navigate to="list" replace />} />
-            <Route path="list" element={<TaxListPage />} />
-            <Route path="add" element={<TaxFormPage mode="create" />} />
-            <Route path=":id/edit" element={<TaxFormPage mode="edit" />} />
+            <Route path="list" element={withPageTitle("Taxes", <TaxListPage />)} />
+            <Route path="add" element={withPageTitle("Add Tax", <TaxFormPage mode="create" />)} />
+            <Route path=":id/edit" element={withPageTitle("Edit Tax", <TaxFormPage mode="edit" />)} />
           </Route>
           <Route path="/settings/finance-vendors">
             <Route index element={<Navigate to="list" replace />} />
-            <Route path="list" element={<FinanceVendorListPage />} />
-            <Route path="add" element={<FinanceVendorFormPage mode="create" />} />
-            <Route path=":id/edit" element={<FinanceVendorFormPage mode="edit" />} />
+            <Route path="list" element={withPageTitle("Finance Vendors", <FinanceVendorListPage />)} />
+            <Route path="add" element={withPageTitle("Add Finance Vendor", <FinanceVendorFormPage mode="create" />)} />
+            <Route path=":id/edit" element={withPageTitle("Edit Finance Vendor", <FinanceVendorFormPage mode="edit" />)} />
           </Route>
-          <Route path={APP_ROUTES.settings.customerBill} element={<CustomerBillSettingsPage />} />
-          <Route path={APP_ROUTES.settings.auditLogs} element={<AuditLogsPage />} />
-          <Route path={APP_ROUTES.settings.tenantApprovals} element={<TenantApprovalsPage />} />
+          <Route path={APP_ROUTES.settings.customerBill} element={withPageTitle("Customer Bill Settings", <CustomerBillSettingsPage />)} />
+          <Route path={APP_ROUTES.settings.auditLogs} element={withPageTitle("Audit Logs", <AuditLogsPage />)} />
+          <Route path={APP_ROUTES.settings.tenantApprovals} element={withPageTitle("Tenant Approvals", <TenantApprovalsPage />)} />
           <Route element={<AdminRoute />}>
-            <Route path={APP_ROUTES.settings.databaseTables} element={<TableManagementDashboardPage />} />
-            <Route path={APP_ROUTES.admin.databaseTables} element={<TableManagementDashboardPage />} />
+            <Route path={APP_ROUTES.settings.databaseTables} element={withPageTitle("Database Tables", <TableManagementDashboardPage />)} />
+            <Route path={APP_ROUTES.admin.databaseTables} element={withPageTitle("Database Tables", <TableManagementDashboardPage />)} />
           </Route>
 
           {/* Product Owner Console Routes */}
           <Route path="/admin" element={<Navigate to={APP_ROUTES.admin.dashboard} replace />} />
-          <Route path={APP_ROUTES.admin.dashboard} element={<ProductOwnerDashboardPage />} />
-          <Route path={APP_ROUTES.admin.tenants} element={<TenantDirectoryPage />} />
-          <Route path={APP_ROUTES.admin.pendingApprovals} element={<TenantApprovalsPage />} />
-          <Route path={APP_ROUTES.admin.databaseMigrations} element={<DatabaseMigrationsPage />} />
-          <Route path={APP_ROUTES.admin.systemSettings} element={<SystemSettingsPage />} />
-          <Route path={APP_ROUTES.admin.featureFlags} element={<FeatureFlagsAdminPage />} />
-          <Route path={APP_ROUTES.admin.mastersImport} element={<MasterImportPage isAdminMode={true} />} />
-          <Route path={APP_ROUTES.admin.emailTemplates} element={<EmailTemplatesPage />} />
+          <Route path={APP_ROUTES.admin.dashboard} element={withPageTitle("Platform Dashboard", <ProductOwnerDashboardPage />)} />
+          <Route path={APP_ROUTES.admin.tenants} element={withPageTitle("Tenant Directory", <TenantDirectoryPage />)} />
+          <Route path={APP_ROUTES.admin.pendingApprovals} element={withPageTitle("Tenant Approvals", <TenantApprovalsPage />)} />
+          <Route path={APP_ROUTES.admin.databaseMigrations} element={withPageTitle("Database Migrations", <DatabaseMigrationsPage />)} />
+          <Route path={APP_ROUTES.admin.systemSettings} element={withPageTitle("System Settings", <SystemSettingsPage />)} />
+          <Route path={APP_ROUTES.admin.featureFlags} element={withPageTitle("Feature Flags", <FeatureFlagsAdminPage />)} />
+          <Route path={APP_ROUTES.admin.mastersImport} element={withPageTitle("Import Masters", <MasterImportPage isAdminMode={true} />)} />
+          <Route path={APP_ROUTES.admin.emailTemplates} element={withPageTitle("Email Templates", <EmailTemplatesPage />)} />
 
         </Route>
       </Route>
-      <Route path="/not-found" element={<NotFoundPage />} />
+      <Route path="/not-found" element={withPageTitle("Page Not Found", <NotFoundPage />)} />
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
   );
