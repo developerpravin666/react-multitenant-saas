@@ -21,6 +21,7 @@ import { GeneralLedgerPage } from "./features/accounting/GeneralLedgerPage";
 import { AgingReportPage } from "./features/accounting/AgingReportPage";
 import { AccountingPeriodsPage } from "./features/accounting/AccountingPeriodsPage";
 import { BankReconciliationPage } from "./features/accounting/BankReconciliationPage";
+import { RcmManagementPage } from "./features/compliance/pages/RcmManagementPage";
 import { StockMovementsPage } from "./features/accounting/StockMovementsPage";
 import { TaxReportsPage } from "./features/accounting/TaxReportsPage";
 import { GodownsPage } from "./features/inventory/pages/GodownsPage";
@@ -74,6 +75,7 @@ export default function App() {
           <Route path={APP_ROUTES.generalLedger} element={withPageTitle("General Ledger", <GeneralLedgerPage />)} />
           <Route path={APP_ROUTES.accountingAging} element={withPageTitle("Aging Report", <AgingReportPage />)} />
           <Route path={APP_ROUTES.taxReports} element={withPageTitle("Tax Reports", <TaxReportsPage />)} />
+          <Route path={APP_ROUTES.rcm} element={withPageTitle("RCM Self-Invoicing", <RcmManagementPage />)} />
           <Route path={APP_ROUTES.partyStatement} element={withPageTitle("Party Statement", <PartyStatementPage />)} />
           <Route path={APP_ROUTES.accountingPeriods} element={withPageTitle("Accounting Periods", <AccountingPeriodsPage />)} />
           <Route path={APP_ROUTES.bankReconciliation} element={withPageTitle("Bank Reconciliation", <BankReconciliationPage />)} />

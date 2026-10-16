@@ -69,6 +69,80 @@ export interface CancelComplianceRequest {
   reason: string;
 }
 
+export interface RcmSelfInvoiceDto {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  section: "9(3)" | "9(4)";
+  category: string;
+  vendorName: string;
+  vendorGstin?: string | null;
+  vendorAddress?: string | null;
+  vendorPan?: string | null;
+  placeOfSupplyStateCode: string;
+  placeOfSupplyStateName: string;
+  description: string;
+  hsnSacCode?: string | null;
+  taxableAmount: number;
+  gstRate: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalAmount: number;
+  isItcEligible: boolean;
+  paymentMode: string;
+  paymentDate: string;
+  paymentReference?: string | null;
+  journalEntryNumber?: string | null;
+  status: "Active" | "Cancelled";
+  cancelReason?: string | null;
+  cancelledAt?: string | null;
+  createdAt: string;
+}
+
+export interface CreateRcmSelfInvoiceRequest {
+  invoiceDate: string;
+  section: "9(3)" | "9(4)";
+  category: string;
+  vendorName: string;
+  vendorGstin?: string | null;
+  vendorAddress?: string | null;
+  vendorPan?: string | null;
+  placeOfSupplyStateCode: string;
+  placeOfSupplyStateName: string;
+  description: string;
+  hsnSacCode?: string | null;
+  taxableAmount: number;
+  gstRate: number;
+  isItcEligible: boolean;
+  paymentMode: string;
+  paymentDate: string;
+  paymentReference?: string | null;
+  expenseAccountId?: string | null;
+}
+
+export interface AutoMatchResultDto {
+  matchedCount: number;
+  totalMatchedAmount: number;
+  matchDetails: string[];
+}
+
+export interface BankStatementSuggestionDto {
+  statementLineId: string;
+  transactionDate: string;
+  statementAmount: number;
+  statementDescription?: string | null;
+  statementReference?: string | null;
+  suggestionType: "CustomerReceipt" | "VendorPayment";
+  entityId: string;
+  partyName: string;
+  documentNumber: string;
+  documentAmount: number;
+  documentBalance: number;
+  matchConfidence: "High" | "Medium";
+  matchReason: string;
+}
+
 export interface PagedResult<T> {
   items: T[];
   pageNumber: number;
@@ -76,4 +150,5 @@ export interface PagedResult<T> {
   totalCount: number;
   totalPages: number;
 }
+
 

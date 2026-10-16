@@ -5,6 +5,8 @@ import type {
   GenerateEWayBillRequest,
   GenerateEInvoiceRequest,
   CancelComplianceRequest,
+  RcmSelfInvoiceDto,
+  CreateRcmSelfInvoiceRequest,
   PagedResult,
 } from "../types/compliance.types";
 
@@ -94,4 +96,46 @@ export const complianceApi = {
   async getEInvoiceJson(id: string): Promise<string> {
     return apiClient.get<string>(`/compliance/e-invoice/${encodeURIComponent(id)}/json`);
   },
+
+  // --- Reverse Charge Mechanism (RCM) ---
+  async getRcmSelfInvoices(params?: {
+    page?: number;
+    pageSize?: number;
+    fromDate?: string;
+    toDate?: string;
+    section?: string;
+    status?: string;
+    search?: string;
+  }): Promise<PagedResult<RcmSelfInvoiceDto>> {
+    const q = new URLSearchParams();
+    if (params?.page) q.append("page", params.page.toString());
+    if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+    if (params?.fromDate) q.append("fromDate", params.fromDate);
+    if (params?.toDate) q.append("toDate", params.toDate);
+    if (params?.section) q.append("section", params.section);
+    if (params?.status) q.append("status", params.status);
+    if (params?.search) q.append("search", params.search);
+
+    const qs = q.toString();
+    return apiClient.get<PagedResult<RcmSelfInvoiceDto>>(`/compliance/rcm${qs ? `?${qs}` : ""}`);
+  },
+
+  async getRcmSelfInvoiceById(id: string): Promise<RcmSelfInvoiceDto | null> {
+    try {
+      return await apiClient.get<RcmSelfInvoiceDto>(`/compliance/rcm/${encodeURIComponent(id)}`);
+    } catch {
+      return null;
+    }
+  },
+
+  async createRcmSelfInvoice(data: CreateRcmSelfInvoiceRequest): Promise<{ id: string }> {
+    return apiClient.post<{ id: string }>("/compliance/rcm", data);
+  },
+
+  async cancelRcmSelfInvoice(id: string, reason: string): Promise<void> {
+    return apiClient.post<void>(`/compliance/rcm/${encodeURIComponent(id)}/cancel`, {
+      reason,
+    });
+  },
 };
+
