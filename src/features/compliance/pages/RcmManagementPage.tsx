@@ -25,7 +25,7 @@ import { z } from "zod";
 const rcmSelfInvoiceSchema = z.object({
   vendorName: z.string().trim().min(1, "Vendor name is required."),
   taxableAmount: z
-    .number({ invalid_type_error: "Taxable amount must be a number." })
+    .number({ error: "Taxable amount must be a number." })
     .positive("Taxable amount must be greater than zero."),
   placeOfSupplyStateCode: z.string().min(1, "Place of supply state is required."),
   description: z.string().trim().min(1, "Description is required."),
@@ -278,7 +278,7 @@ export function RcmManagementPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => void loadInvoices()} disabled={loading}>
+          <Button variant="secondary" onClick={() => void loadInvoices()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
@@ -524,7 +524,7 @@ export function RcmManagementPage() {
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             title="Print Statutory Self-Invoice (Section 31(3)(f))"
                             onClick={() => {
                               setSelectedInvoice(inv);
@@ -536,7 +536,7 @@ export function RcmManagementPage() {
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             title="Print Statutory Payment Voucher (Section 31(3)(g))"
                             onClick={() => {
                               setSelectedInvoice(inv);
@@ -549,7 +549,7 @@ export function RcmManagementPage() {
                           {inv.status === "Active" && (
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="secondary"
                               className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
                               title="Cancel Voucher"
                               onClick={() => {
@@ -579,7 +579,7 @@ export function RcmManagementPage() {
             <div className="flex gap-2">
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(p - 1, 1))}
               >
@@ -587,7 +587,7 @@ export function RcmManagementPage() {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 disabled={page * pageSize >= totalCount}
                 onClick={() => setPage((p) => p + 1)}
               >
@@ -1004,7 +1004,7 @@ export function RcmManagementPage() {
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+                <Button type="button" variant="secondary" onClick={() => setShowCreateModal(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={busy} className="bg-indigo-600 hover:bg-indigo-700 text-white">
@@ -1025,7 +1025,7 @@ export function RcmManagementPage() {
                 Statutory Document Preview
               </span>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={handlePrint}>
+                <Button size="sm" variant="secondary" onClick={handlePrint}>
                   <Printer className="h-4 w-4 mr-1" /> Print
                 </Button>
                 <button
@@ -1149,7 +1149,7 @@ export function RcmManagementPage() {
                 Payment Voucher Preview
               </span>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={handlePrint}>
+                <Button size="sm" variant="secondary" onClick={handlePrint}>
                   <Printer className="h-4 w-4 mr-1" /> Print
                 </Button>
                 <button
