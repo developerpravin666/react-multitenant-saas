@@ -29,6 +29,7 @@ import {
   ToggleRight,
   Mail,
   Warehouse,
+  Scale,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -169,6 +170,12 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Godowns & Stock Journal",
         path: APP_ROUTES.godowns,
         icon: Warehouse,
+      },
+      {
+        id: "stock-valuation",
+        label: "Stock Valuation & Units",
+        path: APP_ROUTES.stockValuation,
+        icon: Scale,
       },
       {
         id: "purchase-scan-bill",

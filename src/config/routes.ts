@@ -11,6 +11,7 @@ export const APP_ROUTES = {
   bankReconciliation: "/accounting/bank-reconciliation",
   stockMovements: "/purchase/stock-movements",
   godowns: "/inventory/godowns",
+  stockValuation: "/inventory/valuation",
 
   products: {
     root: "/products",
