@@ -111,3 +111,56 @@ The project now includes a reusable generic DynamicGrid with interchangeable cli
 V3 also includes a shared feedback layer under `src/components/feedback` and `src/context/NotificationContext.tsx`.
 
 It provides success/error/warning/info toasts, persistent alerts, and Promise-based confirmation dialogs. Mount `NotificationProvider` once near the application root and call `useNotifications()` from any feature.
+
+---
+
+## Strict Frontend Engineering & Coding Standards (Mandatory)
+
+Whenever adding, updating, or refactoring code in this frontend application, all developers and AI coding agents must strictly adhere to the following rules:
+
+### 1. Optimized, Clean & Easy-to-Understand Code
+- **Readability First**: Write clean, declarative, and self-documenting code. Favor obvious, readable logic over clever or obscure one-liners.
+- **Meaningful Naming**: Use descriptive, domain-accurate names for components, variables, hooks, and types (e.g., `fromLedgerId`, `isBalanced`, `totalDebit`). Avoid cryptic abbreviations.
+- **Render Optimization**: Prevent unnecessary re-renders using `useCallback` for callbacks passed to child components and `useMemo` for heavy computations (such as ledger balance aggregations or filter calculations).
+- **Component Sizing**: Keep component files focused and maintainable. When a component exceeds ~300 lines or takes on multiple responsibilities, decompose it into subcomponents or extract custom hooks.
+
+### 2. Code Reusability & DRY (Don't Repeat Yourself)
+- **Shared UI Primitives**: Always reuse standardized components from `src/components/ui/` (`Button`, `FormFieldShell`, modal dialogs, badges, cards) rather than recreating bespoke styling or HTML elements.
+- **Centralized API Client**: Use `apiClient` (`src/services/apiClient.ts`) for all HTTP interactions to guarantee automatic JWT token injection, refresh token rotation, and tenant header propagation. Never call `fetch()` or `axios` directly in feature components.
+- **Centralized Routes**: Always reference navigation paths through `APP_ROUTES` (`src/config/routes.ts`). Never hardcode route strings across components.
+- **Reusable Utilities**: Common logic (currency formatting, date formatting, GST calculations, table sorting/pagination) must reside in reusable utility functions or hooks rather than being copied across pages.
+
+### 3. Always Add & Update Error-Free Code
+- **Strict TypeScript (Zero Errors)**: Every change must compile cleanly with `npx tsc --noEmit` with **0 errors**. No `any`, no unverified type assertions, and strictly no `@ts-ignore` or `@ts-expect-error`.
+- **Production Build Guarantee**: Every change must successfully pass `npm run build` without bundling or Rollup syntax errors.
+- **Safe Nullability & Defensive Coding**: Always guard against `null` or `undefined` values using optional chaining (`?.`), nullish coalescing (`??`), and default fallbacks. Never invoke methods like `.trim()`, `.toLowerCase()`, or `.map()` on potentially nullish values.
+- **Robust Error Handling**: Wrap all asynchronous operations in `try / catch` blocks, display user-friendly toast messages using `useNotifications()`, and gracefully handle error states in the UI.
+
+### 4. Industry-Standard Modern Architecture
+- **Functional Components & Hooks**: Use standard functional React components with modern hooks (`useState`, `useEffect`, `useCallback`, `useMemo`, custom hooks). Never introduce legacy class components.
+- **Single-Direction Data Flow**: Enforce immutable state updates (`setItems(prev => [...prev, newItem])`). Never mutate existing state arrays or objects directly.
+- **Accessible UI & Semantic HTML**: Provide accessible form controls with `aria-label`, `aria-invalid`, `role="alert"`, and visible focus rings for keyboard navigation.
+- **Tailwind CSS Consistency**: Use Tailwind utility classes following the existing project design tokens (colors, borders, dark mode variants `dark:bg-slate-900`, `dark:border-slate-800`).
+
+### 5. Consistent Patterns Throughout the Application
+- **Feature-First Organization**: Group code by business domain under `src/features/<feature-name>/`:
+  - `pages/`: Routable container components.
+  - `components/`: Feature-specific subcomponents.
+  - `types/`: Domain-specific TypeScript interfaces and types.
+  - `config/`: Form configurations, column definitions, or lookup tables.
+- **Form Conventions**:
+  - Consistent layout: Label $\rightarrow$ Input $\rightarrow$ Inline error message.
+  - Clear visual feedback for required fields (`<span className="text-rose-500">*</span>`).
+  - Submit buttons disabled during asynchronous submission (`isLoading={busy}`) to prevent duplicate requests.
+- **Table & Grid Conventions**:
+  - Consistent headers, pagination, empty state messages, and loading skeletons across all list views.
+
+### 6. Domain-Specific Standards (Accounting, Inventory & Multi-Tenancy)
+- **Indian Accounting & GST Formatting**:
+  - Currency values must be formatted using Indian locale standards (`en-IN` e.g., `₹1,23,456.78`).
+  - Balances must clearly indicate `Dr` (Debit) or `Cr` (Credit).
+  - Vouchers must strictly validate and display live balance equality ($\sum \text{Debits} == \sum \text{Credits}$) before permitting submission.
+- **Tally Prime Keyboard Accessibility**:
+  - Maintain support for standard accounting shortcuts (e.g. `F4` for Contra, `F7` for Journal) while preserving system shortcuts (`Ctrl+F4`, `Alt+F4`).
+- **Multi-Tenant Transparency**:
+  - All multi-tenant state and session headers are managed globally by `AuthContext` and `apiClient`. Feature pages must never attempt to manipulate or hardcode tenant IDs directly.
