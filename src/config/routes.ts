@@ -1,5 +1,7 @@
 export const APP_ROUTES = {
   dashboard: "/",
+  contraVoucher: "/accounting/contra",
+  journalVoucher: "/accounting/journal",
   generalLedger: "/accounting/general-ledger",
   accountingAging: "/accounting/aging",
   taxReports: "/accounting/tax-reports",
@@ -8,6 +10,9 @@ export const APP_ROUTES = {
   accountingControls: "/accounting/controls",
   bankReconciliation: "/accounting/bank-reconciliation",
   stockMovements: "/purchase/stock-movements",
+  godowns: "/inventory/godowns",
+  stockValuation: "/inventory/valuation",
+  rcm: "/compliance/rcm",
 
   products: {
     root: "/products",
@@ -73,6 +78,7 @@ export const APP_ROUTES = {
       add: "/sales/invoices/new",
       print: (id: string) => `/sales/invoices/${id}/print`,
     },
+    compliance: "/sales/compliance",
     accounting: "/sales/accounting",
     customers: {
       list: "/sales/customers/list",

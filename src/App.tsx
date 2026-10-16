@@ -15,12 +15,17 @@ import { FinanceVendorFormPage } from "./features/settings/finance-vendor/pages/
 import { FinanceVendorListPage } from "./features/settings/finance-vendor/pages/FinanceVendorListPage";
 import { CustomerBillSettingsPage } from "./features/settings/customer-bill/CustomerBillSettingsPage";
 import { AuditLogsPage } from "./features/settings/audit-logs/AuditLogsPage";
+import { ContraVoucherPage } from "./features/accounting/pages/ContraVoucherPage";
+import { JournalVoucherPage } from "./features/accounting/pages/JournalVoucherPage";
 import { GeneralLedgerPage } from "./features/accounting/GeneralLedgerPage";
 import { AgingReportPage } from "./features/accounting/AgingReportPage";
 import { AccountingPeriodsPage } from "./features/accounting/AccountingPeriodsPage";
 import { BankReconciliationPage } from "./features/accounting/BankReconciliationPage";
+import { RcmManagementPage } from "./features/compliance/pages/RcmManagementPage";
 import { StockMovementsPage } from "./features/accounting/StockMovementsPage";
 import { TaxReportsPage } from "./features/accounting/TaxReportsPage";
+import { GodownsPage } from "./features/inventory/pages/GodownsPage";
+import { StockValuationPage } from "./features/inventory/pages/StockValuationPage";
 import { PartyStatementPage } from "./features/accounting/pages/PartyStatementPage";
 import { AccountingControlsPage } from "./features/accounting/AccountingControlsPage";
 import { InvoiceCorrectionsPage } from "./features/accounting/InvoiceCorrectionsPage";
@@ -65,13 +70,18 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<RootDashboard />} />
           <Route path="/account/change-password" element={withPageTitle("Change Password", <ChangePasswordPage />)} />
+          <Route path={APP_ROUTES.contraVoucher} element={withPageTitle("Contra Voucher (F4)", <ContraVoucherPage />)} />
+          <Route path={APP_ROUTES.journalVoucher} element={withPageTitle("Journal Voucher (F7)", <JournalVoucherPage />)} />
           <Route path={APP_ROUTES.generalLedger} element={withPageTitle("General Ledger", <GeneralLedgerPage />)} />
           <Route path={APP_ROUTES.accountingAging} element={withPageTitle("Aging Report", <AgingReportPage />)} />
           <Route path={APP_ROUTES.taxReports} element={withPageTitle("Tax Reports", <TaxReportsPage />)} />
+          <Route path={APP_ROUTES.rcm} element={withPageTitle("RCM Self-Invoicing", <RcmManagementPage />)} />
           <Route path={APP_ROUTES.partyStatement} element={withPageTitle("Party Statement", <PartyStatementPage />)} />
           <Route path={APP_ROUTES.accountingPeriods} element={withPageTitle("Accounting Periods", <AccountingPeriodsPage />)} />
           <Route path={APP_ROUTES.bankReconciliation} element={withPageTitle("Bank Reconciliation", <BankReconciliationPage />)} />
           <Route path={APP_ROUTES.stockMovements} element={withPageTitle("Stock Movements", <StockMovementsPage />)} />
+          <Route path={APP_ROUTES.godowns} element={withPageTitle("Godowns & Stock Journal", <GodownsPage />)} />
+          <Route path={APP_ROUTES.stockValuation} element={withPageTitle("Stock Valuation & Alternate Units", <StockValuationPage />)} />
           <Route path={APP_ROUTES.accountingControls} element={withPageTitle("Accounting Controls", <AccountingControlsPage />)} />
           <Route path="/accounting/corrections" element={withPageTitle("Invoice Corrections", <InvoiceCorrectionsPage />)} />
           <Route path="/accounting/opening-balances" element={withPageTitle("Opening Balances", <OpeningBalancesPage />)} />

@@ -23,6 +23,7 @@ export function AccountingControlsPage() {
   const notifications = useNotifications();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [proceedsAccountId, setProceedsAccountId] = useState("");
+  const [disposalProceeds, setDisposalProceeds] = useState("0");
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [permissionUsers, setPermissionUsers] = useState<PermissionUser[]>([]);
   const [dimensions, setDimensions] = useState<Dimension[]>([]);
@@ -332,8 +333,29 @@ export function AccountingControlsPage() {
         </div>
         <div className="self-end"><Button type="submit" disabled={busy}>Record asset</Button></div>
       </form>
-      <div className="mt-5 flex flex-wrap items-end gap-2"><label><span className={label}>Disposal proceeds account</span><select className={input} value={proceedsAccountId} onChange={e => setProceedsAccountId(e.target.value)}><option value="">Select cash/bank</option>{accounts.filter(a => a.type === 0 && (a.code === "1000" || a.code === "1010")).map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label></div>
-      <div className="mt-2 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="py-2">Asset</th><th>Cost</th><th>Depreciated</th><th>Book value</th><th>Actions</th></tr></thead><tbody>{assets.map(a => <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800"><td className="py-2">{a.assetNumber} · {a.name}</td><td>{money(a.acquisitionCost)}</td><td>{money(a.accumulatedDepreciation)}</td><td>{money(a.bookValue)}</td><td className="space-x-2">{!a.disposedDate && <><Button type="button" disabled={busy} onClick={() => void run(() => apiClient.post(`/fixed-assets/${a.id}/depreciate`, { depreciationDate: new Date().toISOString().slice(0, 10), months: 1 }), "Depreciation posted")}>Depreciate month</Button><Button type="button" disabled={busy || !proceedsAccountId} onClick={() => { const proceeds = Number(window.prompt("Disposal proceeds", "0")); if (Number.isFinite(proceeds) && proceeds >= 0) void run(() => apiClient.post(`/fixed-assets/${a.id}/dispose`, { disposalDate: new Date().toISOString().slice(0, 10), proceeds, proceedsAccountId }), "Asset disposed"); }}>Dispose</Button></>}</td></tr>)}</tbody></table></div>
+      <div className="mt-5 flex flex-wrap items-end gap-3">
+        <label>
+          <span className={label}>Disposal proceeds account</span>
+          <select className={input} value={proceedsAccountId} onChange={e => setProceedsAccountId(e.target.value)}>
+            <option value="">Select cash/bank</option>
+            {accounts.filter(a => a.type === 0 && (a.code === "1000" || a.code === "1010")).map(a => (
+              <option key={a.id} value={a.id}>{a.code} · {a.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className={label}>Disposal proceeds (₹)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className={input}
+            value={disposalProceeds}
+            onChange={e => setDisposalProceeds(e.target.value)}
+          />
+        </label>
+      </div>
+      <div className="mt-2 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="py-2">Asset</th><th>Cost</th><th>Depreciated</th><th>Book value</th><th>Actions</th></tr></thead><tbody>{assets.map(a => <tr key={a.id} className="border-b border-slate-100 dark:border-slate-800"><td className="py-2">{a.assetNumber} · {a.name}</td><td>{money(a.acquisitionCost)}</td><td>{money(a.accumulatedDepreciation)}</td><td>{money(a.bookValue)}</td><td className="space-x-2">{!a.disposedDate && <><Button type="button" disabled={busy} onClick={() => void run(() => apiClient.post(`/fixed-assets/${a.id}/depreciate`, { depreciationDate: new Date().toISOString().slice(0, 10), months: 1 }), "Depreciation posted")}>Depreciate month</Button><Button type="button" disabled={busy || !proceedsAccountId} onClick={async () => { const proceeds = Number(disposalProceeds); if (!Number.isFinite(proceeds) || proceeds < 0) { notifications.error("Invalid Proceeds", "Please specify a valid non-negative disposal proceeds amount."); return; } const confirmed = await notifications.confirm({ title: `Dispose Asset ${a.assetNumber}?`, message: `Record asset disposal with proceeds of ${money(proceeds)}? This cannot be undone.`, variant: "warning", confirmLabel: "Dispose Asset" }); if (confirmed) void run(() => apiClient.post(`/fixed-assets/${a.id}/dispose`, { disposalDate: new Date().toISOString().slice(0, 10), proceeds, proceedsAccountId }), "Asset disposed"); }}>Dispose</Button></>}</td></tr>)}</tbody></table></div>
     </section>
 
     <section className={card}>

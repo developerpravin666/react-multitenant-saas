@@ -62,7 +62,13 @@ export function AccountingPeriodsPage() {
   };
 
   const closePeriod = async (period: AccountingPeriod) => {
-    if (!window.confirm(`Close ${period.name} (${period.startDate} to ${period.endDate})? New journal postings to these dates will be blocked.`)) return;
+    const confirmed = await notifications.confirm({
+      title: `Close Period ${period.name}?`,
+      message: `Closing this period (${period.startDate} to ${period.endDate}) will block all new journal postings within these dates. Revenue and expenses will be closed to retained earnings.`,
+      variant: "warning",
+      confirmLabel: "Close Period",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await apiClient.post<AccountingPeriod>(`/accounting-periods/${encodeURIComponent(period.id)}/close`, {});

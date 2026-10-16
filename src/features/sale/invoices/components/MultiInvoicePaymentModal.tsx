@@ -259,7 +259,7 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
           </div>
         ) : (
           /* Input Form */
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-5">
             <header className="border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="rounded-lg bg-blue-100 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
@@ -387,8 +387,6 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
                 <input
                   type="number"
                   step="0.01"
-                  min="0.01"
-                  required
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
                   className="mt-1 w-full text-base font-bold text-slate-900 rounded-lg border border-slate-300 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -414,7 +412,6 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Payment Date *</label>
                 <input
                   type="date"
-                  required
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"

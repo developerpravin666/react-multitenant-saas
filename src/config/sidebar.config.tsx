@@ -28,6 +28,8 @@ import {
   Clock,
   ToggleRight,
   Mail,
+  Warehouse,
+  Scale,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -164,6 +166,18 @@ export const sidebarConfiguration: NavigationItem[] = [
         icon: Boxes,
       },
       {
+        id: "godowns-stock-journal",
+        label: "Godowns & Stock Journal",
+        path: APP_ROUTES.godowns,
+        icon: Warehouse,
+      },
+      {
+        id: "stock-valuation",
+        label: "Stock Valuation & Units",
+        path: APP_ROUTES.stockValuation,
+        icon: Scale,
+      },
+      {
         id: "purchase-scan-bill",
         label: "Scan / Upload Bill",
         path: APP_ROUTES.purchase.scanBill,
@@ -182,10 +196,13 @@ export const sidebarConfiguration: NavigationItem[] = [
     label: "Accounting",
     icon: BookOpenCheck,
     children: [
+      { id: "contra-voucher", label: "Contra Voucher (F4)", path: APP_ROUTES.contraVoucher, icon: ArrowLeftRight },
+      { id: "journal-voucher", label: "Journal Voucher (F7)", path: APP_ROUTES.journalVoucher, icon: FileSpreadsheet },
       { id: "party-statement", label: "Party Ledger (SOA)", path: APP_ROUTES.partyStatement, icon: FileText },
       { id: "general-ledger", label: "General Ledger", path: APP_ROUTES.generalLedger, icon: BookOpenCheck },
       { id: "accounting-aging", label: "Receivable & Payable Aging", path: APP_ROUTES.accountingAging, icon: Clock3 },
       { id: "tax-reports", label: "GST Reports", path: APP_ROUTES.taxReports, icon: FileSpreadsheet },
+      { id: "rcm-management", label: "RCM Self-Invoicing", path: APP_ROUTES.rcm, icon: Scale },
       { id: "accounting-periods", label: "Accounting Periods", path: APP_ROUTES.accountingPeriods, icon: CalendarDays },
       { id: "bank-reconciliation", label: "Bank Reconciliation", path: APP_ROUTES.bankReconciliation, icon: Landmark },
       { id: "stock-movements", label: "Stock Movements", path: APP_ROUTES.stockMovements, icon: ArrowLeftRight },
@@ -205,6 +222,12 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Sales Invoices",
         path: APP_ROUTES.sale.invoices.list,
         icon: FileText,
+      },
+      {
+        id: "sales-compliance",
+        label: "E-Way Bill & E-Invoice",
+        path: APP_ROUTES.sale.compliance,
+        icon: ShieldCheck,
       },
       {
         id: "sale-products",

@@ -21,6 +21,8 @@ import {
   Clock,
 } from "lucide-react";
 import { formatDate } from "../../../../lib/date";
+import { z } from "zod";
+import { useNotifications } from "../../../../context/NotificationContext";
 
 type PaymentMode = "Cash" | "Finance";
 type CashMethod = "Cash" | "UPI" | "OnlineTransfer" | "Cheque" | "Other";
@@ -117,7 +119,16 @@ const formatCurrency = (val?: number | null) =>
 
 const todayDate = () => new Date().toISOString().slice(0, 10);
 
+const partPaymentSchema = z.object({
+  amount: z
+    .number({ invalid_type_error: "Payment amount must be a number." })
+    .positive("Please enter a valid payment amount greater than zero."),
+  paymentMode: z.string().min(1, "Payment method is required."),
+  paymentDate: z.string().min(1, "Payment date is required."),
+});
+
 export function SalesPaymentPage() {
+  const notifications = useNotifications();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -136,6 +147,7 @@ export function SalesPaymentPage() {
   const [partNote, setPartNote] = useState("");
   const [isRecordingPartPayment, setIsRecordingPartPayment] = useState(false);
   const [partPaymentSuccessMsg, setPartPaymentSuccessMsg] = useState<string | null>(null);
+  const [partPaymentErrors, setPartPaymentErrors] = useState<Record<string, string>>({});
 
   // Reminder copy state
   const [copiedReminder, setCopiedReminder] = useState(false);
@@ -172,12 +184,12 @@ export function SalesPaymentPage() {
     return financeFields.map((field) =>
       field.name === "financeVendorId"
         ? {
-            ...field,
-            options: financeVendors.map((vendor) => ({
-              label: `${vendor.name} (${vendor.code})`,
-              value: vendor.id,
-            })),
-          }
+          ...field,
+          options: financeVendors.map((vendor) => ({
+            label: `${vendor.name} (${vendor.code})`,
+            value: vendor.id,
+          })),
+        }
         : field
     );
   }, [financeVendors]);
@@ -220,16 +232,31 @@ export function SalesPaymentPage() {
     if (!id || !sale) return;
 
     const amt = Number(partAmount);
-    if (!amt || isNaN(amt) || amt <= 0) {
-      alert("Please enter a valid payment amount greater than zero.");
-      return;
+    const parseResult = partPaymentSchema.safeParse({
+      amount: amt,
+      paymentMode: partMethod,
+      paymentDate: partDate,
+    });
+
+    const errs: Record<string, string> = {};
+    if (!parseResult.success) {
+      for (const issue of parseResult.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) errs[field] = issue.message;
+      }
     }
 
     if (amt > remainingBalance + 0.01) {
-      alert(`Amount cannot exceed the remaining balance of ${formatCurrency(remainingBalance)}.`);
+      errs.amount = `Amount cannot exceed the remaining balance of ${formatCurrency(remainingBalance)}.`;
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setPartPaymentErrors(errs);
+      notifications.error("Validation error", "Please correct the highlighted issues.");
       return;
     }
 
+    setPartPaymentErrors({});
     setIsRecordingPartPayment(true);
     setPartPaymentSuccessMsg(null);
 
@@ -250,14 +277,16 @@ export function SalesPaymentPage() {
         paymentMode: "Cash",
       });
 
+      notifications.success("Payment Recorded", `Payment of ${formatCurrency(amt)} recorded successfully!`);
       setPartPaymentSuccessMsg(`Payment of ${formatCurrency(amt)} recorded successfully!`);
+      setPartAmount("");
       setPartRef("");
       setPartNote("");
 
       // Reload updated balance and receipts
       await loadData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to record payment.");
+      notifications.error("Payment Failed", err instanceof Error ? err.message : "Failed to record payment.");
     } finally {
       setIsRecordingPartPayment(false);
     }
@@ -277,23 +306,23 @@ export function SalesPaymentPage() {
 
   const initialValues = payment
     ? {
-        financeVendorId: payment.financeVendorId ?? "",
-        downPayment: payment.downPayment ?? 0,
-        numberOfEmi: payment.numberOfEmi ?? 1,
-        emiAmount: payment.emiAmount ?? 0,
-        hasInsurance: payment.hasInsurance === true ? "true" : "false",
-        insuranceAmount: payment.insuranceAmount ?? 0,
-        firstInstallmentDate: payment.firstInstallmentDate ?? "",
-      }
+      financeVendorId: payment.financeVendorId ?? "",
+      downPayment: payment.downPayment ?? 0,
+      numberOfEmi: payment.numberOfEmi ?? 1,
+      emiAmount: payment.emiAmount ?? 0,
+      hasInsurance: payment.hasInsurance === true ? "true" : "false",
+      insuranceAmount: payment.insuranceAmount ?? 0,
+      firstInstallmentDate: payment.firstInstallmentDate ?? "",
+    }
     : {
-        financeVendorId: "",
-        downPayment: 0,
-        numberOfEmi: 1,
-        emiAmount: 0,
-        hasInsurance: "false",
-        insuranceAmount: 0,
-        firstInstallmentDate: "",
-      };
+      financeVendorId: "",
+      downPayment: 0,
+      numberOfEmi: 1,
+      emiAmount: 0,
+      hasInsurance: "false",
+      insuranceAmount: 0,
+      firstInstallmentDate: "",
+    };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -344,22 +373,20 @@ export function SalesPaymentPage() {
           </span>
           <div className="mt-1 flex items-baseline gap-2">
             <span
-              className={`text-xl font-bold ${
-                remainingBalance <= 0.01
+              className={`text-xl font-bold ${remainingBalance <= 0.01
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-rose-600 dark:text-rose-400"
-              }`}
+                }`}
             >
               {formatCurrency(remainingBalance)}
             </span>
             <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                remainingBalance <= 0.01
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${remainingBalance <= 0.01
                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
                   : totalAmountPaid > 0
-                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                  : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-              }`}
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                    : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                }`}
             >
               {remainingBalance <= 0.01 ? "Paid in Full" : totalAmountPaid > 0 ? "Partial Payment" : "Unpaid"}
             </span>
@@ -377,11 +404,10 @@ export function SalesPaymentPage() {
         </h2>
         <div className="mt-3 flex flex-wrap gap-4">
           <label
-            className={`flex cursor-pointer items-center gap-3 rounded-xl border px-5 py-3 text-sm font-semibold transition ${
-              paymentMode === "Cash"
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border px-5 py-3 text-sm font-semibold transition ${paymentMode === "Cash"
                 ? "border-indigo-600 bg-indigo-50/60 text-indigo-900 dark:border-indigo-500 dark:bg-indigo-950/30 dark:text-indigo-200 shadow-xs"
                 : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-            }`}
+              }`}
           >
             <input
               type="radio"
@@ -398,11 +424,10 @@ export function SalesPaymentPage() {
           </label>
 
           <label
-            className={`flex cursor-pointer items-center gap-3 rounded-xl border px-5 py-3 text-sm font-semibold transition ${
-              paymentMode === "Finance"
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border px-5 py-3 text-sm font-semibold transition ${paymentMode === "Finance"
                 ? "border-indigo-600 bg-indigo-50/60 text-indigo-900 dark:border-indigo-500 dark:bg-indigo-950/30 dark:text-indigo-200 shadow-xs"
                 : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-            }`}
+              }`}
           >
             <input
               type="radio"
@@ -505,7 +530,7 @@ export function SalesPaymentPage() {
                 </div>
               )}
 
-              <form onSubmit={handleRecordPartPayment} className="mt-4 space-y-4 text-xs">
+              <form onSubmit={handleRecordPartPayment} noValidate autoComplete="off" className="mt-4 space-y-4 text-xs">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -513,19 +538,34 @@ export function SalesPaymentPage() {
                     </label>
                     <input
                       type="number"
-                      required
-                      min={1}
-                      max={remainingBalance}
                       step="any"
                       value={partAmount}
-                      onChange={(e) => setPartAmount(e.target.value)}
+                      onChange={(e) => {
+                        setPartAmount(e.target.value);
+                        if (partPaymentErrors.amount) {
+                          setPartPaymentErrors((prev) => ({ ...prev, amount: "" }));
+                        }
+                      }}
                       placeholder="e.g. 5000"
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      className={`w-full rounded-xl border bg-white px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500 dark:bg-slate-800 dark:text-white ${partPaymentErrors.amount
+                          ? "border-rose-500 dark:border-rose-500"
+                          : "border-slate-300 dark:border-slate-700"
+                        }`}
                     />
+                    {partPaymentErrors.amount && (
+                      <p role="alert" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                        {partPaymentErrors.amount}
+                      </p>
+                    )}
                     <div className="mt-1 flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setPartAmount(String(remainingBalance))}
+                        onClick={() => {
+                          setPartAmount(String(remainingBalance));
+                          if (partPaymentErrors.amount) {
+                            setPartPaymentErrors((prev) => ({ ...prev, amount: "" }));
+                          }
+                        }}
                         className="text-[10px] text-indigo-600 hover:underline dark:text-indigo-400 font-semibold cursor-pointer"
                       >
                         Set Full Remaining ({formatCurrency(remainingBalance)})
@@ -556,11 +596,23 @@ export function SalesPaymentPage() {
                     </label>
                     <input
                       type="date"
-                      required
                       value={partDate}
-                      onChange={(e) => setPartDate(e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      onChange={(e) => {
+                        setPartDate(e.target.value);
+                        if (partPaymentErrors.paymentDate) {
+                          setPartPaymentErrors((prev) => ({ ...prev, paymentDate: "" }));
+                        }
+                      }}
+                      className={`w-full rounded-xl border bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 dark:bg-slate-800 dark:text-white ${partPaymentErrors.paymentDate
+                          ? "border-rose-500 dark:border-rose-500"
+                          : "border-slate-300 dark:border-slate-700"
+                        }`}
                     />
+                    {partPaymentErrors.paymentDate && (
+                      <p role="alert" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                        {partPaymentErrors.paymentDate}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -735,13 +787,12 @@ export function SalesPaymentPage() {
                         </td>
                         <td className="py-2.5 px-3 text-right">
                           <span
-                            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                              item.status === "Due Soon"
+                            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${item.status === "Due Soon"
                                 ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse"
                                 : item.status === "Overdue"
-                                ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                            }`}
+                                  ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                              }`}
                           >
                             {item.status}
                             {item.daysRemaining !== undefined && item.daysRemaining >= 0 && (
