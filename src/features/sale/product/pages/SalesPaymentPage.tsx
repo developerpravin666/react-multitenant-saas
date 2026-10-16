@@ -121,7 +121,7 @@ const todayDate = () => new Date().toISOString().slice(0, 10);
 
 const partPaymentSchema = z.object({
   amount: z
-    .number({ invalid_type_error: "Payment amount must be a number." })
+    .number({ error: "Payment amount must be a number." })
     .positive("Please enter a valid payment amount greater than zero."),
   paymentMode: z.string().min(1, "Payment method is required."),
   paymentDate: z.string().min(1, "Payment date is required."),

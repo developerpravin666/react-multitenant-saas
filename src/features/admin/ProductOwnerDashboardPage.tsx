@@ -87,7 +87,7 @@ export function ProductOwnerDashboardPage() {
     const confirmed = await notifications.confirm({
       title: `Approve "${tenant.name}"?`,
       message: "This triggers PostgreSQL schema creation & default ledgers seeding.",
-      variant: "primary",
+      variant: "info",
       confirmLabel: "Approve & Provision",
     });
     if (!confirmed) {

@@ -39,7 +39,7 @@ const currency = (val: number) =>
 const ewbSchema = z.object({
   salesInvoiceId: z.string().trim().min(1, "Please select a sales invoice."),
   distanceKm: z
-    .number({ invalid_type_error: "Distance must be a valid number." })
+    .number({ error: "Distance must be a valid number." })
     .positive("Distance must be greater than 0 km.")
     .max(4000, "Distance cannot exceed 4,000 km."),
 });
