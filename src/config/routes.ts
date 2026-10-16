@@ -1,5 +1,7 @@
 export const APP_ROUTES = {
   dashboard: "/",
+  contraVoucher: "/accounting/contra",
+  journalVoucher: "/accounting/journal",
   generalLedger: "/accounting/general-ledger",
   accountingAging: "/accounting/aging",
   taxReports: "/accounting/tax-reports",

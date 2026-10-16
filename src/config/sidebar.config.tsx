@@ -182,6 +182,8 @@ export const sidebarConfiguration: NavigationItem[] = [
     label: "Accounting",
     icon: BookOpenCheck,
     children: [
+      { id: "contra-voucher", label: "Contra Voucher (F4)", path: APP_ROUTES.contraVoucher, icon: ArrowLeftRight },
+      { id: "journal-voucher", label: "Journal Voucher (F7)", path: APP_ROUTES.journalVoucher, icon: FileSpreadsheet },
       { id: "party-statement", label: "Party Ledger (SOA)", path: APP_ROUTES.partyStatement, icon: FileText },
       { id: "general-ledger", label: "General Ledger", path: APP_ROUTES.generalLedger, icon: BookOpenCheck },
       { id: "accounting-aging", label: "Receivable & Payable Aging", path: APP_ROUTES.accountingAging, icon: Clock3 },

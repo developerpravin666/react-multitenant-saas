@@ -15,6 +15,8 @@ import { FinanceVendorFormPage } from "./features/settings/finance-vendor/pages/
 import { FinanceVendorListPage } from "./features/settings/finance-vendor/pages/FinanceVendorListPage";
 import { CustomerBillSettingsPage } from "./features/settings/customer-bill/CustomerBillSettingsPage";
 import { AuditLogsPage } from "./features/settings/audit-logs/AuditLogsPage";
+import { ContraVoucherPage } from "./features/accounting/pages/ContraVoucherPage";
+import { JournalVoucherPage } from "./features/accounting/pages/JournalVoucherPage";
 import { GeneralLedgerPage } from "./features/accounting/GeneralLedgerPage";
 import { AgingReportPage } from "./features/accounting/AgingReportPage";
 import { AccountingPeriodsPage } from "./features/accounting/AccountingPeriodsPage";
@@ -65,6 +67,8 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<RootDashboard />} />
           <Route path="/account/change-password" element={withPageTitle("Change Password", <ChangePasswordPage />)} />
+          <Route path={APP_ROUTES.contraVoucher} element={withPageTitle("Contra Voucher (F4)", <ContraVoucherPage />)} />
+          <Route path={APP_ROUTES.journalVoucher} element={withPageTitle("Journal Voucher (F7)", <JournalVoucherPage />)} />
           <Route path={APP_ROUTES.generalLedger} element={withPageTitle("General Ledger", <GeneralLedgerPage />)} />
           <Route path={APP_ROUTES.accountingAging} element={withPageTitle("Aging Report", <AgingReportPage />)} />
           <Route path={APP_ROUTES.taxReports} element={withPageTitle("Tax Reports", <TaxReportsPage />)} />

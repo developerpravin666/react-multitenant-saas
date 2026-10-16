@@ -1,13 +1,28 @@
-import { useState } from "react";
-
-import { Outlet } from "react-router-dom";
-
+import { useEffect, useState } from "react";
+import { Outlet, useNavigate } from "react-router-dom";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Footer } from "./Footer";
+import { APP_ROUTES } from "../../config/routes";
 
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "F4") {
+        e.preventDefault();
+        navigate(APP_ROUTES.contraVoucher);
+      } else if (e.key === "F7") {
+        e.preventDefault();
+        navigate(APP_ROUTES.journalVoucher);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
 
   return (
     <div
