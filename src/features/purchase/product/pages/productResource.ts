@@ -78,24 +78,34 @@ export const productResource = {
     bulkUpdate: async (products: Record<string, unknown>[]) =>
       apiClient.put<Product[]>("/products/bulk", { products }),
     create: async (values: Record<string, unknown>) => {
-      const serialPairs = values.serialPairs as { serialNumber: string; serialNumber1: string }[];
+      const serialPairs = values.serialPairs as { serialNumber: string; serialNumber1?: string }[];
       if (!serialPairs?.length || serialPairs.length > 500)
         throw new Error("Add between 1 and 500 product units.");
-      const normalizedSerials = serialPairs.flatMap(({ serialNumber, serialNumber1 }) => [serialNumber, serialNumber1])
-        .map((serial) => serial.trim().toLocaleLowerCase());
-      if (normalizedSerials.some((serial) => !serial))
-        throw new Error("Enter both serial numbers for every unit.");
-      if (new Set(normalizedSerials).size !== normalizedSerials.length)
-        throw new Error("Serial Number and Serial Number 1 must all be unique.");
+      const primarySerials = serialPairs
+        .map(({ serialNumber }) => (serialNumber || "").trim().toLocaleLowerCase());
+      if (primarySerials.some((serial) => !serial))
+        throw new Error("Enter a serial number for every unit.");
+
+      const allNonEmptySerials = serialPairs
+        .flatMap(({ serialNumber, serialNumber1 }) => [
+          (serialNumber || "").trim().toLocaleLowerCase(),
+          (serialNumber1 || "").trim().toLocaleLowerCase(),
+        ])
+        .filter(Boolean);
+      if (new Set(allNonEmptySerials).size !== allNonEmptySerials.length)
+        throw new Error("Serial numbers must be unique across all units.");
 
       const { serialPairs: _serialPairs, ...shared } = values;
       const products = serialPairs.map(({ serialNumber, serialNumber1 }) => ({
         ...shared,
         serialNumber: serialNumber.trim(),
-        serialNumber1: serialNumber1.trim(),
+        serialNumber1: serialNumber1?.trim() || null,
       }));
-      const created = await apiClient.post<Product[]>("/products/bulk", { products });
-      const firstCreated = created[0];
+      const response = await apiClient.post<any>("/products/bulk", { products });
+      const createdList: Product[] = Array.isArray(response)
+        ? response
+        : (response?.products || response?.inserted || []);
+      const firstCreated = createdList[0];
       if (!firstCreated) throw new Error("No products were returned after saving the purchase.");
       return firstCreated;
     },

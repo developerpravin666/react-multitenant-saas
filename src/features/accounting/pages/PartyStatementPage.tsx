@@ -217,7 +217,78 @@ export function PartyStatementPage() {
   };
 
   return (
-    <section className="space-y-6 pb-16">
+    <section className="space-y-6 pb-16 print:space-y-0 print:pb-0 print:m-0">
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm 10mm 12mm 10mm;
+          }
+          body {
+            background: #ffffff !important;
+            color: #111827 !important;
+          }
+          .no-print,
+          .no-print * {
+            display: none !important;
+          }
+          #party-statement-print {
+            position: relative !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+            color: #111827 !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          #party-statement-print * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          #party-statement-print .overflow-x-auto {
+            overflow: visible !important;
+          }
+          #party-statement-print .truncate {
+            overflow: visible !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+          }
+          #party-statement-print a {
+            text-decoration: none !important;
+            color: inherit !important;
+          }
+          #party-statement-print table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          #party-statement-print thead {
+            display: table-header-group !important;
+          }
+          #party-statement-print tfoot {
+            display: table-footer-group !important;
+          }
+          #party-statement-print tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          #party-statement-print th,
+          #party-statement-print td {
+            color: #111827 !important;
+            border-color: #e2e8f0 !important;
+          }
+          #party-statement-print .bg-slate-50,
+          #party-statement-print .bg-slate-100 {
+            background-color: #f8fafc !important;
+          }
+          #party-statement-print .sign-off-box {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
+
       {/* Page Header (Hidden on print) */}
       <header className="no-print flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 dark:border-slate-800">
         <div>
@@ -242,7 +313,13 @@ export function PartyStatementPage() {
               <Button variant="secondary" onClick={handleExportCsv} className="gap-1.5">
                 <Download size={14} /> Export CSV
               </Button>
-              <Button onClick={() => window.print()} className="gap-1.5">
+              <Button
+                onClick={() => {
+                  window.focus();
+                  window.print();
+                }}
+                className="gap-1.5"
+              >
                 <Printer size={14} /> Print Statement
               </Button>
             </>
@@ -443,13 +520,13 @@ export function PartyStatementPage() {
 
       {/* Statement Content */}
       {loadingStatement && (
-        <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+        <div className="no-print rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
           Reconciling ledger entries and computing running balance…
         </div>
       )}
 
       {!loadingStatement && !statement && (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-12 text-center text-slate-500 dark:border-slate-800 dark:bg-slate-900/50">
+        <div className="no-print rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-12 text-center text-slate-500 dark:border-slate-800 dark:bg-slate-900/50">
           <FileText size={36} className="mx-auto mb-2 text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">No Party Selected</h3>
           <p className="mt-1 text-xs text-slate-500">
@@ -597,7 +674,10 @@ export function PartyStatementPage() {
           )}
 
           {/* Printable Document / Ledger Table */}
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div
+            id="party-statement-print"
+            className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 print:border-none print:shadow-none print:p-0"
+          >
             {/* Formal Stationery Header (Always visible in print & screen) */}
             <div className="border-b border-slate-200 pb-5 dark:border-slate-800">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -766,7 +846,7 @@ export function PartyStatementPage() {
             </div>
 
             {/* Formal Footer Sign-Off (Print-friendly) */}
-            <div className="mt-8 border-t border-slate-200 pt-6 text-xs text-slate-500 dark:border-slate-800">
+            <div className="sign-off-box mt-8 border-t border-slate-200 pt-6 text-xs text-slate-500 dark:border-slate-800">
               <div className="flex flex-wrap items-end justify-between gap-6">
                 <div>
                   <p className="font-semibold text-slate-700 dark:text-slate-300">Terms & Reconciliation:</p>

@@ -29,7 +29,7 @@ export interface ExtractedBillItem {
   variant: string;
   color: string;
   serialNumber: string;
-  serialNumber1: string;
+  serialNumber1?: string | null;
   hsnCode: string;
   quantity: number;
   unit: string;

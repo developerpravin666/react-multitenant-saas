@@ -82,8 +82,8 @@ export function createProductFormConfig({
       type: "text", required: true
     },
     {
-      id: "serialNumber1", name: "serialNumber1", label: "Serial Number 1",
-      type: "text", required: true
+      id: "serialNumber1", name: "serialNumber1", label: "Serial Number 1 (Optional)",
+      type: "text", required: false
     },
     {
       id: "taxId", name: "taxId", label: "Tax Profile", type: "select", required: true,
