@@ -21,6 +21,8 @@ import type { EWayBillDto, EInvoiceDto } from "../types/compliance.types";
 import { apiClient } from "../../../services/apiClient";
 import { QrCodeSvg } from "../../../components/ui/QrCodeSvg";
 import { formatDate } from "../../../lib/date";
+import { z } from "zod";
+import { useNotifications } from "../../../context/NotificationContext";
 
 interface InvoiceOption {
   id: string;
@@ -34,8 +36,23 @@ interface InvoiceOption {
 const currency = (val: number) =>
   `₹${val.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+const ewbSchema = z.object({
+  salesInvoiceId: z.string().trim().min(1, "Please select a sales invoice."),
+  distanceKm: z
+    .number({ invalid_type_error: "Distance must be a valid number." })
+    .positive("Distance must be greater than 0 km.")
+    .max(4000, "Distance cannot exceed 4,000 km."),
+});
+
+const einvSchema = z.object({
+  salesInvoiceId: z.string().trim().min(1, "Please select a sales invoice."),
+});
+
 export const EWayBillAndEInvoicePage: React.FC = () => {
+  const notifications = useNotifications();
   const [activeTab, setActiveTab] = useState<"eway" | "einvoice">("eway");
+  const [ewbFormErrors, setEwbFormErrors] = useState<Record<string, string>>({});
+  const [einvFormErrors, setEinvFormErrors] = useState<Record<string, string>>({});
 
   // Filter state
   const [fromDate, setFromDate] = useState("");
@@ -141,14 +158,19 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
   // Handle Generate E-Way Bill
   const handleGenerateEwb = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedInvoiceId) {
-      alert("Please select a sales invoice.");
+    const parse = ewbSchema.safeParse({ salesInvoiceId: selectedInvoiceId, distanceKm });
+    if (!parse.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parse.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) errs[field] = issue.message;
+      }
+      setEwbFormErrors(errs);
+      notifications.error("Validation error", "Please correct the highlighted issues.");
       return;
     }
-    if (distanceKm <= 0) {
-      alert("Distance must be greater than 0 km.");
-      return;
-    }
+    setEwbFormErrors({});
+
     try {
       setActionLoading(true);
       await complianceApi.generateEWayBill({
@@ -165,11 +187,12 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
         supplyType,
         subSupplyType,
       });
+      notifications.success("E-Way Bill Generated", "E-Way Bill consignment note generated successfully.");
       setIsGenerateEwbOpen(false);
       resetEwbForm();
       void loadEWayBills();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to generate E-Way Bill.");
+      notifications.error("Generation Failed", err instanceof Error ? err.message : "Failed to generate E-Way Bill.");
     } finally {
       setActionLoading(false);
     }
@@ -188,25 +211,36 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
     setDocType("INV");
     setSupplyType("O");
     setSubSupplyType("1");
+    setEwbFormErrors({});
   };
 
   // Handle Generate E-Invoice
   const handleGenerateEinv = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedInvoiceId) {
-      alert("Please select a sales invoice.");
+    const parse = einvSchema.safeParse({ salesInvoiceId: selectedInvoiceId });
+    if (!parse.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parse.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) errs[field] = issue.message;
+      }
+      setEinvFormErrors(errs);
+      notifications.error("Validation error", "Please select a sales invoice.");
       return;
     }
+    setEinvFormErrors({});
+
     try {
       setActionLoading(true);
       await complianceApi.generateEInvoice({
         salesInvoiceId: selectedInvoiceId,
       });
+      notifications.success("E-Invoice Generated", "Official IRN hash and Signed QR generated successfully.");
       setIsGenerateEinvOpen(false);
       setSelectedInvoiceId("");
       void loadEInvoices();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to generate E-Invoice.");
+      notifications.error("Generation Failed", err instanceof Error ? err.message : "Failed to generate E-Invoice.");
     } finally {
       setActionLoading(false);
     }
@@ -216,22 +250,24 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
   const handleConfirmCancel = async () => {
     if (!cancelModalData) return;
     if (!cancelReason.trim()) {
-      alert("Please provide a cancellation reason.");
+      notifications.warning("Reason Required", "Please provide a statutory cancellation reason.");
       return;
     }
     try {
       setActionLoading(true);
       if (cancelModalData.type === "eway") {
         await complianceApi.cancelEWayBill(cancelModalData.id, cancelReason);
+        notifications.success("E-Way Bill Cancelled", "Consignment note cancelled on GST portal.");
         void loadEWayBills();
       } else {
         await complianceApi.cancelEInvoice(cancelModalData.id, cancelReason);
+        notifications.success("E-Invoice Cancelled", "IRN cancelled on GST portal.");
         void loadEInvoices();
       }
       setCancelModalData(null);
       setCancelReason("");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to cancel compliance document.");
+      notifications.error("Cancellation Failed", err instanceof Error ? err.message : "Failed to cancel compliance document.");
     } finally {
       setActionLoading(false);
     }
@@ -249,7 +285,7 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to download E-Way Bill JSON.");
+      notifications.error("Download Failed", err instanceof Error ? err.message : "Failed to download E-Way Bill JSON.");
     }
   };
 
@@ -264,14 +300,14 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to download E-Invoice JSON.");
+      notifications.error("Download Failed", err instanceof Error ? err.message : "Failed to download E-Invoice JSON.");
     }
   };
 
   // Copy helper
   const copyToClipboard = (text: string, label: string) => {
     void navigator.clipboard.writeText(text);
-    alert(`${label} copied to clipboard!`);
+    notifications.success("Copied to Clipboard", `${label} copied successfully!`);
   };
 
   // KPIs
@@ -347,22 +383,20 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
       <div className="flex border-b border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setActiveTab("eway")}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${
-            activeTab === "eway"
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${activeTab === "eway"
               ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
               : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400"
-          }`}
+            }`}
         >
           <Truck className="h-4 w-4" />
           E-Way Bills (Form GST EWB-01)
         </button>
         <button
           onClick={() => setActiveTab("einvoice")}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${
-            activeTab === "einvoice"
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${activeTab === "einvoice"
               ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
               : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400"
-          }`}
+            }`}
         >
           <QrCode className="h-4 w-4" />
           E-Invoicing (IRN & Signed QR)
@@ -593,10 +627,10 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
                             {e.transMode === 1
                               ? "Road"
                               : e.transMode === 2
-                              ? "Rail"
-                              : e.transMode === 3
-                              ? "Air"
-                              : "Ship"}
+                                ? "Rail"
+                                : e.transMode === 3
+                                  ? "Air"
+                                  : "Ship"}
                           </span>
                           <span className="font-mono font-medium">{e.vehicleNo || "—"}</span>
                         </div>
@@ -618,11 +652,10 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
 
                       <td className="px-3 py-3">
                         <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            e.status === "Generated"
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${e.status === "Generated"
                               ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
                               : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
-                          }`}
+                            }`}
                         >
                           {e.status}
                         </span>
@@ -737,11 +770,10 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
 
                       <td className="px-3 py-3">
                         <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            e.status === "Generated"
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${e.status === "Generated"
                               ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
                               : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
-                          }`}
+                            }`}
                         >
                           {e.status}
                         </span>
@@ -802,18 +834,23 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
               Enter vehicle and transporter dispatch details to create the statutory consignment note and NIC JSON payload.
             </p>
 
-            <form onSubmit={(e) => void handleGenerateEwb(e)} className="mt-4 space-y-4">
+            <form onSubmit={(e) => void handleGenerateEwb(e)} noValidate autoComplete="off" className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Select Sales Invoice *
                 </label>
                 <select
-                  required
                   value={selectedInvoiceId}
                   onChange={(e) => {
                     setSelectedInvoiceId(e.target.value);
+                    if (ewbFormErrors.salesInvoiceId) {
+                      setEwbFormErrors((prev) => ({ ...prev, salesInvoiceId: "" }));
+                    }
                   }}
-                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  className={`mt-1 w-full rounded-lg border p-2 text-xs dark:bg-slate-800 dark:text-slate-200 ${ewbFormErrors.salesInvoiceId
+                      ? "border-rose-500 dark:border-rose-500"
+                      : "border-slate-300 dark:border-slate-700"
+                    }`}
                 >
                   <option value="">-- Choose Sales Invoice --</option>
                   {availableInvoices.map((inv) => (
@@ -822,6 +859,11 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {ewbFormErrors.salesInvoiceId && (
+                  <p role="alert" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                    {ewbFormErrors.salesInvoiceId}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -831,13 +873,23 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    min={1}
-                    max={4000}
-                    required
                     value={distanceKm}
-                    onChange={(e) => setDistanceKm(parseInt(e.target.value) || 0)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    onChange={(e) => {
+                      setDistanceKm(parseInt(e.target.value) || 0);
+                      if (ewbFormErrors.distanceKm) {
+                        setEwbFormErrors((prev) => ({ ...prev, distanceKm: "" }));
+                      }
+                    }}
+                    className={`mt-1 w-full rounded-lg border p-2 text-xs dark:bg-slate-800 dark:text-slate-200 ${ewbFormErrors.distanceKm
+                        ? "border-rose-500 dark:border-rose-500"
+                        : "border-slate-300 dark:border-slate-700"
+                      }`}
                   />
+                  {ewbFormErrors.distanceKm && (
+                    <p role="alert" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                      {ewbFormErrors.distanceKm}
+                    </p>
+                  )}
                   <span className="mt-0.5 block text-[10px] text-slate-400">
                     Approx validity: {Math.max(1, Math.ceil(distanceKm / 200))} Day(s)
                   </span>
@@ -977,16 +1029,23 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
               1-click computation of official 64-char SHA-256 IRN hash, 15-digit Ack Number, Signed QR Code payload, and NIC schema v1.03 JSON.
             </p>
 
-            <form onSubmit={(e) => void handleGenerateEinv(e)} className="mt-4 space-y-4">
+            <form onSubmit={(e) => void handleGenerateEinv(e)} noValidate autoComplete="off" className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Select Sales Invoice *
                 </label>
                 <select
-                  required
                   value={selectedInvoiceId}
-                  onChange={(e) => setSelectedInvoiceId(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  onChange={(e) => {
+                    setSelectedInvoiceId(e.target.value);
+                    if (einvFormErrors.salesInvoiceId) {
+                      setEinvFormErrors((prev) => ({ ...prev, salesInvoiceId: "" }));
+                    }
+                  }}
+                  className={`mt-1 w-full rounded-lg border p-2 text-xs dark:bg-slate-800 dark:text-slate-200 ${einvFormErrors.salesInvoiceId
+                      ? "border-rose-500 dark:border-rose-500"
+                      : "border-slate-300 dark:border-slate-700"
+                    }`}
                 >
                   <option value="">-- Choose Sales Invoice --</option>
                   {availableInvoices.map((inv) => (
@@ -995,6 +1054,11 @@ export const EWayBillAndEInvoicePage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {einvFormErrors.salesInvoiceId && (
+                  <p role="alert" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                    {einvFormErrors.salesInvoiceId}
+                  </p>
+                )}
               </div>
 
               <div className="rounded-lg bg-indigo-50 p-3 text-xs text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">

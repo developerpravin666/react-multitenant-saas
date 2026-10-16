@@ -236,17 +236,14 @@ export function SalesInvoiceListPage() {
               <strong className="text-rose-600">{currency(paymentModal.balance)}</strong>
             </p>
 
-            <form onSubmit={handleRecordPayment} className="mt-4 space-y-3">
+            <form onSubmit={handleRecordPayment} noValidate autoComplete="off" className="mt-4 space-y-3">
               <div>
                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Amount (₹)</label>
                 <input
                   type="number"
                   step="0.01"
-                  min="0.01"
-                  max={paymentModal.balance}
                   value={payAmount}
                   onChange={(e) => setPayAmount(Number(e.target.value))}
-                  required
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
@@ -272,7 +269,6 @@ export function SalesInvoiceListPage() {
                     type="date"
                     value={payDate}
                     onChange={(e) => setPayDate(e.target.value)}
-                    required
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
                   />
                 </div>

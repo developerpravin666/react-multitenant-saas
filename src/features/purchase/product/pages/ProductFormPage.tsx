@@ -1390,7 +1390,6 @@ function BulkProductCreateForm() {
               <Hash className="absolute left-2.5 top-2.5 size-3.5 text-slate-400" />
               <input
                 type="text"
-                required
                 value={header.billNumber}
                 onChange={(e) => setHeader((prev) => ({ ...prev, billNumber: e.target.value }))}
                 placeholder="e.g. NT-26/27-2962"
@@ -1408,7 +1407,6 @@ function BulkProductCreateForm() {
               <Calendar className="absolute left-2.5 top-2.5 size-3.5 text-slate-400" />
               <input
                 type="date"
-                required
                 value={header.purchaseDate}
                 onChange={(e) => setHeader((prev) => ({ ...prev, purchaseDate: e.target.value }))}
                 className="w-full rounded-xl border border-slate-300 bg-white pl-8 pr-3 py-2 text-xs font-medium text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -1572,7 +1570,6 @@ function BulkProductCreateForm() {
                     <td className="py-2 px-3">
                       <input
                         type="text"
-                        required
                         maxLength={100}
                         value={row.serialNumber}
                         onChange={(e) => updateRowField(row.id, "serialNumber", e.target.value)}
@@ -1793,8 +1790,8 @@ function BulkProductUpdateForm() {
         <div className="max-h-64 space-y-2 overflow-y-auto">
           {selectedProducts.map((product, index) => <div key={product.id} className="grid grid-cols-1 gap-2 rounded-lg bg-slate-50 p-3 sm:grid-cols-[minmax(8rem,0.7fr)_1fr_1fr] dark:bg-slate-800/50">
             <span className="self-center text-sm font-medium">{product.productModelName ?? `Product ${index + 1}`}</span>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Serial Number
-              <input required maxLength={100} autoComplete="off" value={serialPairs[index]?.serialNumber ?? ""} onChange={(event) => setSerialPairs((current) => current.map((pair, pairIndex) => pairIndex === index ? { ...pair, serialNumber: event.target.value } : pair))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Serial Number <span className="text-rose-500">*</span>
+              <input maxLength={100} autoComplete="off" value={serialPairs[index]?.serialNumber ?? ""} onChange={(event) => setSerialPairs((current) => current.map((pair, pairIndex) => pairIndex === index ? { ...pair, serialNumber: event.target.value } : pair))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
             </label>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Serial Number 1 (Optional)
               <input maxLength={100} autoComplete="off" value={serialPairs[index]?.serialNumber1 ?? ""} onChange={(event) => setSerialPairs((current) => current.map((pair, pairIndex) => pairIndex === index ? { ...pair, serialNumber1: event.target.value } : pair))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />

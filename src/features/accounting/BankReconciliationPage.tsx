@@ -49,30 +49,30 @@ function parseOfxContent(content: string): {
   let match: RegExpExecArray | null;
 
   while ((match = trnRegex.exec(content)) !== null) {
-    const block = match[1];
+    const block = match[1] ?? "";
 
     // DTPOSTED (Format: YYYYMMDD or YYYYMMDDHHMMSS)
     const dateMatch = /<DTPOSTED>\s*(\d{8})/i.exec(block);
     let txnDate = "";
-    if (dateMatch) {
+    if (dateMatch && dateMatch[1]) {
       const raw = dateMatch[1];
       txnDate = `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
     }
 
     // TRNAMT
     const amtMatch = /<TRNAMT>\s*([+-]?\d+(?:\.\d+)?)/i.exec(block);
-    const amt = amtMatch ? amtMatch[1] : "";
+    const amt = amtMatch?.[1] ?? "";
 
     // NAME or MEMO
     const nameMatch = /<NAME>\s*([^<\r\n]+)/i.exec(block);
     const memoMatch = /<MEMO>\s*([^<\r\n]+)/i.exec(block);
-    const description = (nameMatch ? nameMatch[1].trim() : "") || (memoMatch ? memoMatch[1].trim() : "Bank Transaction");
+    const description = (nameMatch?.[1]?.trim() ?? "") || (memoMatch?.[1]?.trim() ?? "Bank Transaction");
 
     // CHECKNUM or REFNUM or FITID
     const chqMatch = /<CHECKNUM>\s*([^<\r\n]+)/i.exec(block);
     const refMatch = /<REFNUM>\s*([^<\r\n]+)/i.exec(block);
     const fitidMatch = /<FITID>\s*([^<\r\n]+)/i.exec(block);
-    const reference = (chqMatch ? chqMatch[1].trim() : "") || (refMatch ? refMatch[1].trim() : "") || (fitidMatch ? fitidMatch[1].trim() : "");
+    const reference = (chqMatch?.[1]?.trim() ?? "") || (refMatch?.[1]?.trim() ?? "") || (fitidMatch?.[1]?.trim() ?? "");
 
     if (txnDate && amt && !isNaN(Number(amt))) {
       lines.push({
@@ -87,7 +87,7 @@ function parseOfxContent(content: string): {
   // Extract balances if present
   let closingBal: number | undefined;
   const balMatch = /<LEDGERBAL>[\s\S]*?<BALAMT>\s*([+-]?\d+(?:\.\d+)?)/i.exec(content);
-  if (balMatch) {
+  if (balMatch && balMatch[1]) {
     closingBal = parseFloat(balMatch[1]);
   }
 
@@ -226,7 +226,7 @@ export function BankReconciliationPage() {
           return;
         }
 
-        const headers = rows[0].map((h) => h.toLowerCase().trim());
+        const headers = (rows[0] ?? []).map((h) => h.toLowerCase().trim());
         const dateIdx = headers.findIndex((h) => h.includes("date"));
         const descIdx = headers.findIndex((h) => h.includes("desc") || h.includes("narration") || h.includes("particular") || h.includes("remark"));
         const refIdx = headers.findIndex((h) => h.includes("ref") || h.includes("chq") || h.includes("cheque") || h.includes("utr") || h.includes("id"));
@@ -237,6 +237,7 @@ export function BankReconciliationPage() {
         const parsed: DraftLine[] = [];
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
+          if (!row) continue;
           const rawDate = dateIdx >= 0 ? row[dateIdx] : row[0];
           const formattedDate = formatDateForApi(rawDate ?? "") || rawDate || "";
           const desc = descIdx >= 0 ? row[descIdx] : row[1] || "";
@@ -244,14 +245,14 @@ export function BankReconciliationPage() {
 
           let amt = "";
           if (amtIdx >= 0 && row[amtIdx]) {
-            amt = row[amtIdx].replace(/,/g, "");
+            amt = (row[amtIdx] ?? "").replace(/,/g, "");
           } else if (debitIdx >= 0 || creditIdx >= 0) {
-            const dr = parseFloat((row[debitIdx] || "0").replace(/,/g, "")) || 0;
-            const cr = parseFloat((row[creditIdx] || "0").replace(/,/g, "")) || 0;
+            const dr = parseFloat(((debitIdx >= 0 ? row[debitIdx] : undefined) || "0").replace(/,/g, "")) || 0;
+            const cr = parseFloat(((creditIdx >= 0 ? row[creditIdx] : undefined) || "0").replace(/,/g, "")) || 0;
             if (cr > 0) amt = cr.toString();
             else if (dr > 0) amt = (-dr).toString();
           } else if (row[3]) {
-            amt = row[3].replace(/,/g, "");
+            amt = (row[3] ?? "").replace(/,/g, "");
           }
 
           if (/^\d{4}-\d{2}-\d{2}$/.test(formattedDate) && desc && !isNaN(Number(amt)) && Number(amt) !== 0) {
@@ -445,6 +446,7 @@ export function BankReconciliationPage() {
       <form
         onSubmit={(event) => void create(event)}
         noValidate
+        autoComplete="off"
         className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
       >
         <div className="flex items-center justify-between">
@@ -666,7 +668,7 @@ export function BankReconciliationPage() {
             <div className="flex items-center gap-2 pt-4">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300"
                 disabled={busy}
                 onClick={() => void handleAutoMatch()}

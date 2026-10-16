@@ -27,6 +27,25 @@ import type {
   CreateUnitOfMeasureRequest,
 } from "../types/valuation.types";
 import type { GodownDto } from "../types/godown.types";
+import { z } from "zod";
+
+const uomSchema = z
+  .object({
+    code: z.string().trim().min(1, "Unit code is required."),
+    name: z.string().trim().min(1, "Unit name is required."),
+    symbol: z.string().trim().min(1, "Symbol is required."),
+    isBaseUnit: z.boolean(),
+    baseUnitId: z.string().optional(),
+    conversionRate: z.number().optional(),
+  })
+  .refine(
+    (data) =>
+      data.isBaseUnit || (Boolean(data.baseUnitId) && (data.conversionRate ?? 0) > 0),
+    {
+      message: "Compound units require a valid Base Unit and positive conversion rate.",
+      path: ["baseUnitId"],
+    }
+  );
 
 export const StockValuationPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"valuation" | "cogs" | "uom">("valuation");
@@ -137,6 +156,19 @@ export const StockValuationPage: React.FC = () => {
 
   const handleCreateUom = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parse = uomSchema.safeParse({
+      code: uomForm.code,
+      name: uomForm.name,
+      symbol: uomForm.symbol,
+      isBaseUnit: uomForm.isBaseUnit,
+      baseUnitId: uomForm.baseUnitId,
+      conversionRate: Number(uomForm.conversionRate),
+    });
+    if (!parse.success) {
+      setUomError(parse.error.issues[0]?.message ?? "Please check unit details.");
+      return;
+    }
+
     setUomSubmitting(true);
     setUomError(null);
     try {
@@ -952,14 +984,13 @@ export const StockValuationPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleCreateUom} className="space-y-4 text-sm">
+            <form onSubmit={handleCreateUom} noValidate autoComplete="off" className="space-y-4 text-sm">
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Unit Code * (e.g. PCS, BOX, NAG, DOZ)
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. BOX"
                   value={uomForm.code}
                   onChange={(e) => setUomForm({ ...uomForm, code: e.target.value.toUpperCase() })}
@@ -973,7 +1004,6 @@ export const StockValuationPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. Box"
                   value={uomForm.name}
                   onChange={(e) => setUomForm({ ...uomForm, name: e.target.value })}
@@ -987,7 +1017,6 @@ export const StockValuationPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. box"
                   value={uomForm.symbol}
                   onChange={(e) => setUomForm({ ...uomForm, symbol: e.target.value })}
@@ -1031,7 +1060,6 @@ export const StockValuationPage: React.FC = () => {
                       Target Base Unit *
                     </label>
                     <select
-                      required={!uomForm.isBaseUnit}
                       value={uomForm.baseUnitId || ""}
                       onChange={(e) => setUomForm({ ...uomForm, baseUnitId: e.target.value })}
                       className="w-full text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
@@ -1052,8 +1080,6 @@ export const StockValuationPage: React.FC = () => {
                     <input
                       type="number"
                       step="any"
-                      min="0.0001"
-                      required={!uomForm.isBaseUnit}
                       placeholder="e.g. 10"
                       value={uomForm.conversionRate || ""}
                       onChange={(e) => setUomForm({ ...uomForm, conversionRate: parseFloat(e.target.value) || 0 })}

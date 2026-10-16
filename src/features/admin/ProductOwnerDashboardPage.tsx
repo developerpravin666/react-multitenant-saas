@@ -21,6 +21,7 @@ import {
 import { apiClient } from "../../services/apiClient";
 import { APP_ROUTES } from "../../config/routes";
 import { formatDate } from "../../lib/date";
+import { useNotifications } from "../../context/NotificationContext";
 
 interface TenantMetrics {
   totalTenants: number;
@@ -44,6 +45,7 @@ interface PendingTenant {
 }
 
 export function ProductOwnerDashboardPage() {
+  const notifications = useNotifications();
   const [metrics, setMetrics] = useState<TenantMetrics | null>(null);
   const [pendingTenants, setPendingTenants] = useState<PendingTenant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,13 @@ export function ProductOwnerDashboardPage() {
   }, [fetchDashboardData]);
 
   const handleQuickApprove = async (tenant: PendingTenant) => {
-    if (!window.confirm(`Approve "${tenant.name}"? This triggers PostgreSQL schema creation & default ledgers seeding.`)) {
+    const confirmed = await notifications.confirm({
+      title: `Approve "${tenant.name}"?`,
+      message: "This triggers PostgreSQL schema creation & default ledgers seeding.",
+      variant: "primary",
+      confirmLabel: "Approve & Provision",
+    });
+    if (!confirmed) {
       return;
     }
 

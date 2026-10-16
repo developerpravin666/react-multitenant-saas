@@ -780,14 +780,13 @@ export function FeatureFlagsAdminPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateFlag} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={handleCreateFlag} noValidate autoComplete="off" className="mt-4 space-y-4 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Flag Key (e.g., ai_barcode_scanner) *
                 </label>
                 <input
                   type="text"
-                  required
                   value={newKey}
                   onChange={(e) => setNewKey(e.target.value)}
                   placeholder="module_feature_name"
@@ -801,7 +800,6 @@ export function FeatureFlagsAdminPage() {
                 </label>
                 <input
                   type="text"
-                  required
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="Smart Barcode Scanning"

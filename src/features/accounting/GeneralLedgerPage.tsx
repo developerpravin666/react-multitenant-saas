@@ -133,12 +133,18 @@ export function GeneralLedgerPage() {
   };
 
   const reverseJournal = async (journal: Journal) => {
-    if (!window.confirm(`Reverse ${journal.journalNumber}? This adds an equal and opposite journal entry and keeps the original intact.`)) return;
-    const reason = window.prompt("Reason for reversal (optional):") ?? "";
+    const confirmed = await notifications.confirm({
+      title: `Reverse Journal ${journal.journalNumber}?`,
+      message: `This will create an equal and opposite linked reversing journal entry while keeping the original intact for audit compliance.`,
+      variant: "warning",
+      confirmLabel: "Reverse Entry",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await apiClient.post(`/general-ledger/journals/${encodeURIComponent(journal.id)}/reverse`, {
-        reversalDate: new Date().toISOString().slice(0, 10), reason,
+        reversalDate: new Date().toISOString().slice(0, 10),
+        reason: "Reversed from General Ledger workspace",
       });
       notifications.success("Journal reversed", "A linked reversing entry was posted.");
       await load();

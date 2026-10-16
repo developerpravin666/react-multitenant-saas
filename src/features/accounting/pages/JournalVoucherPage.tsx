@@ -278,22 +278,21 @@ export function JournalVoucherPage() {
   };
 
   const handleReverse = async (voucher: JournalVoucher) => {
-    if (
-      !window.confirm(
-        `Reverse Journal ${voucher.journalNumber}? This will create an equal and opposite reversing journal entry.`
-      )
-    ) {
-      return;
-    }
+    const confirmed = await notifications.confirm({
+      title: `Reverse Journal ${voucher.journalNumber}?`,
+      message: "This will create an equal and opposite reversing journal entry while keeping the original intact for audit compliance.",
+      variant: "warning",
+      confirmLabel: "Reverse Journal",
+    });
+    if (!confirmed) return;
 
-    const reason = window.prompt("Reason for reversal (optional):") ?? "";
     setBusy(true);
     try {
       await apiClient.post(
         `/general-ledger/journals/${encodeURIComponent(voucher.id)}/reverse`,
         {
           reversalDate: new Date().toISOString().slice(0, 10),
-          reason: reason.trim() || `Reversal of ${voucher.journalNumber}`,
+          reason: `Reversal of ${voucher.journalNumber}`,
         }
       );
       notifications.success("Journal Reversed", "Reversing entry posted successfully.");
@@ -337,6 +336,7 @@ export function JournalVoucherPage() {
       <form
         onSubmit={handleSubmit}
         noValidate
+        autoComplete="off"
         className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">

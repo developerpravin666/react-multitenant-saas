@@ -614,15 +614,23 @@ export function SalesInvoiceFormPage() {
       if (e.key === "Escape") {
         const target = e.target as HTMLElement;
         if (target && target.tagName === "SELECT") return;
-        if (window.confirm("Discard unsaved invoice changes and return to invoice list?")) {
-          navigate(APP_ROUTES.sale.invoices.list);
-        }
+        void (async () => {
+          const confirmed = await notifications.confirm({
+            title: "Discard Changes?",
+            message: "Discard unsaved invoice changes and return to invoice list?",
+            variant: "warning",
+            confirmLabel: "Discard & Exit",
+          });
+          if (confirmed) {
+            navigate(APP_ROUTES.sale.invoices.list);
+          }
+        })();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate]);
+  }, [navigate, notifications]);
 
   if (loadingRefData) {
     return <div className="p-8 text-center text-sm text-slate-500">Loading catalog and taxes…</div>;
@@ -1193,7 +1201,6 @@ export function SalesInvoiceFormPage() {
                         placeholder="Service description"
                         value={line.itemDescription}
                         onChange={(e) => updateLineField(line.tempId, { itemDescription: e.target.value })}
-                        required
                         className="w-full rounded border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
                       />
                     )}

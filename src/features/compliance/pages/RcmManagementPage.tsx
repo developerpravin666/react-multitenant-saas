@@ -20,6 +20,21 @@ import type { RcmSelfInvoiceDto, CreateRcmSelfInvoiceRequest } from "../types/co
 import { useNotifications } from "../../../context/NotificationContext";
 import { formatDate } from "../../../lib/date";
 import { apiClient } from "../../../services/apiClient";
+import { z } from "zod";
+
+const rcmSelfInvoiceSchema = z.object({
+  vendorName: z.string().trim().min(1, "Vendor name is required."),
+  taxableAmount: z
+    .number({ invalid_type_error: "Taxable amount must be a number." })
+    .positive("Taxable amount must be greater than zero."),
+  placeOfSupplyStateCode: z.string().min(1, "Place of supply state is required."),
+  description: z.string().trim().min(1, "Description is required."),
+  invoiceDate: z.string().min(1, "Voucher date is required."),
+  paymentMode: z.string().min(1, "Payment mode is required."),
+  gstRate: z.number().min(0, "GST rate must be non-negative."),
+  section: z.enum(["9(3)", "9(4)"]),
+  category: z.string().trim().min(1, "Supply category is required."),
+});
 
 interface VendorSummary {
   id: string;
@@ -100,6 +115,7 @@ export function RcmManagementPage() {
   const [viewModalType, setViewModalType] = useState<"self-invoice" | "payment-voucher" | null>(null);
   const [cancelModalInvoice, setCancelModalInvoice] = useState<RcmSelfInvoiceDto | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [createFormErrors, setCreateFormErrors] = useState<Record<string, string>>({});
 
   // Create Form State
   const [formData, setFormData] = useState<CreateRcmSelfInvoiceRequest>({
@@ -194,14 +210,18 @@ export function RcmManagementPage() {
   // Handle Create Submit
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.vendorName.trim()) {
-      notifications.error("Validation error", "Vendor name is required.");
+    const parse = rcmSelfInvoiceSchema.safeParse(formData);
+    if (!parse.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parse.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) errs[field] = issue.message;
+      }
+      setCreateFormErrors(errs);
+      notifications.error("Validation error", "Please correct the highlighted issues.");
       return;
     }
-    if (formData.taxableAmount <= 0) {
-      notifications.error("Validation error", "Taxable amount must be greater than zero.");
-      return;
-    }
+    setCreateFormErrors({});
 
     setBusy(true);
     try {
@@ -600,7 +620,7 @@ export function RcmManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4 pt-4 text-sm">
+            <form onSubmit={handleCreateSubmit} noValidate autoComplete="off" className="space-y-4 pt-4 text-sm">
               {/* Section & Category */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -707,12 +727,24 @@ export function RcmManagementPage() {
                     </label>
                     <input
                       type="text"
-                      required
                       value={formData.vendorName}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, vendorName: e.target.value }))}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, vendorName: e.target.value }));
+                        if (createFormErrors.vendorName) {
+                          setCreateFormErrors((prev) => ({ ...prev, vendorName: "" }));
+                        }
+                      }}
+                      className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:bg-slate-950 ${createFormErrors.vendorName
+                        ? "border-rose-500 dark:border-rose-500"
+                        : "border-slate-300 dark:border-slate-700"
+                        }`}
                       placeholder="e.g. Bharat Freight Logistics"
                     />
+                    {createFormErrors.vendorName && (
+                      <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                        {createFormErrors.vendorName}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -776,11 +808,23 @@ export function RcmManagementPage() {
                   </label>
                   <input
                     type="text"
-                    required
                     value={formData.description}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                    onChange={(e) => {
+                      setFormData((prev) => ({ ...prev, description: e.target.value }));
+                      if (createFormErrors.description) {
+                        setCreateFormErrors((prev) => ({ ...prev, description: "" }));
+                      }
+                    }}
+                    className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:bg-slate-950 ${createFormErrors.description
+                      ? "border-rose-500 dark:border-rose-500"
+                      : "border-slate-300 dark:border-slate-700"
+                      }`}
                   />
+                  {createFormErrors.description && (
+                    <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                      {createFormErrors.description}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -802,11 +846,23 @@ export function RcmManagementPage() {
                   </label>
                   <input
                     type="date"
-                    required
                     value={formData.invoiceDate}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, invoiceDate: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                    onChange={(e) => {
+                      setFormData((prev) => ({ ...prev, invoiceDate: e.target.value }));
+                      if (createFormErrors.invoiceDate) {
+                        setCreateFormErrors((prev) => ({ ...prev, invoiceDate: "" }));
+                      }
+                    }}
+                    className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:bg-slate-950 ${createFormErrors.invoiceDate
+                      ? "border-rose-500 dark:border-rose-500"
+                      : "border-slate-300 dark:border-slate-700"
+                      }`}
                   />
+                  {createFormErrors.invoiceDate && (
+                    <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                      {createFormErrors.invoiceDate}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -816,12 +872,23 @@ export function RcmManagementPage() {
                   <input
                     type="number"
                     step="0.01"
-                    min="0.01"
-                    required
                     value={formData.taxableAmount}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, taxableAmount: parseFloat(e.target.value) || 0 }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                    onChange={(e) => {
+                      setFormData((prev) => ({ ...prev, taxableAmount: parseFloat(e.target.value) || 0 }));
+                      if (createFormErrors.taxableAmount) {
+                        setCreateFormErrors((prev) => ({ ...prev, taxableAmount: "" }));
+                      }
+                    }}
+                    className={`mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:bg-slate-950 ${createFormErrors.taxableAmount
+                      ? "border-rose-500 dark:border-rose-500"
+                      : "border-slate-300 dark:border-slate-700"
+                      }`}
                   />
+                  {createFormErrors.taxableAmount && (
+                    <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                      {createFormErrors.taxableAmount}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1184,7 +1251,6 @@ export function RcmManagementPage() {
                 Cancellation Reason <span className="text-rose-500">*</span>
               </label>
               <textarea
-                required
                 rows={3}
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
@@ -1193,7 +1259,7 @@ export function RcmManagementPage() {
               />
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setCancelModalInvoice(null)}>
+              <Button variant="secondary" onClick={() => setCancelModalInvoice(null)}>
                 Close
               </Button>
               <Button

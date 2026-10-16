@@ -1438,7 +1438,7 @@ export function GodownsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveGodown} className="mt-4 space-y-4">
+            <form onSubmit={handleSaveGodown} noValidate autoComplete="off" className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Godown Name <span className="text-rose-500">*</span>
@@ -1448,7 +1448,6 @@ export function GodownsPage() {
                   placeholder="e.g. Warehouse Kukshi, Main Store"
                   value={godownForm.name}
                   onChange={(e) => setGodownForm((prev) => ({ ...prev, name: e.target.value }))}
-                  required
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
@@ -1462,7 +1461,6 @@ export function GodownsPage() {
                   placeholder="e.g. MAIN, WH-01, SVC-PT"
                   value={godownForm.code}
                   onChange={(e) => setGodownForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                  required
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 uppercase font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
@@ -1654,7 +1652,7 @@ export function GodownsPage() {
               </button>
             </div>
 
-            <form onSubmit={handlePostAdjustment} className="mt-4 space-y-4">
+            <form onSubmit={handlePostAdjustment} noValidate autoComplete="off" className="mt-4 space-y-4">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/50 space-y-1">
                 <p>
                   <span className="text-slate-500">Item:</span>{" "}
@@ -1732,7 +1730,6 @@ export function GodownsPage() {
                   placeholder="e.g. Damage during transit, missing handset, count error"
                   value={adjustmentReason}
                   onChange={(e) => setAdjustmentReason(e.target.value)}
-                  required
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>

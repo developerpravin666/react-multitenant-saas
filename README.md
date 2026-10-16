@@ -143,17 +143,59 @@ Whenever adding, updating, or refactoring code in this frontend application, all
 - **Tailwind CSS Consistency**: Use Tailwind utility classes following the existing project design tokens (colors, borders, dark mode variants `dark:bg-slate-900`, `dark:border-slate-800`).
 
 ### 5. Consistent Patterns Throughout the Application
-- **Feature-First Organization**: Group code by business domain under `src/features/<feature-name>/`:
-  - `pages/`: Routable container components.
-  - `components/`: Feature-specific subcomponents.
-  - `types/`: Domain-specific TypeScript interfaces and types.
-  - `config/`: Form configurations, column definitions, or lookup tables.
-- **Form Conventions**:
-  - Consistent layout: Label $\rightarrow$ Input $\rightarrow$ Inline error message.
-  - Clear visual feedback for required fields (`<span className="text-rose-500">*</span>`).
-  - Submit buttons disabled during asynchronous submission (`isLoading={busy}`) to prevent duplicate requests.
-- **Table & Grid Conventions**:
-  - Consistent headers, pagination, empty state messages, and loading skeletons across all list views.
+
+#### 5.1 Consistent Form Validation Standards
+All forms, dialogs, and user inputs across every module must follow a uniform validation architecture:
+- **Consistent Approach**: Use either standard React Hook Form + Zod schemas (for complex/dynamic forms) or uniform controlled state validation with a dedicated `fieldErrors: Record<string, string>` map. Do not invent ad-hoc validation mechanisms.
+- **Required Field Indicators**: Every mandatory field must visually indicate requirement with a standard red asterisk: `<span className="text-rose-500">*</span>`.
+- **Inline Field-Level Error Display**:
+  - Validation messages must be rendered immediately below the invalid control using `<p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">`.
+  - The invalid input element must visually reflect the error state with a red border and subtle tint: `${fieldErrors[key] ? "border-rose-500 bg-rose-50/20" : ""}` and accessibility tag `aria-invalid={Boolean(fieldErrors[key])}`.
+- **Auto-Clearing Errors**: When the user edits or focuses an invalid field, immediately clear that field's error (`clearFieldError(key)`) so the UI reacts responsively without waiting for re-submission.
+- **Backend Error Mapping**: When the backend returns validation or conflict errors (HTTP 400/409), parse the response and map errors directly back to the respective field inputs, accompanied by a toast notification.
+- **Submission Guard**: Submit buttons must be disabled and display a loading indicator (`isLoading={busy}`) while validation or asynchronous submission is underway to prevent duplicate requests.
+
+#### 5.2 Consistent Confirmation Dialogs for Critical & Destructive Actions
+Accidental data deletion, invoice/voucher cancellation, or period closing can lead to permanent financial and compliance discrepancies. Therefore:
+- **Mandatory Confirmation**: Every destructive, irreversible, or high-impact operation **MUST ALWAYS** require an explicit confirmation prompt before executing. This includes:
+  - Deleting records (products, categories, accounts, templates, customers, vendors).
+  - Cancelling invoices, vouchers, E-Way bills, or E-Invoices.
+  - Finalizing bank reconciliations.
+  - Closing accounting periods.
+  - Applying bulk adjustments or clearing opening balances.
+- **Never Use Browser Natives**: Strictly **NEVER** use browser `window.confirm()` or `window.alert()`. They break application styling, lack accessibility, and degrade user trust.
+- **Unified Confirmation Modal Pattern**:
+  - Use the shared Promise-based `confirm()` from `useNotifications()` (`src/context/NotificationContext.tsx`) or a standardized dialog overlay with:
+    - **Backdrop**: `fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm`.
+    - **Container**: `rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800`.
+    - **Distinctive Header**: Icon indicating severity (e.g. `AlertTriangle`, `Ban`, `Trash2`) + clear action title (e.g., "Cancel RCM Voucher", "Finalize Bank Statement").
+    - **Explicit Impact Description**: Clearly state what will happen, what data is affected, and whether the change is irreversible.
+    - **Audit Reason Field**: For statutory cancellations (E-Way bills, E-Invoices, RCM Self-Invoices, Period re-opening), require a mandatory text reason before the confirm button is enabled.
+    - **Standard Action Layout**: Safe action on the left (`variant="secondary"` Cancel), Destructive/Proceed action on the right (`variant="primary"` or danger red button).
+    - **Keyboard Controls**: Pressing <kbd>Esc</kbd> or clicking the top-right <kbd>X</kbd> button must dismiss without taking action.
+
+#### 5.3 Consistent Feedback, Notifications & Toasts
+- **Centralized Notifications**: All user feedback must trigger through `useNotifications()` from `src/context/NotificationContext.tsx`. Never build custom one-off alert toasts.
+- **Structured Toast Messages**:
+  - `notifications.success(title, message)`: State clearly what was accomplished and any immediate next step.
+  - `notifications.error(title, message)`: Explain the exact problem in plain language with a suggested resolution.
+  - `notifications.warning(title, message)`: For non-blocking warnings (e.g., un-reconciled items remaining).
+  - `notifications.info(title, message)`: For non-critical background updates.
+
+#### 5.4 Consistent Visual Hierarchy & UI Elements
+- **Button Variants**:
+  - Primary Action: `variant="primary"` (styled with tenant branding token `var(--tenant-primary)`).
+  - Secondary Action / Outline: `variant="secondary"` (styled with `border border-slate-300 dark:border-slate-700`).
+  - Destructive Action: Red danger button (`bg-rose-600 hover:bg-rose-700 text-white`).
+  - Keep a single primary action per card or form section to avoid competing calls to action.
+- **Empty States**:
+  - When tables or lists have 0 records, render a clean, centered message explaining why no records were found (e.g., "No matching transactions found") and provide a direct shortcut to clear filters or add a new record.
+- **Loading Skeletons & Spinners**:
+  - Use consistent spinner indicators (`<RefreshCw className="h-6 w-6 animate-spin mx-auto text-indigo-500" />` or `LoaderCircle`) during asynchronous data retrieval.
+- **Standardized Modals & Drawers**:
+  - Maximum height `max-h-[92vh]` with `overflow-y-auto`.
+  - Header containing title, subtitle, and an accessible close button (`X`).
+  - Pinned footer with Cancel and Submit actions.
 
 ### 6. Domain-Specific Standards (Accounting, Inventory & Multi-Tenancy)
 - **Indian Accounting & GST Formatting**:
@@ -164,3 +206,4 @@ Whenever adding, updating, or refactoring code in this frontend application, all
   - Maintain support for standard accounting shortcuts (e.g. `F4` for Contra, `F7` for Journal) while preserving system shortcuts (`Ctrl+F4`, `Alt+F4`).
 - **Multi-Tenant Transparency**:
   - All multi-tenant state and session headers are managed globally by `AuthContext` and `apiClient`. Feature pages must never attempt to manipulate or hardcode tenant IDs directly.
+
