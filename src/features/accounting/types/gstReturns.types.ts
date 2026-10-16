@@ -192,3 +192,66 @@ export interface Gstr3bSummary {
   taxPayment: Gstr3bTaxPaymentSummary;
 }
 
+export interface Gstr2bReconciliationItem {
+  status: "MATCHED" | "BOOKS_ONLY" | "PORTAL_ONLY" | "VALUE_MISMATCH";
+  supplierGstin: string;
+  supplierName: string;
+  invoiceNumber: string;
+  invoiceDate: string | null;
+  booksTaxableValue: number;
+  booksTaxAmount: number;
+  booksCgst: number;
+  booksSgst: number;
+  booksIgst: number;
+  portalTaxableValue: number;
+  portalTaxAmount: number;
+  portalCgst: number;
+  portalSgst: number;
+  portalIgst: number;
+  differenceAmount: number;
+  discrepancyReason?: string | null;
+}
+
+export interface Gstr2bReconciliationResult {
+  tenantGstin: string;
+  returnPeriod: string;
+  fromDate: string;
+  toDate: string;
+  totalInvoicesCount: number;
+  matchedCount: number;
+  booksOnlyCount: number;
+  portalOnlyCount: number;
+  valueMismatchCount: number;
+  totalMatchedItc: number;
+  totalBooksOnlyItc: number;
+  totalPortalOnlyItc: number;
+  totalValueMismatchItcDiff: number;
+  items: Gstr2bReconciliationItem[];
+}
+
+export interface TriangulationException {
+  severity: "Critical" | "Warning";
+  category: "InvalidGSTIN" | "MissingHSN" | "TaxMismatch" | "InterStateTaxMismatch" | "MismatchedLedgers" | "MissingStateCode";
+  voucherType: "SalesInvoice" | "PurchaseBill" | "JournalEntry" | "CreditNote";
+  voucherNumber: string;
+  voucherDate: string | null;
+  partyName?: string | null;
+  partyGstin?: string | null;
+  impactedAmount: number;
+  description: string;
+  recommendedAction: string;
+}
+
+export interface PreFilingTriangulationResult {
+  tenantGstin: string;
+  fromDate: string;
+  toDate: string;
+  totalVouchersScanned: number;
+  totalExceptionsCount: number;
+  criticalErrorsCount: number;
+  warningsCount: number;
+  isFilingReady: boolean;
+  exceptions: TriangulationException[];
+}
+
+

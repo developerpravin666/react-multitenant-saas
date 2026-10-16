@@ -1,8 +1,26 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Download, RefreshCw, FileText, CheckCircle2, Building, AlertCircle } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Download,
+  RefreshCw,
+  FileText,
+  CheckCircle2,
+  Building,
+  AlertCircle,
+  Upload,
+  AlertTriangle,
+  ShieldCheck,
+  Check,
+  FileCheck,
+  Filter,
+} from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { apiClient } from "../../services/apiClient";
-import type { Gstr1Summary, Gstr3bSummary } from "./types/gstReturns.types";
+import type {
+  Gstr1Summary,
+  Gstr3bSummary,
+  Gstr2bReconciliationResult,
+  PreFilingTriangulationResult,
+} from "./types/gstReturns.types";
 
 type RateRow = {
   taxTreatment?: string;
@@ -41,7 +59,7 @@ const money = (value: number | undefined | null) =>
     maximumFractionDigits: 2,
   });
 
-type TabType = "summary" | "gstr1" | "gstr3b";
+type TabType = "gstr1" | "gstr3b" | "gstr2b" | "triangulation" | "summary";
 
 export function TaxReportsPage() {
   const today = new Date().toISOString().slice(0, 10);
@@ -58,6 +76,16 @@ export function TaxReportsPage() {
   // GSTR-3B state
   const [gstr3b, setGstr3b] = useState<Gstr3bSummary | null>(null);
 
+  // Phase 3: GSTR-2B Reconciliation state
+  const [reconciliation, setReconciliation] = useState<Gstr2bReconciliationResult | null>(null);
+  const [reconcileFilter, setReconcileFilter] = useState<"ALL" | "MATCHED" | "BOOKS_ONLY" | "PORTAL_ONLY" | "VALUE_MISMATCH">("ALL");
+  const [uploadingGstr2b, setUploadingGstr2b] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Phase 3: Pre-Filing Triangulation state
+  const [triangulation, setTriangulation] = useState<PreFilingTriangulationResult | null>(null);
+  const [triangulationFilter, setTriangulationFilter] = useState<"ALL" | "Critical" | "Warning">("ALL");
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [exportingJson, setExportingJson] = useState(false);
@@ -68,14 +96,16 @@ export function TaxReportsPage() {
     setError(null);
     try {
       const query = new URLSearchParams({ from, to });
-      const [taxRep, g1, g3b] = await Promise.all([
+      const [taxRep, g1, g3b, tri] = await Promise.all([
         apiClient.get<TaxReport>(`/general-ledger/tax-report?${query}`).catch(() => null),
         apiClient.get<Gstr1Summary>(`/tax/gstr1/summary?${query}`).catch(() => null),
         apiClient.get<Gstr3bSummary>(`/tax/gstr3b/summary?${query}`).catch(() => null),
+        apiClient.get<PreFilingTriangulationResult>(`/tax/triangulation?${query}`).catch(() => null),
       ]);
       setReport(taxRep);
       setGstr1(g1);
       setGstr3b(g3b);
+      setTriangulation(tri);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load GST return data.");
     } finally {
@@ -86,6 +116,31 @@ export function TaxReportsPage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  // Handle GSTR-2B JSON file upload & reconciliation
+  const handleGstr2bFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingGstr2b(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      const payload = {
+        jsonContent: text,
+        fromDate: from,
+        toDate: to,
+      };
+      const result = await apiClient.post<Gstr2bReconciliationResult>("/tax/gstr2b/reconcile", payload);
+      setReconciliation(result);
+      setActiveTab("gstr2b");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to parse and reconcile GSTR-2B JSON.");
+    } finally {
+      setUploadingGstr2b(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   // Export GSTR-1 JSON (GST Portal format)
   const exportGstr1Json = async () => {
@@ -186,6 +241,15 @@ export function TaxReportsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Hidden file input for GSTR-2B upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleGstr2bFileUpload}
+        accept=".json"
+        className="hidden"
+      />
+
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4 dark:border-slate-800">
         <div>
@@ -193,7 +257,7 @@ export function TaxReportsPage() {
             GST Returns &amp; Compliance Center
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Official GSTR-1, GSTR-3B return compilation, portal JSON v1.4 export, and general ledger reconciliation.
+            Official GSTR-1, GSTR-3B return compilation, GSTR-2B auto-reconciliation, pre-filing triangulation, and GL reconciliation.
           </p>
         </div>
 
@@ -220,6 +284,14 @@ export function TaxReportsPage() {
 
           <Button variant="secondary" onClick={() => void loadData()} isLoading={loading}>
             <RefreshCw size={14} className="mr-1.5" /> Refresh
+          </Button>
+
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            isLoading={uploadingGstr2b}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            <Upload size={14} className="mr-1.5" /> Reconcile GSTR-2B
           </Button>
 
           {activeTab === "gstr1" && gstr1 && (
@@ -271,6 +343,28 @@ export function TaxReportsPage() {
           }`}
         >
           <CheckCircle2 size={16} /> GSTR-3B (Monthly Summary)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("gstr2b")}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-colors ${
+            activeTab === "gstr2b"
+              ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+          }`}
+        >
+          <FileCheck size={16} /> GSTR-2B Reconciliation {reconciliation ? `(${reconciliation.totalInvoicesCount})` : ""}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("triangulation")}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-colors ${
+            activeTab === "triangulation"
+              ? "border-amber-600 text-amber-600 dark:border-amber-400 dark:text-amber-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+          }`}
+        >
+          <ShieldCheck size={16} /> Triangulation &amp; Diagnostics {triangulation?.totalExceptionsCount ? `(${triangulation.totalExceptionsCount})` : ""}
         </button>
         <button
           type="button"
@@ -803,7 +897,300 @@ export function TaxReportsPage() {
         </div>
       )}
 
-      {/* TAB 3: LEDGER RECONCILIATION */}
+      {/* TAB 3: GSTR-2B RECONCILIATION */}
+      {activeTab === "gstr2b" && (
+        <div className="space-y-6">
+          {reconciliation ? (
+            <>
+              {/* Summary Metric Cards */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">100% Matched</p>
+                    <Check className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{reconciliation.matchedCount} Invoices</p>
+                  <p className="text-xs text-emerald-600 mt-1">Safe to claim in 3B: ₹{money(reconciliation.totalMatchedItc)}</p>
+                </div>
+
+                <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">In Books, Not In Portal</p>
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-amber-700 dark:text-amber-300">{reconciliation.booksOnlyCount} Invoices</p>
+                  <p className="text-xs text-amber-600 mt-1">Vendor missed GSTR-1: ₹{money(reconciliation.totalBooksOnlyItc)}</p>
+                </div>
+
+                <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300">In Portal, Not In Books</p>
+                    <FileText className="h-5 w-5 text-sky-600" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-sky-700 dark:text-sky-300">{reconciliation.portalOnlyCount} Invoices</p>
+                  <p className="text-xs text-sky-600 mt-1">Unrecorded Purchase: ₹{money(reconciliation.totalPortalOnlyItc)}</p>
+                </div>
+
+                <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/20">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-rose-800 dark:text-rose-300">Value / Tax Mismatches</p>
+                    <AlertCircle className="h-5 w-5 text-rose-600" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-rose-700 dark:text-rose-300">{reconciliation.valueMismatchCount} Invoices</p>
+                  <p className="text-xs text-rose-600 mt-1">Difference amount &gt; ₹1: ₹{money(reconciliation.totalValueMismatchItcDiff)}</p>
+                </div>
+              </div>
+
+              {/* Status Filters & Action Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Filter size={14} className="text-slate-400" />
+                  <span className="text-xs font-semibold uppercase text-slate-500">Filter By Status:</span>
+                  {(["ALL", "MATCHED", "BOOKS_ONLY", "PORTAL_ONLY", "VALUE_MISMATCH"] as const).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setReconcileFilter(st)}
+                      className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+                        reconcileFilter === st
+                          ? "bg-indigo-600 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                      }`}
+                    >
+                      {st.replace("_", " ")}
+                    </button>
+                  ))}
+                </div>
+
+                <Button
+                  variant="secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-xs"
+                >
+                  <Upload size={13} className="mr-1.5" /> Re-upload Another GSTR-2B JSON
+                </Button>
+              </div>
+
+              {/* Invoices Reconciliation Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <tr>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Supplier GSTIN &amp; Name</th>
+                      <th className="p-3">Invoice No</th>
+                      <th className="p-3">Date</th>
+                      <th className="p-3 text-right">Books Taxable (₹)</th>
+                      <th className="p-3 text-right">Books Tax (₹)</th>
+                      <th className="p-3 text-right">Portal Taxable (₹)</th>
+                      <th className="p-3 text-right">Portal Tax (₹)</th>
+                      <th className="p-3 text-right">Diff (₹)</th>
+                      <th className="p-3">Reason / Resolution</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {reconciliation.items
+                      .filter((i) => reconcileFilter === "ALL" || i.status === reconcileFilter)
+                      .map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="p-3">
+                            <span
+                              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                item.status === "MATCHED"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                  : item.status === "BOOKS_ONLY"
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                                  : item.status === "PORTAL_ONLY"
+                                  ? "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300"
+                                  : "bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300"
+                              }`}
+                            >
+                              {item.status.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <div className="font-semibold text-slate-900 dark:text-slate-100">{item.supplierName}</div>
+                            <div className="font-mono text-xs text-slate-500">{item.supplierGstin || "N/A"}</div>
+                          </td>
+                          <td className="p-3 font-mono font-semibold">{item.invoiceNumber}</td>
+                          <td className="p-3 text-slate-600 dark:text-slate-400">{item.invoiceDate || "—"}</td>
+                          <td className="p-3 text-right">₹{money(item.booksTaxableValue)}</td>
+                          <td className="p-3 text-right">₹{money(item.booksTaxAmount)}</td>
+                          <td className="p-3 text-right">₹{money(item.portalTaxableValue)}</td>
+                          <td className="p-3 text-right font-medium">₹{money(item.portalTaxAmount)}</td>
+                          <td
+                            className={`p-3 text-right font-semibold ${
+                              item.differenceAmount > 0 ? "text-amber-600" : "text-slate-700 dark:text-slate-300"
+                            }`}
+                          >
+                            ₹{money(item.differenceAmount)}
+                          </td>
+                          <td className="p-3 text-xs text-slate-600 dark:text-slate-400">{item.discrepancyReason || "—"}</td>
+                        </tr>
+                      ))}
+                    {reconciliation.items.length === 0 && (
+                      <tr>
+                        <td colSpan={10} className="p-8 text-center text-slate-500">
+                          No invoices found for reconciliation.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center dark:border-slate-800">
+              <Upload className="mx-auto h-12 w-12 text-slate-400" />
+              <h3 className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                No GSTR-2B Statement Uploaded
+              </h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+                Download your official GSTR-2B JSON return file from the GST Portal (gst.gov.in) and upload it here to auto-match purchase bills, verify claimed ITC, and flag vendor defaults.
+              </p>
+              <div className="mt-6">
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  isLoading={uploadingGstr2b}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  <Upload size={14} className="mr-1.5" /> Upload GSTR-2B JSON
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: PRE-FILING TRIANGULATION */}
+      {activeTab === "triangulation" && (
+        <div className="space-y-6">
+          {triangulation ? (
+            <>
+              {/* Filing Health Banner */}
+              <div
+                className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4 shadow-sm ${
+                  triangulation.isFilingReady
+                    ? "border-emerald-300 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30"
+                    : "border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {triangulation.isFilingReady ? (
+                    <ShieldCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+                  )}
+                  <div>
+                    <h3
+                      className={`text-base font-bold ${
+                        triangulation.isFilingReady ? "text-emerald-900 dark:text-emerald-200" : "text-amber-900 dark:text-amber-200"
+                      }`}
+                    >
+                      {triangulation.isFilingReady
+                        ? "100% Ready for Portal Return Filing"
+                        : "Exceptions Detected Prior to Return Upload"}
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Scanned {triangulation.totalVouchersScanned} transactions across sales, purchases, and general ledger journals.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs font-semibold">
+                  <span className="rounded-lg bg-red-100 px-3 py-1.5 text-red-800 dark:bg-red-950/60 dark:text-red-300">
+                    Critical Errors: {triangulation.criticalErrorsCount}
+                  </span>
+                  <span className="rounded-lg bg-amber-100 px-3 py-1.5 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                    Warnings: {triangulation.warningsCount}
+                  </span>
+                </div>
+              </div>
+
+              {/* Exception Filter */}
+              <div className="flex items-center gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
+                <span className="text-xs font-semibold uppercase text-slate-500">Filter Severity:</span>
+                {(["ALL", "Critical", "Warning"] as const).map((sev) => (
+                  <button
+                    key={sev}
+                    type="button"
+                    onClick={() => setTriangulationFilter(sev)}
+                    className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+                      triangulationFilter === sev
+                        ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                    }`}
+                  >
+                    {sev}
+                  </button>
+                ))}
+              </div>
+
+              {/* Triangulation Diagnostic Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <tr>
+                      <th className="p-3">Severity</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3">Voucher Details</th>
+                      <th className="p-3">Party Name &amp; GSTIN</th>
+                      <th className="p-3 text-right">Impacted Value (₹)</th>
+                      <th className="p-3">Diagnostic Issue</th>
+                      <th className="p-3">Recommended Resolution</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {triangulation.exceptions
+                      .filter((e) => triangulationFilter === "ALL" || e.severity === triangulationFilter)
+                      .map((ex, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="p-3">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                                ex.severity === "Critical"
+                                  ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                              }`}
+                            >
+                              {ex.severity === "Critical" ? <AlertCircle size={12} /> : <AlertTriangle size={12} />}
+                              {ex.severity}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-900 dark:text-slate-100">{ex.category}</td>
+                          <td className="p-3">
+                            <div className="font-mono font-bold text-slate-800 dark:text-slate-200">{ex.voucherNumber}</div>
+                            <div className="text-xs text-slate-500">{ex.voucherType} · {ex.voucherDate || "—"}</div>
+                          </td>
+                          <td className="p-3">
+                            <div className="font-medium text-slate-900 dark:text-slate-100">{ex.partyName || "—"}</div>
+                            <div className="font-mono text-xs text-slate-500">{ex.partyGstin || "—"}</div>
+                          </td>
+                          <td className="p-3 text-right font-semibold text-slate-900 dark:text-slate-100">
+                            ₹{money(ex.impactedAmount)}
+                          </td>
+                          <td className="p-3 text-xs text-rose-700 dark:text-rose-400 font-medium">{ex.description}</td>
+                          <td className="p-3 text-xs text-emerald-700 dark:text-emerald-400">{ex.recommendedAction}</td>
+                        </tr>
+                      ))}
+                    {triangulation.exceptions.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-emerald-600 font-semibold">
+                          Zero exceptions found. All GSTIN checksums, HSN codes, and inter-state tax allocations are valid.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="p-8 text-center text-slate-500">Running diagnostic triangulation scan...</div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 5: LEDGER RECONCILIATION */}
       {activeTab === "summary" && (
         <div className="space-y-6">
           {report ? (
