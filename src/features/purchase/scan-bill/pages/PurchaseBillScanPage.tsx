@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   UploadCloud,
@@ -36,6 +36,7 @@ import type {
 import {
   parsePurchaseBillText,
   runOcrOnImage,
+  extractTextFromInvoiceDocument,
   BILL_PRESETS,
   type BillPresetInfo,
   getNatrajTelecomBill,
@@ -94,6 +95,30 @@ export function PurchaseBillScanPage() {
   const [selectedVendorId, setSelectedVendorId] = useState<string>("");
   const [savingInventory, setSavingInventory] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Duplicate serial numbers report state
+  const [duplicateReport, setDuplicateReport] = useState<{
+    duplicates: Array<{
+      serialNumber: string;
+      serialNumber1?: string | null;
+      billNumber?: string | null;
+      reason: string;
+    }>;
+    totalInserted: number;
+    totalDuplicates: number;
+    vendorId: string;
+    billNumber: string;
+  } | null>(null);
+
+  const duplicateSerialSet = useMemo(() => {
+    if (!duplicateReport) return new Set<string>();
+    const set = new Set<string>();
+    duplicateReport.duplicates.forEach((d) => {
+      if (d.serialNumber) set.add(d.serialNumber.trim().toLowerCase());
+      if (d.serialNumber1) set.add(d.serialNumber1.trim().toLowerCase());
+    });
+    return set;
+  }, [duplicateReport]);
 
   // Image controls
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -211,15 +236,28 @@ export function PurchaseBillScanPage() {
     }
   };
 
-  // Select one of the 4 sample bills
-  const handleSelectPreset = (preset: BillPresetInfo) => {
+  // Select one of the sample bills
+  const handleSelectPreset = async (preset: BillPresetInfo) => {
     setSelectedPresetId(preset.id);
-    setImageSrc(preset.imagePath);
     setImageFile(null);
     setZoomLevel(1);
     setRotation(0);
     const loadedBill = preset.getBill();
     setBill(loadedBill);
+
+    if (preset.imagePath.toLowerCase().endsWith(".pdf")) {
+      try {
+        const response = await fetch(preset.imagePath);
+        const blob = await response.blob();
+        const { previewUrl } = await extractTextFromInvoiceDocument(blob);
+        setImageSrc(previewUrl || preset.imagePath);
+      } catch {
+        setImageSrc(preset.imagePath);
+      }
+    } else {
+      setImageSrc(preset.imagePath);
+    }
+
     notifications.success(
       `Loaded: ${preset.vendorName}`,
       `Invoice ${preset.invoiceNo} (${preset.itemSummary}) extracted with verified line items.`
@@ -234,20 +272,28 @@ export function PurchaseBillScanPage() {
     }
 
     setSelectedPresetId("");
-    const objectUrl = URL.createObjectURL(file);
-    setImageSrc(objectUrl);
     setImageFile(file);
     setZoomLevel(1);
     setRotation(0);
 
     setIsScanning(true);
-    setScanProgress({ status: "Preparing image for scan…", percent: 10 });
+    setScanProgress({ status: "Preparing document for processing…", percent: 10 });
 
     try {
-      // Run browser OCR
-      const rawText = await runOcrOnImage(file, (status, percent) => {
-        setScanProgress({ status, percent });
-      });
+      // Run document extractor (supports PDF text + canvas render and image OCR)
+      const { text: rawText, previewUrl } = await extractTextFromInvoiceDocument(
+        file,
+        (status, percent) => {
+          setScanProgress({ status, percent });
+        }
+      );
+
+      if (previewUrl) {
+        setImageSrc(previewUrl);
+      } else {
+        const objectUrl = URL.createObjectURL(file);
+        setImageSrc(objectUrl);
+      }
 
       setScanProgress({ status: "Extracting invoice line items & totals…", percent: 95 });
       const parsed = parsePurchaseBillText(rawText);
@@ -397,15 +443,8 @@ export function PurchaseBillScanPage() {
       return;
     }
 
-    // Validation
-    const missingSerials = bill.items.some((i) => !i.serialNumber.trim());
-    if (missingSerials) {
-      notifications.error(
-        "Missing Serial Number",
-        "Every device item must have at least one Serial Number (IMEI) specified."
-      );
-      return;
-    }
+    // If any items have blank serial numbers (e.g. accessories or phones without IMEI on bill),
+    // an internal stock tracking serial will be automatically assigned upon database save.
 
     setSavingInventory(true);
     try {
@@ -538,6 +577,10 @@ export function PurchaseBillScanPage() {
 
         const resolvedTypeId = matchedModel?.productTypeId || defaultProductTypeId;
 
+        const fallbackSerial = `SN-${(item.hsnCode || "ITEM").replace(/\s+/g, "")}-${Date.now().toString().slice(-4)}-${idx + 1}`;
+        const effectiveSerial = item.serialNumber.trim() || fallbackSerial;
+        const effectiveSerial1 = item.serialNumber1?.trim() || null;
+
         return {
           vendorId: finalVendorId || currentVendors[0]?.id || "",
           brandId: resolvedBrandId,
@@ -545,8 +588,8 @@ export function PurchaseBillScanPage() {
           productModelId: resolvedModelId,
           variantId: resolvedVariantId,
           colorId: resolvedColorId,
-          serialNumber: item.serialNumber.trim(),
-          serialNumber1: item.serialNumber1.trim() || item.serialNumber.trim(),
+          serialNumber: effectiveSerial,
+          serialNumber1: effectiveSerial1,
           purchasePrice: item.taxableRate,
           discount: 0,
           cgst: item.cgstRate,
@@ -566,21 +609,61 @@ export function PurchaseBillScanPage() {
         }
       }
 
-      await apiClient.post("/products/bulk", { products: productsPayload });
-      setSaveSuccess(true);
-      notifications.success(
-        "Import Successful!",
-        `${bill.items.length} product(s) from Bill "${bill.header.billNumber}" have been saved to your stock inventory!`
-      );
+      interface BulkImportResponse {
+        products?: any[];
+        duplicates?: Array<{
+          serialNumber: string;
+          serialNumber1?: string | null;
+          billNumber?: string | null;
+          reason: string;
+        }>;
+        totalInserted?: number;
+        totalDuplicates?: number;
+      }
 
-      // Offer to navigate to payments or stock
-      setTimeout(() => {
-        navigate(
-          `${APP_ROUTES.purchase.accountingPayment}?vendorId=${encodeURIComponent(
-            finalVendorId || ""
-          )}&billNumber=${encodeURIComponent(bill.header.billNumber)}`
+      const res = await apiClient.post<BulkImportResponse>("/products/bulk", { products: productsPayload });
+
+      const insertedCount = res.totalInserted ?? (Array.isArray(res) ? res.length : (res.products?.length ?? 0));
+      const duplicatesList = res.duplicates ?? [];
+      const duplicateCount = res.totalDuplicates ?? duplicatesList.length;
+
+      if (duplicateCount > 0) {
+        setDuplicateReport({
+          duplicates: duplicatesList,
+          totalInserted: insertedCount,
+          totalDuplicates: duplicateCount,
+          vendorId: finalVendorId || "",
+          billNumber: bill.header.billNumber,
+        });
+
+        if (insertedCount > 0) {
+          setSaveSuccess(true);
+          notifications.warning(
+            "Partial Import Completed",
+            `${insertedCount} valid item(s) inserted into stock. ${duplicateCount} duplicate serial number(s) were skipped (already exist in database).`
+          );
+        } else {
+          notifications.error(
+            "Duplicate Serial Numbers",
+            `All ${duplicateCount} serial number(s) from this invoice already exist in your inventory database. None were inserted.`
+          );
+        }
+      } else {
+        setSaveSuccess(true);
+        notifications.success(
+          "Import Successful!",
+          `${insertedCount} product(s) from Bill "${bill.header.billNumber}" have been saved to your stock inventory!`
         );
-      }, 1500);
+
+        // Offer to navigate to payments or stock
+        setTimeout(() => {
+          navigate(
+            `${APP_ROUTES.purchase.accountingPayment}?vendorId=${encodeURIComponent(
+              finalVendorId || ""
+            )}&billNumber=${encodeURIComponent(bill.header.billNumber)}`
+          );
+        }, 1500);
+      }
     } catch (err) {
       notifications.error(
         "Inventory Save Failed",
@@ -619,7 +702,7 @@ export function PurchaseBillScanPage() {
       `"${i.variant}"`,
       `"${i.color}"`,
       `"${i.serialNumber}"`,
-      `"${i.serialNumber1}"`,
+      `"${i.serialNumber1 || ""}"`,
       i.hsnCode,
       i.quantity,
       i.taxableRate,
@@ -692,7 +775,7 @@ export function PurchaseBillScanPage() {
               Supported Sample Bills (Click any bill to load & inspect)
             </span>
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-              4 Real Invoices Verified
+              6 Distributor Invoices Verified
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -700,7 +783,7 @@ export function PurchaseBillScanPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {BILL_PRESETS.map((preset) => {
             const isSelected = selectedPresetId === preset.id;
             return (
@@ -1058,10 +1141,22 @@ export function PurchaseBillScanPage() {
                           ? models.filter((m) => !m.brandId || m.brandId === matchedBrand.id)
                           : models;
 
+                        const isDuplicate = Boolean(
+                          (item.serialNumber && duplicateSerialSet.has(item.serialNumber.trim().toLowerCase())) ||
+                          (item.serialNumber1 && duplicateSerialSet.has(item.serialNumber1.trim().toLowerCase()))
+                        );
+                        const isSuccessfullySaved = Boolean(saveSuccess && !isDuplicate);
+
                         return (
                           <tr
                             key={item.id}
-                            className="transition hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                            className={`transition ${
+                              isDuplicate
+                                ? "bg-amber-50/70 border-l-4 border-l-amber-500 dark:bg-amber-950/30"
+                                : isSuccessfullySaved
+                                ? "bg-emerald-50/40 border-l-4 border-l-emerald-500 dark:bg-emerald-950/20"
+                                : "hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                            }`}
                           >
                             <td className="py-2.5 px-2 font-mono text-center text-slate-400">
                               {index + 1}
@@ -1121,8 +1216,24 @@ export function PurchaseBillScanPage() {
                                 handleItemChange(item.id, "serialNumber", e.target.value)
                               }
                               placeholder="IMEI 1 (e.g. 8652...)"
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1 font-mono text-xs text-indigo-700 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-300"
+                              className={`w-full rounded-lg border px-2 py-1 font-mono text-xs outline-none ${
+                                isDuplicate
+                                  ? "border-amber-400 bg-amber-50/80 text-amber-900 font-bold dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200"
+                                  : "border-slate-200 text-indigo-700 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-300"
+                              }`}
                             />
+                            {isDuplicate && (
+                              <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                                <AlertTriangle className="size-2.5 text-amber-600" />
+                                <span>Already in DB (Skipped)</span>
+                              </div>
+                            )}
+                            {isSuccessfullySaved && (
+                              <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                                <CheckCircle2 className="size-2.5 text-emerald-600" />
+                                <span>Saved to Stock</span>
+                              </div>
+                            )}
                           </td>
 
                           {/* Serial Number 2 */}
@@ -1130,7 +1241,7 @@ export function PurchaseBillScanPage() {
                             <input
                               type="text"
                               maxLength={100}
-                              value={item.serialNumber1}
+                              value={item.serialNumber1 || ""}
                               onChange={(e) =>
                                 handleItemChange(item.id, "serialNumber1", e.target.value)
                               }
@@ -1323,6 +1434,119 @@ export function PurchaseBillScanPage() {
           )}
         </div>
       </div>
+      {/* Duplicate Serials Report Modal */}
+      {duplicateReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 p-5 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50">
+              <div className="flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  <AlertTriangle className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Duplicate Serial Numbers Report
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Invoice: <span className="font-mono font-semibold">{duplicateReport.billNumber}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {duplicateReport.totalInserted > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    <CheckCircle2 className="size-3.5" />
+                    {duplicateReport.totalInserted} Inserted
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  <AlertTriangle className="size-3.5" />
+                  {duplicateReport.totalDuplicates} Skipped
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 max-h-[60vh] overflow-y-auto space-y-4">
+              <div className="rounded-xl bg-amber-50/90 p-4 border border-amber-200 dark:bg-amber-950/40 dark:border-amber-900 text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+                {duplicateReport.totalInserted > 0 ? (
+                  <>
+                    <strong>Partial Import Notice:</strong> <strong>{duplicateReport.totalInserted}</strong> valid product(s) have been successfully saved into your stock inventory. The <strong>{duplicateReport.totalDuplicates}</strong> serial number(s) listed below already exist in the database and were skipped to prevent double-entry.
+                  </>
+                ) : (
+                  <>
+                    <strong>Duplicate Warning:</strong> All <strong>{duplicateReport.totalDuplicates}</strong> serial number(s) in this invoice already exist in your inventory database. No new entries were added.
+                  </>
+                )}
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                      <th className="py-2.5 px-3 text-center w-10">#</th>
+                      <th className="py-2.5 px-3">Serial / IMEI 1</th>
+                      <th className="py-2.5 px-3">Serial / IMEI 2</th>
+                      <th className="py-2.5 px-3">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {duplicateReport.duplicates.map((dup, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-3 text-center font-mono text-slate-400">{i + 1}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-amber-700 dark:text-amber-300">
+                          <span className="rounded bg-amber-100 px-2 py-0.5 dark:bg-amber-950">
+                            {dup.serialNumber}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-slate-500">
+                          {dup.serialNumber1 || "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-rose-600 dark:text-rose-400 font-medium text-[11px]">
+                          {dup.reason}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Duplicates are highlighted in amber in the line items grid.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateReport(null)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  Close Report
+                </button>
+                {duplicateReport.totalInserted > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate(
+                        `${APP_ROUTES.purchase.accountingPayment}?vendorId=${encodeURIComponent(
+                          duplicateReport.vendorId
+                        )}&billNumber=${encodeURIComponent(duplicateReport.billNumber)}`
+                      );
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-700"
+                  >
+                    <span>Proceed to Payment Voucher</span>
+                    <ArrowRight className="size-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

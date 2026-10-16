@@ -75,7 +75,7 @@ interface ProductRowItem {
   colorId: string;
   colorName?: string;
   serialNumber: string;
-  serialNumber1: string;
+  serialNumber1?: string | null;
   purchasePrice: number;
   discount: number;
   cgst: number;
@@ -758,7 +758,7 @@ function BulkProductCreateForm() {
     const source = rows[index];
     if (!source) return;
     const s1 = source.serialNumber.trim();
-    let s2 = source.serialNumber1.trim();
+    let s2 = source.serialNumber1?.trim() || "";
     if (s1.length > 2) {
       const last = Number(s1.slice(-1));
       s2 = !isNaN(last) ? `${s1.slice(0, -1)}${(last + 1) % 10}` : "";
@@ -814,10 +814,10 @@ function BulkProductCreateForm() {
     // Validate rows
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i]!;
-      if (!r.serialNumber.trim() || !r.serialNumber1.trim()) {
+      if (!r.serialNumber.trim()) {
         notifications.error(
-          "Serial Numbers Missing",
-          `Unit row #${i + 1} (${r.description || `Line ${i + 1}`}) requires both Serial Number and Serial Number 1.`
+          "Serial Number Missing",
+          `Unit row #${i + 1} (${r.description || `Line ${i + 1}`}) requires a Serial Number / IMEI.`
         );
         return;
       }
@@ -829,7 +829,7 @@ function BulkProductCreateForm() {
 
     // Check duplicate serials across rows
     const allSerials = rows
-      .flatMap((r) => [r.serialNumber.trim().toLowerCase(), r.serialNumber1.trim().toLowerCase()])
+      .flatMap((r) => [r.serialNumber.trim().toLowerCase(), (r.serialNumber1 || "").trim().toLowerCase()])
       .filter(Boolean);
     const set = new Set(allSerials);
     if (set.size !== allSerials.length) {
@@ -964,7 +964,7 @@ function BulkProductCreateForm() {
         variantId: r.variantId,
         colorId: r.colorId,
         serialNumber: r.serialNumber.trim(),
-        serialNumber1: r.serialNumber1.trim(),
+        serialNumber1: r.serialNumber1?.trim() || null,
         purchasePrice: Number(r.purchasePrice) || 0,
         discount: Number(r.discount) || 0,
         cgst: Number(r.cgst) || 0,
@@ -1468,7 +1468,7 @@ function BulkProductCreateForm() {
                 <th className="py-2.5 px-3 min-w-[110px]">Variant</th>
                 <th className="py-2.5 px-3 min-w-[110px]">Color</th>
                 <th className="py-2.5 px-3 min-w-[150px]">IMEI / Serial 1 <span className="text-red-500">*</span></th>
-                <th className="py-2.5 px-3 min-w-[150px]">IMEI / Serial 2 <span className="text-red-500">*</span></th>
+                <th className="py-2.5 px-3 min-w-[150px]">IMEI / Serial 2 <span className="text-slate-400 font-normal">(Optional)</span></th>
                 <th className="py-2.5 px-3 min-w-[100px] text-right">Taxable Rate (₹)</th>
                 <th className="py-2.5 px-3 min-w-[70px] text-right">GST %</th>
                 <th className="py-2.5 px-3 min-w-[110px] text-right">Total (₹)</th>
@@ -1589,16 +1589,11 @@ function BulkProductCreateForm() {
                     <td className="py-2 px-3">
                       <input
                         type="text"
-                        required
                         maxLength={100}
-                        value={row.serialNumber1}
+                        value={row.serialNumber1 || ""}
                         onChange={(e) => updateRowField(row.id, "serialNumber1", e.target.value)}
-                        placeholder="e.g. 865238087752276"
-                        className={`w-full rounded-lg border px-2 py-1.5 font-mono text-xs outline-none focus:border-indigo-500 dark:bg-slate-800 dark:text-white ${
-                          !row.serialNumber1.trim()
-                            ? "border-amber-300 bg-amber-50/50 dark:border-amber-800"
-                            : "border-slate-200 bg-white dark:border-slate-700"
-                        }`}
+                        placeholder="e.g. 865238087752276 (optional)"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </td>
 
@@ -1767,8 +1762,8 @@ function BulkProductUpdateForm() {
       submitLabel={`Update ${selectedProducts.length} ${selectedProducts.length === 1 ? "product" : "products"}`}
       onCancel={() => navigate(productResource.listPath)}
       onSubmit={async (values) => {
-        if (serialPairs.some((pair) => !pair.serialNumber.trim() || !pair.serialNumber1.trim()))
-          throw new Error("Enter both serial numbers for every selected product.");
+        if (serialPairs.some((pair) => !pair.serialNumber.trim()))
+          throw new Error("Enter a serial number for every selected product.");
         const products = selectedProducts.map((product, index) => {
           const pair = serialPairs[index] ?? { serialNumber: "", serialNumber1: "" };
           return {
@@ -1781,7 +1776,7 @@ function BulkProductUpdateForm() {
             colorId: product.colorId,
             billNumber: product.billNumber,
             serialNumber: pair.serialNumber.trim(),
-            serialNumber1: pair.serialNumber1.trim(),
+            serialNumber1: pair.serialNumber1.trim() || null,
             purchasePrice: Number(values.purchasePrice),
             discount: Number(values.discount ?? 0),
             cgst: Number(values.cgst ?? 0),
@@ -1801,8 +1796,8 @@ function BulkProductUpdateForm() {
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Serial Number
               <input required maxLength={100} autoComplete="off" value={serialPairs[index]?.serialNumber ?? ""} onChange={(event) => setSerialPairs((current) => current.map((pair, pairIndex) => pairIndex === index ? { ...pair, serialNumber: event.target.value } : pair))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
             </label>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Serial Number 1
-              <input required maxLength={100} autoComplete="off" value={serialPairs[index]?.serialNumber1 ?? ""} onChange={(event) => setSerialPairs((current) => current.map((pair, pairIndex) => pairIndex === index ? { ...pair, serialNumber1: event.target.value } : pair))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Serial Number 1 (Optional)
+              <input maxLength={100} autoComplete="off" value={serialPairs[index]?.serialNumber1 ?? ""} onChange={(event) => setSerialPairs((current) => current.map((pair, pairIndex) => pairIndex === index ? { ...pair, serialNumber1: event.target.value } : pair))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
             </label>
           </div>)}
         </div>

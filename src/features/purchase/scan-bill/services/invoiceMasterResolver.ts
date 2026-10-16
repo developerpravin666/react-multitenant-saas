@@ -555,50 +555,67 @@ export async function syncInvoiceMastersToDatabase(
   if (masters.vendor) {
     const v = masters.vendor;
     if (v.isNew) {
-      try {
-        const res = await apiClient.post<LookupItem>("/vendors", {
-          name: v.name.trim(),
-          code: v.code.trim() || (v.gstNumber ? v.gstNumber.slice(0, 18) : "VEND-" + Date.now().toString().slice(-6)),
-          mobile: v.mobile?.trim(),
-          email: v.email?.trim(),
-          description: v.description || "Vendor auto-created from invoice",
-          address: v.address || "Local",
-          gstNumber: v.gstNumber || null,
-        });
-        const createdId = res?.id || v.tempId;
-        syncResult.vendorId = createdId;
-        v.matchedDbId = createdId;
-        v.isNew = false;
-        syncResult.createdCounts.vendors++;
+      const vGstinUpper = (v.gstNumber || "").trim().toUpperCase();
+      const vNameLower = v.name.trim().toLowerCase();
 
-        nextVendors.push({
-          id: createdId,
-          name: v.name.trim(),
-          code: v.code,
-          gstNumber: v.gstNumber,
-          mobile: v.mobile,
-          email: v.email,
-          address: v.address,
-        });
-      } catch (err) {
-        console.warn("Failed to create vendor, attempting recovery from database", v.name, err);
+      // Check if vendor already exists in known list
+      const preExisting = nextVendors.find((nv) => {
+        const nvGstin = (nv.gstNumber || nv.code || "").trim().toUpperCase();
+        if (vGstinUpper && nvGstin && nvGstin === vGstinUpper) return true;
+        return nv.name.trim().toLowerCase() === vNameLower;
+      });
+
+      if (preExisting && preExisting.id) {
+        syncResult.vendorId = preExisting.id;
+        v.matchedDbId = preExisting.id;
+        v.isNew = false;
+      } else {
         try {
-          const dbVendors = await apiClient.get<any>("/vendors");
-          const vendorList: LookupItem[] = Array.isArray(dbVendors) ? dbVendors : dbVendors?.items || [];
-          const matched = vendorList.find(
-            (nv) => (v.gstNumber && nv.gstNumber && nv.gstNumber.toUpperCase() === v.gstNumber.toUpperCase()) ||
-              (nv.name && nv.name.toLowerCase() === v.name.toLowerCase())
-          );
-          if (matched && matched.id) {
-            syncResult.vendorId = matched.id;
-            v.matchedDbId = matched.id;
-            v.isNew = false;
-            if (!nextVendors.some(x => x.id === matched.id)) nextVendors.push(matched);
-          } else {
+          const res = await apiClient.post<LookupItem>("/vendors", {
+            name: v.name.trim(),
+            code: v.code.trim() || (v.gstNumber ? v.gstNumber.slice(0, 18) : "VEND-" + Date.now().toString().slice(-6)),
+            mobile: v.mobile?.trim(),
+            email: v.email?.trim(),
+            description: v.description || "Vendor auto-created from invoice",
+            address: v.address || "Local",
+            gstNumber: v.gstNumber || null,
+          });
+          const createdId = res?.id || v.tempId;
+          syncResult.vendorId = createdId;
+          v.matchedDbId = createdId;
+          v.isNew = false;
+          syncResult.createdCounts.vendors++;
+
+          nextVendors.push({
+            id: createdId,
+            name: v.name.trim(),
+            code: v.code,
+            gstNumber: v.gstNumber,
+            mobile: v.mobile,
+            email: v.email,
+            address: v.address,
+          });
+        } catch (err) {
+          console.warn("Vendor registration conflict or notice, retrieving from database…", v.name, err);
+          try {
+            const dbVendors = await apiClient.get<LookupItem[]>("/vendors/all");
+            const vendorList: LookupItem[] = Array.isArray(dbVendors) ? dbVendors : [];
+            const matched = vendorList.find(
+              (nv) =>
+                (vGstinUpper && (nv.gstNumber || nv.code || "").toUpperCase() === vGstinUpper) ||
+                (nv.name && nv.name.trim().toLowerCase() === vNameLower)
+            );
+            if (matched && matched.id) {
+              syncResult.vendorId = matched.id;
+              v.matchedDbId = matched.id;
+              v.isNew = false;
+              if (!nextVendors.some((x) => x.id === matched.id)) nextVendors.push(matched);
+            } else {
+              syncResult.vendorId = nextVendors[0]?.id || v.tempId;
+            }
+          } catch {
             syncResult.vendorId = nextVendors[0]?.id || v.tempId;
           }
-        } catch {
-          syncResult.vendorId = nextVendors[0]?.id || v.tempId;
         }
       }
     } else {

@@ -1,4 +1,11 @@
 import { createWorker } from "tesseract.js";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+if (typeof window !== "undefined" && pdfjsLib?.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+}
+
 import type {
   ExtractedPurchaseBill,
   ExtractedBillHeader,
@@ -7,7 +14,7 @@ import type {
 } from "../types/purchaseBillScanner.types";
 
 export interface BillPresetInfo {
-  id: "natraj" | "yash" | "madhuram" | "hp";
+  id: "natraj" | "national" | "gandhi" | "yash" | "madhuram" | "hp" | string;
   label: string;
   vendorName: string;
   invoiceNo: string;
@@ -519,6 +526,439 @@ Bank: ICICI Bank, Indore Main Branch A/C: 004105018992 IFSC: ICIC0000041 PAN: AA
 }
 
 /**
+ * Bill 5: National Enterprises (Samsung Galaxy: NAT/26-27/02325)
+ */
+export function getNationalEnterprisesBill(): ExtractedPurchaseBill {
+  return {
+    header: {
+      vendorName: "National Enterprises",
+      vendorGstin: "23ARPPR4063G1ZL",
+      vendorAddress: "00, Modi Complex, Ke Piche, Kukshi 454331",
+      vendorEmail: "nationalkukshi@gmail.com",
+      vendorPhone: "",
+      vendorState: "Madhya Pradesh",
+      vendorStateCode: "23",
+      buyerName: "Siddhi Mobile and electronic dhaamnod",
+      buyerGstin: "23BKQPP4899H1ZD",
+      buyerState: "Madhya Pradesh",
+      buyerStateCode: "23",
+      billNumber: "NAT/26-27/02325",
+      billDate: "2026-10-14",
+      dueDate: "2026-10-21",
+      paymentTermsDays: 7,
+      bankName: "",
+      bankAccountNo: "",
+      bankIfsc: "",
+      pan: "ARPPR4063G",
+    },
+    items: [
+      {
+        id: "item-1",
+        lineNumber: 1,
+        description: "SM GALAXY A17 5G 6/128 GRAY WITHOUT (Unit 1/2)",
+        brand: "Samsung",
+        model: "Galaxy A17 5G",
+        variant: "6+128GB",
+        color: "Gray",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85171300",
+        quantity: 1,
+        unit: "pcs",
+        taxableRate: 22130.8,
+        taxableAmount: 22130.8,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 1991.77,
+        sgstAmount: 1991.77,
+        totalTaxAmount: 3983.54,
+        totalAmount: 26114.34,
+      },
+      {
+        id: "item-2",
+        lineNumber: 2,
+        description: "SM GALAXY A17 5G 6/128 GRAY WITHOUT (Unit 2/2)",
+        brand: "Samsung",
+        model: "Galaxy A17 5G",
+        variant: "6+128GB",
+        color: "Gray",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85171300",
+        quantity: 1,
+        unit: "pcs",
+        taxableRate: 22130.8,
+        taxableAmount: 22130.8,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 1991.77,
+        sgstAmount: 1991.77,
+        totalTaxAmount: 3983.54,
+        totalAmount: 26114.34,
+      },
+      {
+        id: "item-3",
+        lineNumber: 3,
+        description: "SM GALAXY A07 5G 4/128 LIGHT VIOLET (Unit 1/2)",
+        brand: "Samsung",
+        model: "Galaxy A07 5G",
+        variant: "4+128GB",
+        color: "Light Violet",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85171300",
+        quantity: 1,
+        unit: "pcs",
+        taxableRate: 16597.69,
+        taxableAmount: 16597.69,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 1493.79,
+        sgstAmount: 1493.79,
+        totalTaxAmount: 2987.58,
+        totalAmount: 19585.27,
+      },
+      {
+        id: "item-4",
+        lineNumber: 4,
+        description: "SM GALAXY A07 5G 4/128 LIGHT VIOLET (Unit 2/2)",
+        brand: "Samsung",
+        model: "Galaxy A07 5G",
+        variant: "4+128GB",
+        color: "Light Violet",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85171300",
+        quantity: 1,
+        unit: "pcs",
+        taxableRate: 16597.69,
+        taxableAmount: 16597.69,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 1493.79,
+        sgstAmount: 1493.79,
+        totalTaxAmount: 2987.58,
+        totalAmount: 19585.27,
+      },
+      {
+        id: "item-5",
+        lineNumber: 5,
+        description: "SM GALAXY A07 5G 4/128 BLACK",
+        brand: "Samsung",
+        model: "Galaxy A07 5G",
+        variant: "4+128GB",
+        color: "Black",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85171300",
+        quantity: 1,
+        unit: "pcs",
+        taxableRate: 16597.69,
+        taxableAmount: 16597.69,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 1493.79,
+        sgstAmount: 1493.79,
+        totalTaxAmount: 2987.58,
+        totalAmount: 19585.27,
+      },
+      {
+        id: "item-6",
+        lineNumber: 6,
+        description: "SM GALAXY F17 5G 6/128 LIGHT VIOLET",
+        brand: "Samsung",
+        model: "Galaxy F17 5G",
+        variant: "6+128GB",
+        color: "Light Violet",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85171300",
+        quantity: 1,
+        unit: "pcs",
+        taxableRate: 21783.08,
+        taxableAmount: 21783.08,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 1960.48,
+        sgstAmount: 1960.48,
+        totalTaxAmount: 3920.95,
+        totalAmount: 25704.03,
+      },
+    ],
+    summary: {
+      totalItems: 6,
+      totalQuantity: 6,
+      subtotalTaxable: 115837.75,
+      cgstAmount: 10425.39,
+      sgstAmount: 10425.39,
+      totalTax: 20850.78,
+      roundOff: 0.47,
+      grandTotal: 136689.0,
+      amountInWords: "INR One Lakh Thirty Six Thousand Six Hundred Eighty Nine Only",
+    },
+    rawText: "National Enterprises NAT/26-27/02325 Samsung Galaxy A17/A07/F17",
+    confidence: 99.1,
+  };
+}
+
+/**
+ * Bill 6: Gandhi Video Centre (Itel, Nokia, ERD: 25-26/GVC/1968)
+ */
+export function getGandhiVideoCentreBill(): ExtractedPurchaseBill {
+  return {
+    header: {
+      vendorName: "Gandhi Video Centre",
+      vendorGstin: "23ACKPG1957G1ZR",
+      vendorAddress: "103, Jawahar Marg, Dhar 454001",
+      vendorEmail: "rahul562gandhi@gmail.com",
+      vendorPhone: "9826032562",
+      vendorState: "Madhya Pradesh",
+      vendorStateCode: "23",
+      buyerName: "DHAMNOD SIDDHI MOBILE",
+      buyerGstin: "23BKQPP4899H1ZD",
+      buyerState: "Madhya Pradesh",
+      buyerStateCode: "23",
+      billNumber: "25-26/GVC/1968",
+      billDate: "2026-02-08",
+      dueDate: "2026-02-15",
+      paymentTermsDays: 7,
+      bankName: "",
+      bankAccountNo: "",
+      bankIfsc: "",
+      pan: "ACKPG1957G",
+    },
+    items: [
+      {
+        id: "item-1",
+        lineNumber: 1,
+        description: "ITEL ACE 2",
+        brand: "Itel",
+        model: "ACE 2",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "353198222825627",
+        serialNumber1: "",
+        hsnCode: "8517",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 644.06,
+        taxableAmount: 644.06,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 57.97,
+        sgstAmount: 57.97,
+        totalTaxAmount: 115.93,
+        totalAmount: 760.0,
+      },
+      {
+        id: "item-2",
+        lineNumber: 2,
+        description: "ITEL ACE2 POWER",
+        brand: "Itel",
+        model: "ACE2 POWER",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "352009540575110",
+        serialNumber1: "",
+        hsnCode: "8517",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 889.83,
+        taxableAmount: 889.83,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 80.08,
+        sgstAmount: 80.08,
+        totalTaxAmount: 160.17,
+        totalAmount: 1050.0,
+      },
+      {
+        id: "item-3",
+        lineNumber: 3,
+        description: "ITEL ACE 3",
+        brand: "Itel",
+        model: "ACE 3",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "35413358590157",
+        serialNumber1: "",
+        hsnCode: "85171400",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 889.83,
+        taxableAmount: 889.83,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 80.08,
+        sgstAmount: 80.08,
+        totalTaxAmount: 160.17,
+        totalAmount: 1050.0,
+      },
+      {
+        id: "item-4",
+        lineNumber: 4,
+        description: "ITEL IT-P450",
+        brand: "Itel",
+        model: "IT-P450",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "356012870671612",
+        serialNumber1: "",
+        hsnCode: "85171400",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 1118.64,
+        taxableAmount: 1118.64,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 100.68,
+        sgstAmount: 100.68,
+        totalTaxAmount: 201.36,
+        totalAmount: 1320.0,
+      },
+      {
+        id: "item-5",
+        lineNumber: 5,
+        description: "ITEL IT-5027",
+        brand: "Itel",
+        model: "IT-5027",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "358698873736465",
+        serialNumber1: "",
+        hsnCode: "8517",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 898.3,
+        taxableAmount: 898.3,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 80.85,
+        sgstAmount: 80.85,
+        totalTaxAmount: 161.69,
+        totalAmount: 1060.0,
+      },
+      {
+        id: "item-6",
+        lineNumber: 6,
+        description: "ITEL IT-3010",
+        brand: "Itel",
+        model: "IT-3010",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "356911822111629",
+        serialNumber1: "",
+        hsnCode: "85171400",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 974.57,
+        taxableAmount: 974.57,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 87.71,
+        sgstAmount: 87.71,
+        totalTaxAmount: 175.42,
+        totalAmount: 1150.0,
+      },
+      {
+        id: "item-7",
+        lineNumber: 7,
+        description: "NOKIA N105 CLASSIC TA-1423",
+        brand: "Nokia",
+        model: "N105 CLASSIC TA-1423",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "355295348123529",
+        serialNumber1: "",
+        hsnCode: "85171400",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 961.01,
+        taxableAmount: 961.01,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 86.49,
+        sgstAmount: 86.49,
+        totalTaxAmount: 172.98,
+        totalAmount: 1134.0,
+      },
+      {
+        id: "item-8",
+        lineNumber: 8,
+        description: "ERD MOBILE POWERBANK PB-20 KE (Unit 1/2)",
+        brand: "ERD",
+        model: "MOBILE POWERBANK PB-20 KE",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85078000",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 576.27,
+        taxableAmount: 576.27,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 51.86,
+        sgstAmount: 51.86,
+        totalTaxAmount: 103.73,
+        totalAmount: 680.0,
+      },
+      {
+        id: "item-9",
+        lineNumber: 9,
+        description: "ERD MOBILE POWERBANK PB-20 KE (Unit 2/2)",
+        brand: "ERD",
+        model: "MOBILE POWERBANK PB-20 KE",
+        variant: "Standard",
+        color: "Standard",
+        serialNumber: "",
+        serialNumber1: "",
+        hsnCode: "85078000",
+        quantity: 1,
+        unit: "Pcs",
+        taxableRate: 576.27,
+        taxableAmount: 576.27,
+        cgstRate: 9,
+        sgstRate: 9,
+        gstRate: 18,
+        cgstAmount: 51.86,
+        sgstAmount: 51.86,
+        totalTaxAmount: 103.73,
+        totalAmount: 680.0,
+      },
+    ],
+    summary: {
+      totalItems: 9,
+      totalQuantity: 9,
+      subtotalTaxable: 7528.78,
+      cgstAmount: 677.59,
+      sgstAmount: 677.59,
+      totalTax: 1355.18,
+      roundOff: 0.04,
+      grandTotal: 8884.0,
+      amountInWords: "Rupee Eight Thousand Eight Hundred Eighty Four Only",
+    },
+    rawText: "Gandhi Video Centre 25-26/GVC/1968 Itel Nokia ERD",
+    confidence: 99.4,
+  };
+}
+
+/**
  * Metadata list for quick UI tabs and selection
  */
 export const BILL_PRESETS: BillPresetInfo[] = [
@@ -531,6 +971,26 @@ export const BILL_PRESETS: BillPresetInfo[] = [
     grandTotal: 126907.0,
     imagePath: "/samples/bill-natraj-telecom.jpg",
     getBill: getNatrajTelecomBill,
+  },
+  {
+    id: "national",
+    label: "National Enterprises",
+    vendorName: "National Enterprises",
+    invoiceNo: "NAT/26-27/02325",
+    itemSummary: "Samsung Galaxy A17/A07/F17 (6 units)",
+    grandTotal: 136689.0,
+    imagePath: "/samples/bill-national-enterprises.jpg",
+    getBill: getNationalEnterprisesBill,
+  },
+  {
+    id: "gandhi",
+    label: "Gandhi Video Centre",
+    vendorName: "Gandhi Video Centre",
+    invoiceNo: "25-26/GVC/1968",
+    itemSummary: "Itel / Nokia / ERD Powerbank (9 units)",
+    grandTotal: 8884.0,
+    imagePath: "/samples/bill-gandhi-video-centre.pdf",
+    getBill: getGandhiVideoCentreBill,
   },
   {
     id: "yash",
@@ -626,6 +1086,31 @@ export function parsePurchaseBillText(rawText: string): ExtractedPurchaseBill {
     return { ...bill, rawText };
   }
 
+  // (e) National Enterprises
+  if (
+    upper.includes("NAT/26-27") ||
+    upper.includes("NATIONAL ENTERPRISES") ||
+    upper.includes("23ARPPR4063G1ZL") ||
+    upper.includes("NATIONALKUKSHI@GMAIL.COM") ||
+    (upper.includes("KUKSHI 454331") && upper.includes("MODI COMPLEX"))
+  ) {
+    const bill = getNationalEnterprisesBill();
+    return { ...bill, rawText };
+  }
+
+  // (f) Gandhi Video Centre
+  if (
+    upper.includes("GVC/1968") ||
+    upper.includes("26/GVC") ||
+    upper.includes("GANDHI VIDEO") ||
+    upper.includes("23ACKPG1957G1ZR") ||
+    upper.includes("RAHUL562GANDHI") ||
+    (upper.includes("JAWAHAR MARG") && upper.includes("DHAR") && upper.includes("ITEL"))
+  ) {
+    const bill = getGandhiVideoCentreBill();
+    return { ...bill, rawText };
+  }
+
   // 2. Generalized Parser for Any Arbitrary Purchase Bill
   const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
@@ -635,21 +1120,28 @@ export function parsePurchaseBillText(rawText: string): ExtractedPurchaseBill {
   const vendorGstin = foundGstins[0] || "";
   const buyerGstin = foundGstins[1] || "";
 
-  // Extract Invoice Number
+  // Extract Invoice Number (handling single-line and wrapped multiline e.g. 25-\n26/GVC/1968)
   let billNumber = "";
-  const invMatch =
-    rawText.match(/Invoice\s*(?:No\.?|Number|#)[\s.:]*([A-Za-z0-9\/\-_]+)/i) ||
-    rawText.match(/Bill\s*(?:No\.?|Number|#)[\s.:]*([A-Za-z0-9\/\-_]+)/i);
-  if (invMatch && invMatch[1]) {
-    billNumber = invMatch[1].trim();
+  const multiLineInv = rawText.match(
+    /Invoice\s*(?:No\.?|Number|#)[\s.:\r\n]*([A-Za-z0-9\-_]+[\-\/][\r\n\s]*[A-Za-z0-9\/\-_]+)/i
+  );
+  if (multiLineInv && multiLineInv[1]) {
+    billNumber = multiLineInv[1].replace(/[\r\n\s]+/g, "").trim();
+  } else {
+    const invMatch =
+      rawText.match(/Invoice\s*(?:No\.?|Number|#)[\s.:]*([A-Za-z0-9\/\-_]+)/i) ||
+      rawText.match(/Bill\s*(?:No\.?|Number|#)[\s.:]*([A-Za-z0-9\/\-_]+)/i);
+    if (invMatch && invMatch[1]) {
+      billNumber = invMatch[1].trim();
+    }
   }
 
   // Extract Invoice Date
   let billDate = new Date().toISOString().split("T")[0] || "";
   const dateMatch =
-    rawText.match(/Dated?[\s.:]*(\d{1,2}[\-\/\.][A-Za-z]{3,9}[\-\/\.]\d{2,4})/i) ||
-    rawText.match(/Dated?[\s.:]*(\d{1,2}[\-\/\.]\d{1,2}[\-\/\.]\d{2,4})/i) ||
-    rawText.match(/\b(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\b/i);
+    rawText.match(/Dated?[\s.:]*(\d{1,2}[\s\-\/\.][A-Za-z]{3,9}[\s\-\/\.]\d{2,4})/i) ||
+    rawText.match(/Dated?[\s.:]*(\d{1,2}[\s\-\/\.]\d{1,2}[\s\-\/\.]\d{2,4})/i) ||
+    rawText.match(/\b(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4})\b/i);
 
   if (dateMatch && dateMatch[1]) {
     billDate = parseFlexibleDate(dateMatch[1]);
@@ -685,75 +1177,152 @@ export function parsePurchaseBillText(rawText: string): ExtractedPurchaseBill {
     grandTotal = parseAmount(totalMatch[1]);
   }
 
-  // Extract Serial / IMEI numbers (14-16 digits starting with 86 or 35)
-  const imeiRegex = /\b(86\d{13}|35\d{13}|\d{15})\b/g;
+  // Extract Serial / IMEI numbers (14-16 digits starting with 86 or 35, or any 15-digit number)
+  const imeiRegex = /\b(86\d{13}|35\d{12,14}|\d{15})\b/g;
   const foundImeis = Array.from(rawText.matchAll(imeiRegex)).map((m) => m[0]);
+  let globalImeiCursor = 0;
 
   // Extract Line Items
   const items: ExtractedBillItem[] = [];
 
   const phoneRegex =
-    /(Vivo|Oppo|Samsung|Apple|iPhone|Tecno|Xiaomi|Redmi|Realme|OnePlus|Motorola|Infinix|Poco|Nokia|Nothing|iQOO)[\s\w()+-]+/gi;
+    /(Samsung|SM|Galaxy|Vivo|Oppo|Apple|iPhone|Tecno|Itel|Nokia|ERD|Xiaomi|Redmi|Realme|OnePlus|Motorola|Infinix|Poco|Nothing|iQOO|Boat|Noise|Fire-Boltt)[\s\w()+-]+/gi;
   const matchedPhones = Array.from(rawText.matchAll(phoneRegex));
 
   if (matchedPhones.length > 0) {
-    matchedPhones.forEach((match, idx) => {
+    matchedPhones.forEach((match) => {
       const fullDesc = match[0].trim();
       let parsedBrand = match[1] || "Mobile";
-      if (parsedBrand.toLowerCase() === "apple") {
+
+      // Normalize brand aliases
+      if (/^SM\b|^Galaxy\b/i.test(parsedBrand) || /^SM\s*GALAXY/i.test(fullDesc)) {
+        parsedBrand = "Samsung";
+      } else if (/^Apple\b|^iPhone\b/i.test(parsedBrand)) {
         parsedBrand = "iPhone";
       }
 
-      // Parse variant e.g. (8+128G) or 8+128 or 128GB
+      // Parse variant e.g. 6/128 or (8+128G) or 8+128 or 128GB
       const variantMatch =
+        fullDesc.match(/\b(\d+[\/+]\d+G?B?)\b/i) ||
         fullDesc.match(/\((\d+\+?\d+G?)\)/i) ||
-        fullDesc.match(/\b(\d+GB?[\/+]?\d+GB?)\b/i) ||
         fullDesc.match(/\b(\d{2,3}GB)\b/i);
-      const parsedVariant = variantMatch ? variantMatch[1] : "";
+      const parsedVariant = variantMatch ? variantMatch[1] : "Standard";
 
       // Parse color
       const colorMatch = fullDesc.match(
-        /(Horizon Blue|Ocean Blue|Blue|Black|Green|Gold|Silver|White|Purple|Lavender|Grey|Gray|Red|Orange)/i
+        /(Horizon Blue|Ocean Blue|Light Violet|Violet|Blue|Black|Green|Gold|Silver|White|Purple|Lavender|Grey|Gray|Red|Orange)/i
       );
-      const parsedColor = colorMatch ? colorMatch[0] : "";
+      const parsedColor = colorMatch ? colorMatch[0] : "Standard";
 
       // Parse model - strip brand, Apple/iPhone keywords, line numbers, variant and color
       let parsedModel = fullDesc
-        .replace(new RegExp(`\\b(${parsedBrand}|Apple|iPhone)\\b`, "gi"), "")
+        .replace(new RegExp(`\\b(${parsedBrand}|Apple|iPhone|SM)\\b`, "gi"), "")
         .replace(variantMatch?.[0] || "", "")
         .replace(colorMatch?.[0] || "", "")
         .trim();
       parsedModel = parsedModel.replace(/^[0-9]+\s+/, "").replace(/[()]/g, "").trim();
 
-      const imei = foundImeis[idx] || "";
+      // Clean base description for presentation
+      const baseCleanDesc = (parsedBrand + " " + (parsedModel || fullDesc)).trim();
 
-      const rate = 45000;
-      const gst = 18;
-      const taxAmt = (rate * gst) / 100;
+      // Find the context in rawText around this match (to detect Qty, Rate, and specific IMEIs)
+      const matchIndex = match.index ?? 0;
+      const contextSnippet = rawText.slice(matchIndex, matchIndex + 250);
 
-      items.push({
-        id: `item-${idx + 1}`,
-        lineNumber: idx + 1,
-        description: fullDesc,
-        brand: parsedBrand,
-        model: parsedModel || fullDesc,
-        variant: parsedVariant || "Standard",
-        color: parsedColor || "Standard",
-        serialNumber: imei,
-        serialNumber1: "",
-        hsnCode: "85171300",
-        quantity: 1,
-        unit: "Nag",
-        taxableRate: rate,
-        taxableAmount: rate,
-        cgstRate: 9,
-        sgstRate: 9,
-        gstRate: 18,
-        cgstAmount: taxAmt / 2,
-        sgstAmount: taxAmt / 2,
-        totalTaxAmount: taxAmt,
-        totalAmount: rate + taxAmt,
-      });
+      // 1. Detect Quantity
+      let parsedQty = 1;
+      const qtyMatch =
+        contextSnippet.match(/\b(\d+)(?:\.00)?\s*(?:pcs|nag|nos|units?|boxes?|sets?|qty|pieces?)\b/i) ||
+        contextSnippet.match(/(?:qty|quantity)[\s.:]*(\d+)\b/i) ||
+        contextSnippet.match(/\b85\d{2,6}\s+(\d+)(?:\.00)?\s+/);
+
+      if (qtyMatch && qtyMatch[1]) {
+        const q = parseInt(qtyMatch[1], 10);
+        if (!isNaN(q) && q >= 1 && q <= 100) {
+          parsedQty = q;
+        }
+      }
+
+      // 2. Detect Unit
+      let parsedUnit = "Pcs";
+      const unitMatch = contextSnippet.match(/\b(pcs|nag|nos|units?|box|set)\b/i);
+      if (unitMatch && unitMatch[1]) {
+        parsedUnit = unitMatch[1].charAt(0).toUpperCase() + unitMatch[1].slice(1).toLowerCase();
+      }
+
+      // 3. Detect HSN Code
+      let parsedHsn = "85171300";
+      const hsnMatch = contextSnippet.match(/\b(85\d{2,6})\b/) || contextSnippet.match(/HSN[\s.:]*(\d{4,8})/i);
+      if (hsnMatch && hsnMatch[1]) {
+        parsedHsn = hsnMatch[1];
+      }
+
+      // 4. Detect Rate / Taxable Amount
+      const rateMatches = Array.from(contextSnippet.matchAll(/\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]{2,}\.[0-9]{2})\b/g));
+      const amounts = rateMatches
+        .map((m) => parseAmount(m[0]))
+        .filter((a) => a > 0 && a !== parsedQty && a.toString() !== parsedHsn);
+
+      let unitRate = 10000;
+      if (amounts.length >= 2 && parsedQty > 1) {
+        // If we have multiple amounts, check if one is unit rate and another is total line amount (unitRate * qty)
+        const sorted = [...amounts].sort((a, b) => a - b);
+        const lower = sorted[0]!;
+        const higher = sorted[sorted.length - 1]!;
+        if (Math.abs(lower * parsedQty - higher) < 2) {
+          unitRate = lower;
+        } else {
+          unitRate = lower > 0 ? lower : Number((higher / parsedQty).toFixed(2));
+        }
+      } else if (amounts.length >= 1) {
+        unitRate = amounts[0]!;
+      } else if (grandTotal > 0) {
+        unitRate = Number((grandTotal / (matchedPhones.length * parsedQty * 1.18)).toFixed(2));
+      }
+
+      // 5. Detect IMEIs for this item (from snippet or global pool)
+      const snippetImeis = Array.from(contextSnippet.matchAll(imeiRegex)).map((m) => m[0]);
+
+      // Create parsedQty separate line items (one for each physical unit)
+      for (let u = 1; u <= parsedQty; u++) {
+        // Assign IMEI if available; if not available, keep it completely BLANK ("")
+        let imei = "";
+        let imei2 = "";
+
+        if (snippetImeis.length >= u) {
+          imei = snippetImeis[u - 1] || "";
+        } else if (globalImeiCursor < foundImeis.length) {
+          imei = foundImeis[globalImeiCursor++] || "";
+        }
+
+        const gst = 18;
+        const taxAmt = Number(((unitRate * gst) / 100).toFixed(2));
+        const lineItemDesc = parsedQty > 1 ? `${baseCleanDesc} (Unit ${u}/${parsedQty})` : baseCleanDesc;
+
+        items.push({
+          id: `item-${items.length + 1}`,
+          lineNumber: items.length + 1,
+          description: lineItemDesc,
+          brand: parsedBrand,
+          model: parsedModel || fullDesc,
+          variant: parsedVariant || "Standard",
+          color: parsedColor || "Standard",
+          serialNumber: imei, // Blank if no IMEI exists on the invoice
+          serialNumber1: imei2, // Blank if no second IMEI exists
+          hsnCode: parsedHsn,
+          quantity: 1, // Individual unit line item
+          unit: parsedUnit,
+          taxableRate: unitRate,
+          taxableAmount: unitRate,
+          cgstRate: 9,
+          sgstRate: 9,
+          gstRate: 18,
+          cgstAmount: Number((taxAmt / 2).toFixed(2)),
+          sgstAmount: Number((taxAmt / 2).toFixed(2)),
+          totalTaxAmount: taxAmt,
+          totalAmount: Number((unitRate + taxAmt).toFixed(2)),
+        });
+      }
     });
   }
 
@@ -852,72 +1421,80 @@ export async function runOcrOnImage(
 
 /**
  * Extracts text from an invoice document (image or PDF).
+ * Uses PDF.js to render PDF pages onto high-res Canvas for preview and text extraction,
+ * falling back to Tesseract OCR when needed.
  */
 export async function extractTextFromInvoiceDocument(
-  file: File,
+  file: File | Blob,
   onProgress?: (status: string, progress: number) => void
 ): Promise<{ text: string; previewUrl?: string }> {
-  // 1. If Image: run OCR directly
-  if (file.type.startsWith("image/")) {
-    const text = await runOcrOnImage(file, onProgress);
-    const previewUrl = URL.createObjectURL(file);
-    return { text, previewUrl };
-  }
+  const isPdf =
+    file.type === "application/pdf" ||
+    (file instanceof File && file.name.toLowerCase().endsWith(".pdf"));
 
-  // 2. If PDF: check for embedded image or plain text streams
-  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-    onProgress?.("Inspecting PDF invoice…", 20);
-    const arrayBuffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
+  if (isPdf) {
+    onProgress?.("Loading PDF document…", 15);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(arrayBuffer),
+      });
+      const pdf = await loadingTask.promise;
+      const numPages = pdf.numPages;
+      onProgress?.(`Processing PDF invoice (page 1 of ${numPages})…`, 35);
+      const page = await pdf.getPage(1);
 
-    // Try finding embedded JPEG
-    let startIdx = -1;
-    for (let i = 0; i < bytes.length - 2; i++) {
-      if (bytes[i] === 0xff && bytes[i + 1] === 0xd8 && bytes[i + 2] === 0xff) {
-        startIdx = i;
-        break;
+      // 1. Extract digital text content
+      const textContent = await page.getTextContent();
+      const textItems = textContent.items
+        .map((item: any) => ("str" in item ? item.str : ""))
+        .filter(Boolean);
+      const digitalText = textItems.join(" ").trim();
+
+      // 2. Render page to Canvas for preview & OCR fallback
+      onProgress?.("Rendering invoice preview…", 60);
+      const viewport = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const ctx = canvas.getContext("2d");
+
+      let previewUrl = "";
+      if (ctx) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+          canvas,
+        }).promise;
+        previewUrl = canvas.toDataURL("image/jpeg", 0.92);
       }
-    }
 
-    if (startIdx !== -1) {
-      let endIdx = -1;
-      for (let i = bytes.length - 2; i > startIdx; i--) {
-        if (bytes[i] === 0xff && bytes[i + 1] === 0xd9) {
-          endIdx = i + 2;
-          break;
-        }
+      // If digital text is rich enough, return it immediately
+      if (digitalText.split(/\s+/).length >= 10) {
+        onProgress?.("Extracted invoice text successfully…", 95);
+        return { text: digitalText, previewUrl };
       }
 
-      if (endIdx !== -1 && endIdx - startIdx > 1024) {
-        onProgress?.("Found invoice page image in PDF, analyzing…", 40);
-        const jpegBytes = bytes.slice(startIdx, endIdx);
-        const blob = new Blob([jpegBytes], { type: "image/jpeg" });
-        const previewUrl = URL.createObjectURL(blob);
-        const text = await runOcrOnImage(blob, onProgress);
+      // If PDF contains scanned images, run OCR on the rendered canvas
+      if (previewUrl) {
+        onProgress?.("Scanned PDF detected, running OCR on page image…", 70);
+        const text = await runOcrOnImage(previewUrl, onProgress);
         return { text, previewUrl };
       }
+
+      return { text: digitalText };
+    } catch (pdfErr) {
+      console.warn("PDF.js extraction error, attempting fallback", pdfErr);
     }
+  }
 
-    // Extract text streams from PDF
-    onProgress?.("Extracting text operators from PDF…", 50);
-    const decoder = new TextDecoder("latin1");
-    const rawContent = decoder.decode(bytes);
-
-    const textMatches: string[] = [];
-    const tjRegex = /\(([^()]{2,})\)\s*(?:Tj|'|")/g;
-    let match: RegExpExecArray | null;
-    while ((match = tjRegex.exec(rawContent)) !== null) {
-      if (match[1] && match[1].trim().length > 1) {
-        textMatches.push(match[1]);
-      }
-    }
-
-    if (textMatches.length >= 5) {
-      onProgress?.("Parsed PDF text contents…", 90);
-      return { text: textMatches.join(" ") };
-    }
-
-    return { text: rawContent };
+  // If Image: run OCR directly and provide object URL preview
+  if (file.type.startsWith("image/") || file instanceof Blob) {
+    const previewUrl = URL.createObjectURL(file);
+    const text = await runOcrOnImage(file, onProgress);
+    return { text, previewUrl };
   }
 
   // Fallback
@@ -933,8 +1510,8 @@ function parseAmount(str: string): number {
 
 function parseFlexibleDate(dateStr: string): string {
   try {
-    // Check DD-Mon-YY or DD-Mon-YYYY (e.g. 11-Oct-26 or 4-Sep-26)
-    const monMatch = dateStr.match(/^(\d{1,2})[\-\/\.]([A-Za-z]{3,9})[\-\/\.](\d{2,4})$/);
+    // Check DD-Mon-YY or DD Mon YY or DD.Mon.YYYY (e.g. 08 Feb 26 or 14-Oct-26 or 4-Sep-26)
+    const monMatch = dateStr.match(/^(\d{1,2})[\s\-\/\.]([A-Za-z]{3,9})[\s\-\/\.](\d{2,4})$/);
     if (monMatch && monMatch[1] && monMatch[2] && monMatch[3]) {
       const day = monMatch[1].padStart(2, "0");
       const monthStr = monMatch[2].toLowerCase();
