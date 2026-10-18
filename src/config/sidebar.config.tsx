@@ -87,6 +87,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
     icon: Server,
     children: [
       {
+        id: "admin-database-backups",
+        label: "Database Backups & Restore",
+        path: APP_ROUTES.admin.databaseBackups,
+        icon: Database,
+      },
+      {
         id: "admin-migrations",
         label: "Database Migrations",
         path: APP_ROUTES.admin.databaseMigrations,

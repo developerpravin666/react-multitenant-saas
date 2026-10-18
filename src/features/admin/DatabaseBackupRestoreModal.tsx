@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   FileSpreadsheet,
   Download,
   Upload,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
   RefreshCw,
   X,
   Check,
@@ -14,9 +13,13 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
-  ArrowRight,
   ShieldCheck,
-  FileText
+  FileText,
+  Trash2,
+  Layers,
+  HardDrive,
+  Clock,
+  RotateCcw,
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
@@ -71,6 +74,25 @@ export interface DatabaseRestoreResult {
   auditLogId?: string | null;
 }
 
+export interface SnapshotTableInfo {
+  tableName: string;
+  displayName: string;
+  rowCount: number;
+  tempTableName: string;
+}
+
+export interface DatabaseSnapshot {
+  id: string;
+  backupName: string;
+  sourceSchema: string;
+  totalTables: number;
+  totalRows: number;
+  createdAtUtc: string;
+  createdBy: string;
+  notes?: string | null;
+  tables: SnapshotTableInfo[];
+}
+
 export interface AvailableTableSource {
   tableName: string;
   displayName: string;
@@ -85,7 +107,7 @@ interface DatabaseBackupRestoreModalProps {
   onClose: () => void;
   schema: string;
   availableTables?: AvailableTableSource[];
-  initialMode: "export" | "restore";
+  initialMode: "export" | "restore" | "db-snapshot" | "db-restore";
   onSuccess?: () => void;
 }
 
@@ -100,15 +122,25 @@ export function DatabaseBackupRestoreModal({
   const notifications = useNotifications();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [mode, setMode] = useState<"export" | "restore">(initialMode);
+  const [mode, setMode] = useState<"export" | "restore" | "db-snapshot" | "db-restore">(initialMode);
   const [loading, setLoading] = useState(false);
 
-  // Export State
+  // Table selection for export / snapshot
   const [exportTables, setExportTables] = useState<BackupTableInfo[]>([]);
   const [selectedExportTables, setSelectedExportTables] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
 
-  // Restore State
+  // Database Temp-Table Snapshot State
+  const [snapshots, setSnapshots] = useState<DatabaseSnapshot[]>([]);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+  const [creatingSnapshot, setCreatingSnapshot] = useState(false);
+  const [snapshotBackupName, setSnapshotBackupName] = useState("");
+  const [snapshotNotes, setSnapshotNotes] = useState("");
+  const [restoringSnapshotId, setRestoringSnapshotId] = useState<string | null>(null);
+  const [deletingSnapshotId, setDeletingSnapshotId] = useState<string | null>(null);
+  const [droppingBackupSchema, setDroppingBackupSchema] = useState(false);
+
+  // Restore from Excel State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [inspectResult, setInspectResult] = useState<InspectBackupResult | null>(null);
@@ -116,7 +148,7 @@ export function DatabaseBackupRestoreModal({
   const [restoring, setRestoring] = useState(false);
   const [restoreResult, setRestoreResult] = useState<DatabaseRestoreResult | null>(null);
 
-  // Differences expandable state
+  // Expandable difference logs
   const [expandedTableDiffs, setExpandedTableDiffs] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -127,7 +159,7 @@ export function DatabaseBackupRestoreModal({
     setExpandedTableDiffs({});
   }, [initialMode, isOpen]);
 
-  // Synchronously seed tables from availableTables if present
+  // Seed tables from availableTables if present
   useEffect(() => {
     if (!isOpen) return;
 
@@ -148,7 +180,7 @@ export function DatabaseBackupRestoreModal({
     }
   }, [isOpen, availableTables]);
 
-  // Fetch tables from server for freshest row counts and validation
+  // Fetch tables from server for freshest counts
   useEffect(() => {
     if (!isOpen) return;
 
@@ -186,6 +218,27 @@ export function DatabaseBackupRestoreModal({
     fetchTables();
   }, [isOpen, schema, availableTables]);
 
+  // Fetch snapshots from database temp tables
+  const fetchSnapshots = useCallback(async () => {
+    setLoadingSnapshots(true);
+    try {
+      const data = await apiClient.get<DatabaseSnapshot[]>(
+        `/admin/backup/snapshots?schema=${encodeURIComponent(schema)}`
+      );
+      setSnapshots(Array.isArray(data) ? data : []);
+    } catch {
+      setSnapshots([]);
+    } finally {
+      setLoadingSnapshots(false);
+    }
+  }, [schema]);
+
+  useEffect(() => {
+    if (isOpen && (mode === "db-restore" || mode === "db-snapshot")) {
+      fetchSnapshots();
+    }
+  }, [isOpen, mode, fetchSnapshots]);
+
   if (!isOpen) return null;
 
   // Toggle export selection
@@ -203,7 +256,127 @@ export function DatabaseBackupRestoreModal({
     }
   };
 
-  // Execute Excel Export using apiClient.download
+  // 1. Create In-Database Snapshot (Stored in same DB temp tables)
+  const handleCreateDatabaseSnapshot = async () => {
+    if (selectedExportTables.length === 0) {
+      notifications.error("Selection Required", "Please select at least one table to backup.");
+      return;
+    }
+
+    setCreatingSnapshot(true);
+    try {
+      const res = await apiClient.post<DatabaseSnapshot>("/admin/backup/create-snapshot", {
+        schema,
+        tables: selectedExportTables,
+        backupName: snapshotBackupName.trim() || undefined,
+        notes: snapshotNotes.trim() || undefined,
+      });
+
+      notifications.success(
+        "Backup Stored in Database",
+        `Snapshot '${res.backupName}' with ${res.totalTables} tables (${res.totalRows.toLocaleString()} records) created in database temp tables.`
+      );
+      setSnapshotBackupName("");
+      setSnapshotNotes("");
+      await fetchSnapshots();
+      setMode("db-restore");
+      onSuccess?.();
+    } catch (err) {
+      notifications.error("Snapshot Failed", err instanceof Error ? err.message : "Failed to create database snapshot.");
+    } finally {
+      setCreatingSnapshot(false);
+    }
+  };
+
+  // 2. Restore directly from in-database temp tables
+  const handleRestoreDatabaseSnapshot = async (snapshot: DatabaseSnapshot) => {
+    const confirmed = await notifications.confirm({
+      title: `Restore Backup '${snapshot.backupName}'?`,
+      message: `This will restore ${snapshot.totalTables} tables (${snapshot.totalRows.toLocaleString()} records) directly from the database temp tables in the same database.`,
+      variant: "warning",
+      confirmLabel: "Restore from Database",
+    });
+    if (!confirmed) return;
+
+    setRestoringSnapshotId(snapshot.id);
+    try {
+      const res = await apiClient.post<DatabaseRestoreResult>(`/admin/backup/restore-snapshot/${snapshot.id}`, {
+        schema,
+      });
+      setRestoreResult(res);
+
+      if (res.success) {
+        notifications.success("Restore Completed", res.message);
+        onSuccess?.();
+      } else {
+        notifications.error("Restore Completed with Warnings", res.message);
+      }
+    } catch (err) {
+      notifications.error("Restore Failed", err instanceof Error ? err.message : "Failed to restore database snapshot.");
+    } finally {
+      setRestoringSnapshotId(null);
+    }
+  };
+
+  // 3. Delete in-database snapshot & drop temp tables
+  const handleDeleteDatabaseSnapshot = async (snapshot: DatabaseSnapshot) => {
+    const confirmed = await notifications.confirm({
+      title: `Delete Backup '${snapshot.backupName}'?`,
+      message: `This will drop the temporary backup tables (admin_table_clear.temp_snap_...) from the database and remove this snapshot record.`,
+      variant: "danger",
+      confirmLabel: "Delete Temp Tables",
+    });
+    if (!confirmed) return;
+
+    setDeletingSnapshotId(snapshot.id);
+    try {
+      await apiClient.delete(`/admin/backup/snapshots/${snapshot.id}`);
+      notifications.success("Backup Deleted", "Temporary backup tables dropped from the database.");
+      await fetchSnapshots();
+    } catch (err) {
+      notifications.error("Delete Failed", err instanceof Error ? err.message : "Failed to delete snapshot.");
+    } finally {
+      setDeletingSnapshotId(null);
+    }
+  };
+
+  // 3b. Manually drop all temporary backup tables and admin_table_clear schema
+  const handleDropBackupDataAndSchema = async () => {
+    const confirmed = await notifications.confirm({
+      title: "Drop All Backup Temp Tables & Schema?",
+      message:
+        "This will permanently DROP SCHEMA admin_table_clear CASCADE and eliminate all temporary backup tables and snapshot records from the database. Are you sure you want to proceed?",
+      variant: "danger",
+      confirmLabel: "Drop Temp Schema & Tables",
+    });
+    if (!confirmed) return;
+
+    setDroppingBackupSchema(true);
+    try {
+      const res = await apiClient.post<{
+        success: boolean;
+        message: string;
+        droppedTablesCount: number;
+        droppedTables: string[];
+      }>("/admin/backup/drop-backup-schema", {});
+
+      notifications.success(
+        "Backup Schema & Temp Data Dropped",
+        res.message || "Temporary backup tables and admin_table_clear schema have been dropped from the database."
+      );
+      await fetchSnapshots();
+      onSuccess?.();
+    } catch (err) {
+      notifications.error(
+        "Drop Failed",
+        err instanceof Error ? err.message : "Failed to drop backup temporary tables and schema."
+      );
+    } finally {
+      setDroppingBackupSchema(false);
+    }
+  };
+
+  // 4. Execute Excel Export using apiClient.download
   const handleExecuteExport = async () => {
     if (selectedExportTables.length === 0) {
       notifications.error("Selection Required", "Please select at least one table to export.");
@@ -232,7 +405,7 @@ export function DatabaseBackupRestoreModal({
     }
   };
 
-  // Inspect uploaded Excel file
+  // 5. Inspect uploaded Excel file
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -250,19 +423,15 @@ export function DatabaseBackupRestoreModal({
       const formData = new FormData();
       formData.append("file", file);
 
-      const inspectData = await apiClient.post<InspectBackupResult>("/admin/backup/inspect", formData);
-      setInspectResult(inspectData);
-      setSelectedRestoreTables(inspectData.tables.map((t) => t.tableName));
-      notifications.success(
-        "File Analyzed",
-        `Found ${inspectData.totalTablesInFile} table(s) with ${inspectData.totalRowsInFile.toLocaleString()} record(s).`
-      );
+      const res = await apiClient.post<InspectBackupResult>("/admin/backup/inspect", formData);
+      setInspectResult(res);
+      setSelectedRestoreTables(res.tables.map((t) => t.tableName));
     } catch (err) {
-      notifications.error("Inspection Failed", err instanceof Error ? err.message : "Failed to inspect Excel file.");
+      notifications.error("Inspection Failed", err instanceof Error ? err.message : "Could not inspect the Excel file.");
       setSelectedFile(null);
-      setInspectResult(null);
     } finally {
       setInspecting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -281,10 +450,10 @@ export function DatabaseBackupRestoreModal({
     }
   };
 
-  // Execute Restore from Excel
+  // 6. Execute Restore from Excel
   const handleExecuteRestore = async () => {
     if (!selectedFile) {
-      notifications.error("File Required", "Please select an Excel backup file to restore.");
+      notifications.error("No File", "Please choose an Excel file to restore.");
       return;
     }
 
@@ -292,6 +461,15 @@ export function DatabaseBackupRestoreModal({
       notifications.error("Selection Required", "Please select at least one table to restore.");
       return;
     }
+
+    const confirmed = await notifications.confirm({
+      title: "Confirm Database Restore?",
+      message: `You are about to restore data into schema '${schema}' for ${selectedRestoreTables.length} selected tables. Existing records will be updated only if modified; new records will be inserted. No data will be truncated.`,
+      variant: "warning",
+      confirmLabel: "Proceed with Restore",
+    });
+
+    if (!confirmed) return;
 
     setRestoring(true);
     try {
@@ -404,18 +582,18 @@ export function DatabaseBackupRestoreModal({
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-              <FileSpreadsheet className="size-6" />
+            <div className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+              <Database className="size-6" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Excel Data Backup & Restore
+                Database Backup & Restore
                 <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
                   Schema: {schema}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Export well-formatted multi-sheet Excel files or restore data with full difference tracking and audit logs.
+                Data is stored in temporary tables inside the same database. Zero extra databases created.
               </p>
             </div>
           </div>
@@ -429,21 +607,43 @@ export function DatabaseBackupRestoreModal({
 
         {/* Tab Controls (Only if not viewing restore result) */}
         {!restoreResult && (
-          <div className="flex border-b border-slate-200 px-6 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="flex border-b border-slate-200 px-6 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
+            <button
+              onClick={() => setMode("db-snapshot")}
+              className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-bold transition whitespace-nowrap ${
+                mode === "db-snapshot"
+                  ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              <HardDrive className="size-4" />
+              <span>Backup to DB (Temp Table)</span>
+            </button>
+            <button
+              onClick={() => setMode("db-restore")}
+              className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-bold transition whitespace-nowrap ${
+                mode === "db-restore"
+                  ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              <RotateCcw className="size-4" />
+              <span>Restore from DB ({snapshots.length})</span>
+            </button>
             <button
               onClick={() => setMode("export")}
-              className={`flex items-center gap-2 border-b-2 py-3 px-4 text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-semibold transition whitespace-nowrap ${
                 mode === "export"
                   ? "border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
                   : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               <Download className="size-4" />
-              <span>Export to Excel Backup</span>
+              <span>Export to Excel File</span>
             </button>
             <button
               onClick={() => setMode("restore")}
-              className={`flex items-center gap-2 border-b-2 py-3 px-4 text-sm font-semibold transition ${
+              className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-semibold transition whitespace-nowrap ${
                 mode === "restore"
                   ? "border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
                   : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
@@ -481,8 +681,8 @@ export function DatabaseBackupRestoreModal({
                       </h3>
                       <p className="text-xs mt-1 opacity-90">{restoreResult.message}</p>
                       <div className="mt-2 text-xs font-medium flex flex-wrap gap-4 opacity-80">
-                        <span>File: {restoreResult.backupFileName}</span>
-                        <span>Target: {restoreResult.targetSchema}</span>
+                        <span>Source: {restoreResult.backupFileName}</span>
+                        <span>Target Schema: {restoreResult.targetSchema}</span>
                         <span>Completed: {new Date(restoreResult.restoredAtUtc).toLocaleTimeString()}</span>
                         {restoreResult.auditLogId && (
                           <span>Audit Log ID: {restoreResult.auditLogId.slice(0, 8)}…</span>
@@ -497,6 +697,38 @@ export function DatabaseBackupRestoreModal({
                   >
                     <Download className="size-3.5 text-indigo-600 dark:text-indigo-400" />
                     <span>Download Log (.log)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Post-Restore Cleanup Action Banner (Super Admin) */}
+              <div className="rounded-xl border border-red-200 bg-red-50/60 p-4 dark:border-red-900/50 dark:bg-red-950/30">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-red-900 dark:text-red-300 flex items-center gap-1.5">
+                      <Trash2 className="size-4 text-red-600 dark:text-red-400" />
+                      Post-Restore Storage Cleanup (Manual Action)
+                    </h4>
+                    <p className="text-xs text-red-800/80 dark:text-red-300/80">
+                      Restore is completely done. As Super Admin, you can now permanently drop the temporary backup data and schema (<code>admin_table_clear</code>) to free up database storage.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleDropBackupDataAndSchema}
+                    disabled={droppingBackupSchema}
+                    className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-red-700 disabled:opacity-50 shrink-0 transition"
+                  >
+                    {droppingBackupSchema ? (
+                      <>
+                        <RefreshCw className="size-3.5 animate-spin" />
+                        <span>Dropping Temp Schema…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="size-3.5" />
+                        <span>Drop Backup Temp Data & Schema</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -542,7 +774,7 @@ export function DatabaseBackupRestoreModal({
                     <thead className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-semibold">
                       <tr>
                         <th className="py-2.5 px-3">Table Name</th>
-                        <th className="py-2.5 px-3 text-right">Rows in File</th>
+                        <th className="py-2.5 px-3 text-right">Rows in Source</th>
                         <th className="py-2.5 px-3 text-right text-emerald-700 dark:text-emerald-400">Inserted</th>
                         <th className="py-2.5 px-3 text-right text-indigo-700 dark:text-indigo-400">Updated</th>
                         <th className="py-2.5 px-3 text-right text-slate-500">Unchanged</th>
@@ -552,73 +784,53 @@ export function DatabaseBackupRestoreModal({
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
                       {restoreResult.tableAudits.map((audit) => (
-                        <>
-                          <tr key={audit.tableName} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
-                            <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
-                              {audit.tableName}
-                              <span className="block text-[10px] font-normal text-slate-400">{audit.displayName}</span>
-                            </td>
-                            <td className="py-2 px-3 text-right text-slate-600 dark:text-slate-300">
-                              {audit.rowsInFile}
-                            </td>
-                            <td className="py-2 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                              {audit.insertedCount > 0 ? `+${audit.insertedCount}` : "0"}
-                            </td>
-                            <td className="py-2 px-3 text-right font-bold text-indigo-600 dark:text-indigo-400">
-                              {audit.updatedCount}
-                            </td>
-                            <td className="py-2 px-3 text-right text-slate-400">
-                              {audit.unchangedCount}
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              <span
-                                className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                  audit.status === "Success"
-                                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                                    : audit.status === "Partial"
-                                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                    : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
-                                }`}
+                        <tr key={audit.tableName} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
+                          <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
+                            {audit.tableName}
+                            <span className="block text-[10px] font-normal text-slate-400">{audit.displayName}</span>
+                          </td>
+                          <td className="py-2 px-3 text-right text-slate-600 dark:text-slate-300">
+                            {audit.rowsInFile}
+                          </td>
+                          <td className="py-2 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                            {audit.insertedCount > 0 ? `+${audit.insertedCount}` : "0"}
+                          </td>
+                          <td className="py-2 px-3 text-right font-bold text-indigo-600 dark:text-indigo-400">
+                            {audit.updatedCount}
+                          </td>
+                          <td className="py-2 px-3 text-right text-slate-400">
+                            {audit.unchangedCount}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                audit.status === "Success"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                  : audit.status === "Partial"
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                  : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                              }`}
+                            >
+                              {audit.status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {audit.sampleDifferences && audit.sampleDifferences.length > 0 ? (
+                              <button
+                                onClick={() => toggleTableDiff(audit.tableName)}
+                                className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 text-[11px] font-semibold underline flex items-center justify-center gap-1 mx-auto"
                               >
-                                {audit.status}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              {audit.sampleDifferences && audit.sampleDifferences.length > 0 ? (
-                                <button
-                                  onClick={() => toggleTableDiff(audit.tableName)}
-                                  className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 text-[11px] font-semibold underline flex items-center justify-center gap-1 mx-auto"
-                                >
-                                  {expandedTableDiffs[audit.tableName] ? (
-                                    <>Hide ({audit.sampleDifferences.length}) <ChevronDown className="size-3" /></>
-                                  ) : (
-                                    <>View ({audit.sampleDifferences.length}) <ChevronRight className="size-3" /></>
-                                  )}
-                                </button>
-                              ) : (
-                                <span className="text-slate-400 text-[10px]">None</span>
-                              )}
-                            </td>
-                          </tr>
-
-                          {/* Expanded Differences */}
-                          {expandedTableDiffs[audit.tableName] && audit.sampleDifferences && (
-                            <tr key={`${audit.tableName}-diffs`} className="bg-slate-50/90 dark:bg-slate-800/80">
-                              <td colSpan={7} className="p-3">
-                                <div className="space-y-1">
-                                  <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                                    Sample Modifications in '{audit.tableName}':
-                                  </p>
-                                  <ul className="list-disc pl-5 space-y-0.5 text-[11px] text-slate-600 dark:text-slate-400">
-                                    {audit.sampleDifferences.map((diff, idx) => (
-                                      <li key={idx} className="font-mono">{diff}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
+                                {expandedTableDiffs[audit.tableName] ? (
+                                  <>Hide ({audit.sampleDifferences.length}) <ChevronDown className="size-3" /></>
+                                ) : (
+                                  <>View ({audit.sampleDifferences.length}) <ChevronRight className="size-3" /></>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">None</span>
+                            )}
+                          </td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>
@@ -627,18 +839,50 @@ export function DatabaseBackupRestoreModal({
             </div>
           )}
 
-          {/* ======================= EXPORT MODE VIEW ======================= */}
-          {!restoreResult && mode === "export" && (
+          {/* ======================= TAB 1: DB SNAPSHOT TO TEMP TABLE ======================= */}
+          {!restoreResult && mode === "db-snapshot" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3.5 text-xs text-indigo-950 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-200 flex items-start gap-3">
+                <ShieldCheck className="size-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Select Tables to Include in Backup
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    All tables are selected by default. Each selected table will be exported as its own formatted sheet.
+                  <h4 className="font-bold">In-Database Temporary Table Backup</h4>
+                  <p className="mt-0.5 text-[11px] opacity-90">
+                    Selected tables are copied into temporary tables directly in the <strong>same PostgreSQL database</strong> (under <code>admin_table_clear</code> schema). Zero extra databases or external files are created. When you restore, the data is read directly from those tables.
                   </p>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Backup Snapshot Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={snapshotBackupName}
+                    onChange={(e) => setSnapshotBackupName(e.target.value)}
+                    placeholder={`${schema}_backup_${new Date().toISOString().slice(0, 10)}`}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Notes / Tag (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={snapshotNotes}
+                    onChange={(e) => setSnapshotNotes(e.target.value)}
+                    placeholder="e.g. Pre-migration backup or monthly snapshot"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-3">
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                  Select Tables to Backup into Database Temp Tables:
+                </h3>
                 <button
                   onClick={handleSelectAllExport}
                   className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400"
@@ -663,7 +907,228 @@ export function DatabaseBackupRestoreModal({
                 <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
                   <Database className="size-8 text-slate-400 mb-2" />
                   <p className="text-sm font-semibold">No eligible tables found for schema "{schema}".</p>
-                  <p className="text-xs text-slate-400 mt-1">Please ensure the store schema has active tables or click "Scan & Sync DB" on the dashboard.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-[40vh] overflow-y-auto p-1">
+                  {exportTables.map((table) => {
+                    const isChecked = selectedExportTables.includes(table.tableName);
+                    return (
+                      <div
+                        key={table.tableName}
+                        onClick={() => handleToggleExportTable(table.tableName)}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition select-none ${
+                          isChecked
+                            ? "border-indigo-300 bg-indigo-50/60 text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-200"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="size-4 rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div className="truncate">
+                            <span className="font-semibold block truncate">{table.tableName}</span>
+                            <span className="text-[10px] text-slate-400 block">{table.displayName}</span>
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 shrink-0">
+                          {table.rowCount.toLocaleString()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/40 flex items-center justify-between">
+                <span>
+                  Selected: <strong>{selectedExportTables.length}</strong> of {exportTables.length} tables
+                </span>
+                <span>
+                  Total Rows to Store:{" "}
+                  <strong>
+                    {exportTables
+                      .filter((t) => selectedExportTables.includes(t.tableName))
+                      .reduce((sum, t) => sum + t.rowCount, 0)
+                      .toLocaleString()}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* ======================= TAB 2: DB RESTORE FROM TEMP TABLE ======================= */}
+          {!restoreResult && mode === "db-restore" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Available In-Database Backup Snapshots
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Snapshots stored in temp tables in this database. Restoring reads directly from these tables.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDropBackupDataAndSchema}
+                    disabled={droppingBackupSchema}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 transition"
+                    title="Drop all backup temporary tables and schema (admin_table_clear)"
+                  >
+                    <Trash2 className="size-3" />
+                    <span>Drop Temp Schema & Tables</span>
+                  </button>
+                  <button
+                    onClick={fetchSnapshots}
+                    disabled={loadingSnapshots}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400"
+                  >
+                    <RefreshCw className={`size-3.5 ${loadingSnapshots ? "animate-spin" : ""}`} />
+                    <span>Refresh Snapshots</span>
+                  </button>
+                </div>
+              </div>
+
+              {loadingSnapshots ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="size-6 animate-spin text-indigo-600" />
+                </div>
+              ) : snapshots.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border-2 border-dashed border-slate-200 p-8 dark:border-slate-800">
+                  <HardDrive className="size-8 text-slate-400 mb-2" />
+                  <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">No In-Database Snapshots Found</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                    Switch to the "Backup to DB" tab above to create an in-database snapshot. Data will be saved in temp tables inside the same database.
+                  </p>
+                  <button
+                    onClick={() => setMode("db-snapshot")}
+                    className="mt-3 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700"
+                  >
+                    Create First In-Database Backup
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto p-1">
+                  {snapshots.map((snap) => (
+                    <div
+                      key={snap.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700 transition"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-900 dark:text-white">
+                              {snap.backupName}
+                            </span>
+                            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                              {snap.totalTables} Tables
+                            </span>
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                              {snap.totalRows.toLocaleString()} Rows
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Clock className="size-3" />
+                              {new Date(snap.createdAtUtc).toLocaleString()}
+                            </span>
+                            <span>Created By: {snap.createdBy}</span>
+                            {snap.notes && <span className="italic text-slate-500">"{snap.notes}"</span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                          <button
+                            onClick={() => handleDeleteDatabaseSnapshot(snap)}
+                            disabled={deletingSnapshotId === snap.id || restoringSnapshotId === snap.id}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400 transition"
+                            title="Delete Snapshot & Drop Temp Tables"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                          <button
+                            onClick={() => handleRestoreDatabaseSnapshot(snap)}
+                            disabled={restoringSnapshotId === snap.id || deletingSnapshotId === snap.id}
+                            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50 transition"
+                          >
+                            {restoringSnapshotId === snap.id ? (
+                              <>
+                                <RefreshCw className="size-3.5 animate-spin" />
+                                <span>Restoring from Temp Table…</span>
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="size-3.5" />
+                                <span>Restore from Database</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tables Mini Preview */}
+                      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 dark:border-slate-800/80 pt-2.5">
+                        {snap.tables.slice(0, 10).map((t) => (
+                          <span
+                            key={t.tableName}
+                            className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                          >
+                            {t.tableName} ({t.rowCount})
+                          </span>
+                        ))}
+                        {snap.tables.length > 10 && (
+                          <span className="text-[10px] text-slate-400 self-center">
+                            +{snap.tables.length - 10} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ======================= TAB 3: EXPORT TO EXCEL VIEW ======================= */}
+          {!restoreResult && mode === "export" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Select Tables to Export to Excel
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Each selected table will be exported as its own formatted sheet in an Excel workbook.
+                  </p>
+                </div>
+                <button
+                  onClick={handleSelectAllExport}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-800 dark:text-emerald-400"
+                >
+                  {selectedExportTables.length === exportTables.length ? (
+                    <>
+                      <CheckSquare className="size-4" /> Deselect All
+                    </>
+                  ) : (
+                    <>
+                      <Square className="size-4" /> Select All ({exportTables.length})
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="size-6 animate-spin text-emerald-600" />
+                </div>
+              ) : exportTables.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
+                  <Database className="size-8 text-slate-400 mb-2" />
+                  <p className="text-sm font-semibold">No eligible tables found for schema "{schema}".</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-[45vh] overflow-y-auto p-1">
@@ -683,7 +1148,7 @@ export function DatabaseBackupRestoreModal({
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            onChange={() => {}} // handled by parent onClick
+                            onChange={() => {}}
                             className="size-4 rounded text-emerald-600 focus:ring-emerald-500"
                           />
                           <div className="truncate">
@@ -717,10 +1182,9 @@ export function DatabaseBackupRestoreModal({
             </div>
           )}
 
-          {/* ======================= RESTORE MODE VIEW ======================= */}
+          {/* ======================= TAB 4: RESTORE FROM EXCEL VIEW ======================= */}
           {!restoreResult && mode === "restore" && (
             <div className="space-y-5">
-              {/* File Upload Box */}
               {!inspectResult ? (
                 <div
                   onClick={() => fileInputRef.current?.click()}
@@ -750,9 +1214,7 @@ export function DatabaseBackupRestoreModal({
                   </div>
                 </div>
               ) : (
-                /* Inspection Summary and Table Selector */
                 <div className="space-y-4">
-                  {/* File Metadata Card */}
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30 flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-sm text-emerald-950 dark:text-emerald-200 flex items-center gap-2">
@@ -776,7 +1238,6 @@ export function DatabaseBackupRestoreModal({
                     </button>
                   </div>
 
-                  {/* Table Selection for Restore */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-xs font-bold text-slate-900 dark:text-white">
@@ -829,7 +1290,6 @@ export function DatabaseBackupRestoreModal({
                     </div>
                   </div>
 
-                  {/* Warning banner */}
                   <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200 flex items-start gap-2">
                     <AlertTriangle className="size-4 text-amber-600 shrink-0 mt-0.5" />
                     <div>
@@ -853,16 +1313,57 @@ export function DatabaseBackupRestoreModal({
               {restoreResult ? "Done" : "Cancel"}
             </button>
             {restoreResult && (
-              <button
-                onClick={handleDownloadRestoreLog}
-                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-4 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 transition"
-              >
-                <FileText className="size-3.5" />
-                <span>Save Full Log Report (.log)</span>
-              </button>
+              <>
+                <button
+                  onClick={handleDownloadRestoreLog}
+                  className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-4 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 transition"
+                >
+                  <FileText className="size-3.5" />
+                  <span>Save Full Log Report (.log)</span>
+                </button>
+                <button
+                  onClick={handleDropBackupDataAndSchema}
+                  disabled={droppingBackupSchema}
+                  className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 transition disabled:opacity-50"
+                >
+                  {droppingBackupSchema ? (
+                    <>
+                      <RefreshCw className="size-3.5 animate-spin" />
+                      <span>Dropping Temp Schema…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="size-3.5 text-red-600 dark:text-red-400" />
+                      <span>Drop Backup Temp Data & Schema</span>
+                    </>
+                  )}
+                </button>
+              </>
             )}
           </div>
 
+          {/* Action button for DB Snapshot */}
+          {!restoreResult && mode === "db-snapshot" && (
+            <button
+              onClick={handleCreateDatabaseSnapshot}
+              disabled={creatingSnapshot || selectedExportTables.length === 0}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition"
+            >
+              {creatingSnapshot ? (
+                <>
+                  <RefreshCw className="size-4 animate-spin" />
+                  <span>Copying to Database Temp Tables...</span>
+                </>
+              ) : (
+                <>
+                  <HardDrive className="size-4" />
+                  <span>Create Backup in Database ({selectedExportTables.length})</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Action button for Excel Export */}
           {!restoreResult && mode === "export" && (
             <button
               onClick={handleExecuteExport}
@@ -883,6 +1384,7 @@ export function DatabaseBackupRestoreModal({
             </button>
           )}
 
+          {/* Action button for Excel Restore */}
           {!restoreResult && mode === "restore" && inspectResult && (
             <button
               onClick={handleExecuteRestore}
@@ -907,4 +1409,3 @@ export function DatabaseBackupRestoreModal({
     </div>
   );
 }
-

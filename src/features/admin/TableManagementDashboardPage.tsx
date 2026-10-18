@@ -22,7 +22,9 @@ import {
   ChevronRight,
   CheckSquare,
   FileSpreadsheet,
-  Upload
+  Upload,
+  History,
+  Save
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
@@ -96,6 +98,9 @@ export function TableManagementDashboardPage() {
   const [showClearAllModal, setShowClearAllModal] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
   const [confirmClearAllText, setConfirmClearAllText] = useState("");
+  const [showDropSchemaModal, setShowDropSchemaModal] = useState(false);
+  const [droppingSchema, setDroppingSchema] = useState(false);
+  const [confirmDropSchemaText, setConfirmDropSchemaText] = useState("");
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [recoveries, setRecoveries] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem("table-clear-recoveries") || "{}"); } catch { return {}; }
@@ -105,8 +110,8 @@ export function TableManagementDashboardPage() {
   const [maintaining, setMaintaining] = useState(false);
   const [backupModalState, setBackupModalState] = useState<{
     isOpen: boolean;
-    mode: "export" | "restore";
-  }>({ isOpen: false, mode: "export" });
+    mode: "export" | "restore" | "db-snapshot" | "db-restore";
+  }>({ isOpen: false, mode: "db-snapshot" });
   useEffect(() => { setSelectedTables([]); }, [selectedSchema]);
   const saveRecovery = (schema: string, operationId?: string) => {
     if (!operationId) return;
@@ -380,6 +385,34 @@ export function TableManagementDashboardPage() {
     }
   };
 
+  const handleDropSchema = async () => {
+    const expected = `DROP SCHEMA ${selectedSchema.toUpperCase()}`;
+    const conf = confirmDropSchemaText.trim().toUpperCase();
+    if (conf !== expected && conf !== `DROP ${selectedSchema.toUpperCase()}`) {
+      notifications.error("Confirmation Mismatch", `Please type '${expected}' to confirm.`);
+      return;
+    }
+
+    setDroppingSchema(true);
+    try {
+      await apiClient.post(`/admin/tables/drop-schema?schema=${encodeURIComponent(selectedSchema)}`, {
+        confirmation: confirmDropSchemaText.trim(),
+      });
+      notifications.success(
+        "Schema & All Data Dropped",
+        `Schema '${selectedSchema}' and all associated tables and records have been permanently dropped.`
+      );
+      setShowDropSchemaModal(false);
+      setConfirmDropSchemaText("");
+      setSelectedSchema("");
+      await fetchTables();
+    } catch (error) {
+      notifications.error("Drop Schema Failed", error instanceof Error ? error.message : "Failed to drop schema.");
+    } finally {
+      setDroppingSchema(false);
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!editingTable) return;
     setSavingEdit(true);
@@ -531,6 +564,28 @@ export function TableManagementDashboardPage() {
             {syncing ? "Scanning DB…" : "Scan & Sync DB"}
           </button>
 
+          {/* DB Temp-Table Snapshot Button */}
+          <button
+            onClick={() => setBackupModalState({ isOpen: true, mode: "db-snapshot" })}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-sm transition hover:bg-purple-100 disabled:opacity-50 dark:border-purple-900/60 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/50"
+            title="Create instant in-database snapshot in temporary tables (same DB, no extra DB created)"
+          >
+            <Save className="size-3.5 text-purple-600 dark:text-purple-400" />
+            <span>DB Backup (Temp Table)</span>
+          </button>
+
+          {/* DB Temp-Table Restore Button */}
+          <button
+            onClick={() => setBackupModalState({ isOpen: true, mode: "db-restore" })}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700 shadow-sm transition hover:bg-cyan-100 disabled:opacity-50 dark:border-cyan-900/60 dark:bg-cyan-950/40 dark:text-cyan-300 dark:hover:bg-cyan-900/50"
+            title="Restore tables from in-database temporary table snapshots"
+          >
+            <History className="size-3.5 text-cyan-600 dark:text-cyan-400" />
+            <span>DB Restore (Temp Table)</span>
+          </button>
+
           {/* Export to Excel Button */}
           <button
             onClick={() => setBackupModalState({ isOpen: true, mode: "export" })}
@@ -587,6 +642,22 @@ export function TableManagementDashboardPage() {
             <Trash2 className="size-3.5" />
             <span>Delete All Table Records</span>
           </button>
+
+          {/* Drop Schema & All Data Button (Super Admin Manual Action) */}
+          {selectedSchema && !["public", "tenant", "admin_table_clear"].includes(selectedSchema.toLowerCase()) && (
+            <button
+              onClick={() => {
+                setConfirmDropSchemaText("");
+                setShowDropSchemaModal(true);
+              }}
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-100/60 px-3 py-1.5 text-xs font-bold text-red-800 shadow-sm transition hover:bg-red-200 disabled:opacity-50 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200 dark:hover:bg-red-900/60"
+              title={`Permanently DROP SCHEMA "${selectedSchema}" CASCADE and delete all its tables and data`}
+            >
+              <Trash2 className="size-3.5 text-red-600 dark:text-red-400" />
+              <span>Drop Schema & All Data</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1336,6 +1407,84 @@ export function TableManagementDashboardPage() {
                   <>
                     <Trash2 className="size-3.5" />
                     Confirm Delete All Records
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2b: Drop Schema and All Data (Super Admin Manual Action) */}
+      {showDropSchemaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl border border-red-300 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-slate-900">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="rounded-full bg-red-100 p-2.5 dark:bg-red-950/60">
+                <AlertTriangle className="size-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Drop Entire Schema and All Data
+                </h3>
+                <p className="text-xs text-red-600 font-semibold mt-0.5">
+                  CRITICAL: Permanent schema deletion cannot be undone!
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50/70 p-4 text-xs text-red-950 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200 space-y-2">
+              <p>
+                You are about to execute <code>DROP SCHEMA "{selectedSchema}" CASCADE</code> in PostgreSQL.
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-red-800 dark:text-red-300">
+                <li>All tables, views, sequences, indexes, and records in <strong>{selectedSchema}</strong> will be destroyed.</li>
+                <li>All table registry entries for this schema will be erased.</li>
+                <li>This is a manual administrative action. Make sure you have taken a backup if needed.</li>
+              </ul>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                To confirm, type <span className="font-mono font-bold text-red-600">DROP SCHEMA {selectedSchema.toUpperCase()}</span> below:
+              </label>
+              <input
+                type="text"
+                value={confirmDropSchemaText}
+                onChange={(e) => setConfirmDropSchemaText(e.target.value)}
+                placeholder={`DROP SCHEMA ${selectedSchema.toUpperCase()}`}
+                className="w-full rounded-lg border border-red-300 px-3 py-2 text-xs font-mono uppercase tracking-wider text-slate-900 outline-none focus:border-red-600 dark:border-red-900/60 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDropSchemaModal(false)}
+                disabled={droppingSchema}
+                className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDropSchema}
+                disabled={
+                  (confirmDropSchemaText.trim().toUpperCase() !== `DROP SCHEMA ${selectedSchema.toUpperCase()}` &&
+                   confirmDropSchemaText.trim().toUpperCase() !== `DROP ${selectedSchema.toUpperCase()}`) ||
+                  droppingSchema
+                }
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-red-700 disabled:opacity-40"
+              >
+                {droppingSchema ? (
+                  <>
+                    <RefreshCw className="size-3.5 animate-spin" />
+                    Dropping Schema…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="size-3.5" />
+                    Permanently Drop Schema & All Data
                   </>
                 )}
               </button>

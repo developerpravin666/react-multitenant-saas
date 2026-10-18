@@ -46,6 +46,7 @@ import { SystemSettingsPage } from "./features/admin/SystemSettingsPage";
 import { MasterImportPage } from "./features/products/import/MasterImportPage";
 import { FeatureFlagsAdminPage } from "./features/feature-flags/FeatureFlagsAdminPage";
 import { TableManagementDashboardPage } from "./features/admin/TableManagementDashboardPage";
+import { DatabaseBackupDashboardPage } from "./features/admin/DatabaseBackupDashboardPage";
 import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
 import { AdminRoute } from "./features/auth/AdminRoute";
 
@@ -116,6 +117,7 @@ export default function App() {
           <Route path={APP_ROUTES.admin.tenants} element={withPageTitle("Tenant Directory", <TenantDirectoryPage />)} />
           <Route path={APP_ROUTES.admin.pendingApprovals} element={withPageTitle("Tenant Approvals", <TenantApprovalsPage />)} />
           <Route path={APP_ROUTES.admin.databaseMigrations} element={withPageTitle("Database Migrations", <DatabaseMigrationsPage />)} />
+          <Route path={APP_ROUTES.admin.databaseBackups} element={withPageTitle("Database Backups & Restore", <DatabaseBackupDashboardPage />)} />
           <Route path={APP_ROUTES.admin.systemSettings} element={withPageTitle("System Settings", <SystemSettingsPage />)} />
           <Route path={APP_ROUTES.admin.featureFlags} element={withPageTitle("Feature Flags", <FeatureFlagsAdminPage />)} />
           <Route path={APP_ROUTES.admin.mastersImport} element={withPageTitle("Import Masters", <MasterImportPage isAdminMode={true} />)} />
