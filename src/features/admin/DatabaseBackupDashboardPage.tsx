@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Database,
   ShieldCheck,
@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Activity,
   User,
+  Building2,
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
@@ -122,15 +123,26 @@ export interface DatabaseRestoreResult {
   auditLogId?: string | null;
 }
 
+export interface TenantOption {
+  id?: string;
+  name: string;
+  slug?: string;
+  schemaName: string;
+}
+
 export function DatabaseBackupDashboardPage() {
   const notifications = useNotifications();
+  const notificationsRef = useRef(notifications);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"schemas" | "logs" | "excel">("schemas");
 
-  // Schema state
-  const [activeSchema, setActiveSchema] = useState<string>("tenant");
-  const [availableSchemas, setAvailableSchemas] = useState<string[]>([]);
+  // Tenants and Schema state
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [activeSchema, setActiveSchema] = useState<string>("ALL");
 
   // Snapshots & Backups state
   const [snapshots, setSnapshots] = useState<DatabaseSnapshot[]>([]);
@@ -145,6 +157,7 @@ export function DatabaseBackupDashboardPage() {
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [backupTargetSchema, setBackupTargetSchema] = useState<string>("tenant");
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [newBackupName, setNewBackupName] = useState("");
   const [newBackupNotes, setNewBackupNotes] = useState("");
@@ -174,24 +187,26 @@ export function DatabaseBackupDashboardPage() {
   const [restoringExcel, setRestoringExcel] = useState(false);
   const [uploadedExcelFile, setUploadedExcelFile] = useState<File | null>(null);
 
-  // 1. Load initial schemas
+  // 1. Load initial tenants and schemas
   useEffect(() => {
-    fetchSchemas();
+    fetchTenants();
   }, []);
 
-  const fetchSchemas = async () => {
+  const fetchTenants = async () => {
     try {
-      const res = await apiClient.get<Array<{ schemaName: string }>>("/tenants");
-      const list = Array.isArray(res) ? res.map((t: { schemaName: string }) => t.schemaName).filter(Boolean) : [];
-      const uniqueSchemas = Array.from(new Set(["tenant", ...list]));
-      setAvailableSchemas(uniqueSchemas);
-      if (uniqueSchemas.length > 0) {
-        const preferred = uniqueSchemas.find((s) => s !== "tenant") || "tenant";
-        setActiveSchema(preferred);
-      }
+      const res = await apiClient.get<Array<{ id: string; name: string; slug: string; schemaName: string }>>("/tenants");
+      const list = Array.isArray(res) ? res : [];
+      const tenantOpts: TenantOption[] = [
+        { id: "tenant", name: "Master Registry (tenant)", slug: "tenant", schemaName: "tenant" },
+        ...list.map((t) => ({ id: t.id, name: t.name, slug: t.slug, schemaName: t.schemaName })),
+      ];
+      setTenants(tenantOpts);
+      const preferred = tenantOpts.find((t) => t.schemaName !== "tenant")?.schemaName || "tenant";
+      setBackupTargetSchema(preferred);
     } catch {
-      setAvailableSchemas(["tenant"]);
-      setActiveSchema("tenant");
+      const fallback: TenantOption[] = [{ name: "Master Registry (tenant)", schemaName: "tenant" }];
+      setTenants(fallback);
+      setBackupTargetSchema("tenant");
     }
   };
 
@@ -199,16 +214,17 @@ export function DatabaseBackupDashboardPage() {
   const loadSnapshots = useCallback(async () => {
     setLoadingSnapshots(true);
     try {
+      const schemaParam = activeSchema && activeSchema !== "ALL" ? activeSchema : "";
       const data = await apiClient.get<DatabaseSnapshot[]>(
-        `/admin/backup/snapshots?schema=${encodeURIComponent(activeSchema)}`
+        `/admin/backup/snapshots${schemaParam ? `?schema=${encodeURIComponent(schemaParam)}` : ""}`
       );
       setSnapshots(Array.isArray(data) ? data : []);
     } catch (err: unknown) {
-      notifications.error("Failed to load backups", err instanceof Error ? err.message : "Error fetching backups");
+      notificationsRef.current.error("Failed to load backups", err instanceof Error ? err.message : "Error fetching backups");
     } finally {
       setLoadingSnapshots(false);
     }
-  }, [activeSchema, notifications]);
+  }, [activeSchema]);
 
   // 3. Load Logs
   const loadLogs = useCallback(async () => {
@@ -217,17 +233,18 @@ export function DatabaseBackupDashboardPage() {
       const data = await apiClient.get<DatabaseBackupRestoreLog[]>("/admin/backup/logs");
       setLogs(Array.isArray(data) ? data : []);
     } catch (err: unknown) {
-      notifications.error("Failed to load audit logs", err instanceof Error ? err.message : "Error fetching logs");
+      notificationsRef.current.error("Failed to load audit logs", err instanceof Error ? err.message : "Error fetching logs");
     } finally {
       setLoadingLogs(false);
     }
-  }, [notifications]);
+  }, []);
 
   // 4. Load Tables for Backup / Export
   const loadEligibleTables = useCallback(async (schemaToLoad: string) => {
+    const target = schemaToLoad && schemaToLoad !== "ALL" ? schemaToLoad : "tenant";
     try {
       const res = await apiClient.get<{ tables?: BackupTableInfo[] } | BackupTableInfo[]>(
-        `/admin/backup/tables?schema=${encodeURIComponent(schemaToLoad)}`
+        `/admin/backup/tables?schema=${encodeURIComponent(target)}`
       );
       const t: BackupTableInfo[] = Array.isArray(res)
         ? res
@@ -239,13 +256,13 @@ export function DatabaseBackupDashboardPage() {
       setExportTables(t);
       setSelectedExportTables(t.map((item: BackupTableInfo) => item.tableName));
     } catch (err: unknown) {
-      notifications.error("Failed to load tables list", err instanceof Error ? err.message : "Error fetching tables");
+      notificationsRef.current.error("Failed to load tables list", err instanceof Error ? err.message : "Error fetching tables");
     }
-  }, [notifications]);
+  }, []);
 
   useEffect(() => {
-    if (activeSchema) {
-      loadSnapshots();
+    loadSnapshots();
+    if (activeSchema && activeSchema !== "ALL") {
       loadEligibleTables(activeSchema);
     }
   }, [activeSchema, loadSnapshots, loadEligibleTables]);
@@ -256,7 +273,7 @@ export function DatabaseBackupDashboardPage() {
     }
   }, [activeTab, loadLogs]);
 
-  // Create In-Database Snapshot
+  // Create In-Database Snapshot for selected tenant
   const handleCreateSnapshot = async () => {
     if (selectedTablesForBackup.length === 0) {
       notifications.error("Selection Required", "Please select at least one table to back up.");
@@ -266,7 +283,7 @@ export function DatabaseBackupDashboardPage() {
     setCreatingBackup(true);
     try {
       const res = await apiClient.post<DatabaseSnapshot>("/admin/backup/create-snapshot", {
-        schema: activeSchema,
+        schema: backupTargetSchema,
         tables: selectedTablesForBackup,
         backupName: newBackupName.trim() || undefined,
         notes: newBackupNotes.trim() || undefined,
@@ -275,7 +292,7 @@ export function DatabaseBackupDashboardPage() {
       const schemaCreated = res.backupSchemaName || "schema";
       notifications.success(
         "Backup Schema Created",
-        `Created schema '${schemaCreated}' with ${res.totalTables} tables (${res.totalRows.toLocaleString()} rows).`
+        `Created schema '${schemaCreated}' for tenant '${backupTargetSchema}' with ${res.totalTables} tables (${res.totalRows.toLocaleString()} rows).`
       );
       setIsCreateModalOpen(false);
       setNewBackupName("");
@@ -298,13 +315,13 @@ export function DatabaseBackupDashboardPage() {
       const res = await apiClient.post<DatabaseRestoreResult>(
         `/admin/backup/restore-snapshot/${snapshotToRestore.id}`,
         {
-          schema: activeSchema,
+          schema: snapshotToRestore.sourceSchema,
         }
       );
       setRestoreResult(res);
       notifications.success(
         "Database Restored",
-        `Successfully restored data from schema '${snapshotToRestore.backupSchemaName || snapshotToRestore.backupName}'. (${res.totalRowsProcessed.toLocaleString()} rows reconciled)`
+        `Successfully restored data from schema '${snapshotToRestore.backupSchemaName || snapshotToRestore.backupName}' into tenant '${snapshotToRestore.sourceSchema}'. (${res.totalRowsProcessed.toLocaleString()} rows reconciled)`
       );
       setSnapshotToRestore(null);
       await loadSnapshots();
@@ -343,10 +360,11 @@ export function DatabaseBackupDashboardPage() {
       notifications.error("Selection Required", "Select at least one table to export.");
       return;
     }
+    const targetSchema = activeSchema !== "ALL" ? activeSchema : "tenant";
     setExporting(true);
     try {
-      const defaultFileName = `${activeSchema}_backup_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      const url = `/admin/backup/export?schema=${encodeURIComponent(activeSchema)}`;
+      const defaultFileName = `${targetSchema}_backup_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const url = `/admin/backup/export?schema=${encodeURIComponent(targetSchema)}`;
 
       await apiClient.download(url, defaultFileName, {
         method: "POST",
@@ -388,11 +406,12 @@ export function DatabaseBackupDashboardPage() {
       notifications.error("File Required", "Please attach an Excel backup file.");
       return;
     }
+    const targetSchema = activeSchema !== "ALL" ? activeSchema : "tenant";
     setRestoringExcel(true);
     try {
       const formData = new FormData();
       formData.append("file", uploadedExcelFile);
-      formData.append("schema", activeSchema);
+      formData.append("schema", targetSchema);
       const res = await apiClient.post<DatabaseRestoreResult>("/admin/backup/restore", formData);
       setRestoreResult(res);
       notifications.success("Restore Completed", "Database restore from Excel completed successfully!");
@@ -412,6 +431,7 @@ export function DatabaseBackupDashboardPage() {
         searchQuery === "" ||
         s.backupName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (s.backupSchemaName && s.backupSchemaName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        s.sourceSchema.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.createdBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (s.notes && s.notes.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -461,7 +481,7 @@ export function DatabaseBackupDashboardPage() {
                 <p className="text-xs text-indigo-200/80 mt-0.5">
                   Backups stored as dedicated PostgreSQL schemas formatted as{" "}
                   <code className="text-amber-300 bg-black/40 px-1.5 py-0.5 rounded font-mono text-[11px]">
-                    {"{{actual db name}}_bkp_YYYYMMDD"}
+                    {"{{tenant db name}}_bkp_YYYYMMDD"}
                   </code>
                   . Tracked in <code className="text-indigo-300 font-mono text-[11px]">tenant.database_backups</code> with
                   full audit history in{" "}
@@ -484,8 +504,10 @@ export function DatabaseBackupDashboardPage() {
             </button>
             <button
               onClick={() => {
+                const target = activeSchema !== "ALL" ? activeSchema : (tenants[0]?.schemaName || "tenant");
+                setBackupTargetSchema(target);
+                loadEligibleTables(target);
                 setIsCreateModalOpen(true);
-                loadEligibleTables(activeSchema);
               }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition-colors border border-indigo-400/30"
             >
@@ -495,19 +517,22 @@ export function DatabaseBackupDashboardPage() {
           </div>
         </div>
 
-        {/* Global Schema Selector Bar */}
+        {/* Global Tenant / Schema Filter Bar */}
         <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 text-indigo-200">
-            <Server className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Active Tenant Schema:</span>
+            <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Filter by Tenant:</span>
             <select
               value={activeSchema}
               onChange={(e) => setActiveSchema(e.target.value)}
-              className="bg-black/40 border border-white/20 rounded-lg px-2.5 py-1 text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              className="bg-black/40 border border-white/20 rounded-lg px-2.5 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
             >
-              {availableSchemas.map((s) => (
-                <option key={s} value={s} className="bg-slate-900 text-white">
-                  {s}
+              <option value="ALL" className="bg-slate-900 text-white">
+                🌐 All Tenants (Global Registry)
+              </option>
+              {tenants.map((t) => (
+                <option key={t.schemaName} value={t.schemaName} className="bg-slate-900 text-white">
+                  {t.name} ({t.schemaName})
                 </option>
               ))}
             </select>
@@ -516,12 +541,12 @@ export function DatabaseBackupDashboardPage() {
           <div className="flex items-center gap-3 text-indigo-200/90 text-xs">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              PostgreSQL Isolated Schemas
+              Named: <code className="font-mono text-emerald-300">{"{{tenant db name}}_bkp_YYYYMMDD"}</code>
             </span>
             <span className="text-white/20">•</span>
             <span className="flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-              Manual Schema Drop Supported
+              DROP SCHEMA CASCADE Supported
             </span>
           </div>
         </div>
@@ -537,7 +562,9 @@ export function DatabaseBackupDashboardPage() {
             </span>
           </div>
           <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2">{snapshots.length}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Across all snapshots in registry</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {activeSchema === "ALL" ? "Across all tenant databases" : `For tenant ${activeSchema}`}
+          </p>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
@@ -614,7 +641,10 @@ export function DatabaseBackupDashboardPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab("excel")}
+            onClick={() => {
+              setActiveTab("excel");
+              loadEligibleTables(activeSchema !== "ALL" ? activeSchema : "tenant");
+            }}
             className={`flex items-center gap-2 py-3 px-4 font-medium text-sm border-b-2 transition-colors ${
               activeTab === "excel"
                 ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
@@ -636,7 +666,7 @@ export function DatabaseBackupDashboardPage() {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search by schema name, notes, user..."
+                placeholder="Search by schema name, tenant, notes, user..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -672,10 +702,15 @@ export function DatabaseBackupDashboardPage() {
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">No backup schemas found</h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Create a new snapshot to backup tables into a dedicated{" "}
-                  <code>{"{{db}}_bkp_YYYYMMDD"}</code> schema.
+                  <code>{"{{tenant db name}}_bkp_YYYYMMDD"}</code> schema.
                 </p>
                 <button
-                  onClick={() => setIsCreateModalOpen(true)}
+                  onClick={() => {
+                    const target = activeSchema !== "ALL" ? activeSchema : (tenants[0]?.schemaName || "tenant");
+                    setBackupTargetSchema(target);
+                    loadEligibleTables(target);
+                    setIsCreateModalOpen(true);
+                  }}
                   className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-500"
                 >
                   <HardDrive className="w-3.5 h-3.5" />
@@ -689,7 +724,7 @@ export function DatabaseBackupDashboardPage() {
                     <tr>
                       <th className="py-3 px-4">PostgreSQL Schema Name</th>
                       <th className="py-3 px-4">Backup Name / Label</th>
-                      <th className="py-3 px-4">Source DB & Schema</th>
+                      <th className="py-3 px-4">Tenant DB & Schema</th>
                       <th className="py-3 px-4">Tables & Rows</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Created Details</th>
@@ -737,9 +772,12 @@ export function DatabaseBackupDashboardPage() {
                             {snap.notes && <div className="text-[11px] text-slate-500 truncate max-w-xs">{snap.notes}</div>}
                           </td>
 
-                          <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
-                            <div>{snap.databaseName || "active_db"}</div>
-                            <span className="text-[10px] text-indigo-500">{snap.sourceSchema}</span>
+                          <td className="py-3 px-4 text-[11px]">
+                            <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-indigo-500" />
+                              {snap.databaseName || snap.sourceSchema}
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">schema: {snap.sourceSchema}</span>
                           </td>
 
                           <td className="py-3 px-4">
@@ -805,7 +843,7 @@ export function DatabaseBackupDashboardPage() {
                                   {/* Restore Snapshot button */}
                                   <button
                                     onClick={() => setSnapshotToRestore(snap)}
-                                    title="Restore database from this schema"
+                                    title={`Restore into tenant schema "${snap.sourceSchema}"`}
                                     className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition-colors"
                                   >
                                     <RotateCcw className="w-4 h-4" />
@@ -1005,7 +1043,13 @@ export function DatabaseBackupDashboardPage() {
               </span>
               <div>
                 <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Export Database to Excel</h3>
-                <p className="text-xs text-slate-500">Download formatted multi-sheet Excel workbook backup.</p>
+                <p className="text-xs text-slate-500">
+                  Download formatted multi-sheet Excel workbook backup for tenant{" "}
+                  <code className="text-emerald-600 font-mono font-bold">
+                    {activeSchema !== "ALL" ? activeSchema : "tenant"}
+                  </code>
+                  .
+                </p>
               </div>
             </div>
 
@@ -1149,17 +1193,43 @@ export function DatabaseBackupDashboardPage() {
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+              {/* Tenant Selection */}
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                  Tenant for whom need to take backup:
+                </label>
+                <select
+                  value={backupTargetSchema}
+                  onChange={(e) => {
+                    const chosen = e.target.value;
+                    setBackupTargetSchema(chosen);
+                    loadEligibleTables(chosen);
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-medium"
+                >
+                  {tenants.map((t) => (
+                    <option key={t.schemaName} value={t.schemaName}>
+                      {t.name} (DB Schema: {t.schemaName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Dynamic Schema Name Preview */}
               <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-semibold">Automatic Schema Naming Convention</p>
                   <p className="mt-0.5 text-[11px] leading-relaxed">
-                    The backup engine will create a dedicated PostgreSQL schema formatted as{" "}
-                    <code className="font-mono bg-amber-200/50 dark:bg-amber-900/50 px-1 py-0.5 rounded font-bold">
-                      {"{{actual_db_name}}_bkp_YYYYMMDD"}
-                    </code>{" "}
-                    (e.g., <span className="font-mono">siddhi_dev_bkp_{new Date().toISOString().slice(0, 10).replace(/-/g, "")}</span>
-                    ). It is registered in <code className="font-mono font-bold">tenant.database_backups</code>.
+                    The backup engine will create a dedicated schema for this tenant formatted as:
+                    <br />
+                    <code className="font-mono bg-amber-200/50 dark:bg-amber-900/50 px-1.5 py-0.5 rounded font-bold text-xs mt-1 inline-block">
+                      {backupTargetSchema}_bkp_{new Date().toISOString().slice(0, 10).replace(/-/g, "")}
+                    </code>
+                    <br />
+                    Format: <code className="font-mono font-semibold">{"{{tenant db name}}_bkp_YYYYMMDD"}</code>.
+                    All backup entries are registered in <code className="font-mono font-bold">tenant.database_backups</code>.
                   </p>
                 </div>
               </div>
@@ -1283,7 +1353,7 @@ export function DatabaseBackupDashboardPage() {
                   Tables in Schema: <code className="text-amber-300">{inspectingSnapshot.backupSchemaName}</code>
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Backup: {inspectingSnapshot.backupName} • {inspectingSnapshot.totalTables} tables •{" "}
+                  Tenant: {inspectingSnapshot.databaseName || inspectingSnapshot.sourceSchema} • {inspectingSnapshot.totalTables} tables •{" "}
                   {inspectingSnapshot.totalRows.toLocaleString()} total rows
                 </p>
               </div>
@@ -1355,21 +1425,21 @@ export function DatabaseBackupDashboardPage() {
                 <p className="font-semibold">Safe Topological Reconciliation</p>
                 <p className="text-[11px] leading-relaxed">
                   Data from schema <code className="font-mono font-bold">{snapshotToRestore.backupSchemaName}</code> will be
-                  safely reconciled into the active schema <code className="font-mono font-bold">"{activeSchema}"</code>.
+                  safely reconciled into the tenant schema <code className="font-mono font-bold">"{snapshotToRestore.sourceSchema}"</code>.
                   Existing records will be updated and missing records will be inserted. No data outside this backup will be dropped.
                 </p>
               </div>
 
               <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 space-y-1.5 font-mono text-[11px]">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Source Schema:</span>
+                  <span className="text-slate-500">Source Backup Schema:</span>
                   <span className="font-semibold text-indigo-600 dark:text-indigo-400">
                     {snapshotToRestore.backupSchemaName}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Target Schema:</span>
-                  <span className="font-semibold text-slate-800 dark:text-white">{activeSchema}</span>
+                  <span className="text-slate-500">Target Tenant DB:</span>
+                  <span className="font-semibold text-slate-800 dark:text-white">{snapshotToRestore.sourceSchema}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Total Tables:</span>
@@ -1605,4 +1675,3 @@ export function DatabaseBackupDashboardPage() {
     </div>
   );
 }
-
