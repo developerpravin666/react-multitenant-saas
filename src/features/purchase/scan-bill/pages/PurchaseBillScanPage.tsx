@@ -96,6 +96,40 @@ export function PurchaseBillScanPage() {
   const [savingInventory, setSavingInventory] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Tenant OCR Provider & Quota Status
+  const [ocrStatus, setOcrStatus] = useState<{
+    isOcrEnabled: boolean;
+    canUploadInvoice: boolean;
+    activeProviderName: string;
+    activeProviderType: string;
+    maxScansLimit: number;
+    usedScansCount: number;
+    remainingScans: number;
+    lastScanAtUtc?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    apiClient
+      .get<{
+        isOcrEnabled: boolean;
+        canUploadInvoice: boolean;
+        activeProviderName: string;
+        activeProviderType: string;
+        maxScansLimit: number;
+        usedScansCount: number;
+        remainingScans: number;
+        lastScanAtUtc?: string | null;
+      }>("/ocr/status")
+      .then((res) => {
+        if (isMounted && res) setOcrStatus(res);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Duplicate serial numbers report state
   const [duplicateReport, setDuplicateReport] = useState<{
     duplicates: Array<{
@@ -271,6 +305,22 @@ export function PurchaseBillScanPage() {
       return;
     }
 
+    if (ocrStatus && !ocrStatus.isOcrEnabled) {
+      notifications.error(
+        "OCR Disabled",
+        "AI OCR functionality is currently disabled for your store by the platform administrator."
+      );
+      return;
+    }
+
+    if (ocrStatus && ocrStatus.remainingScans <= 0) {
+      notifications.error(
+        "OCR Quota Exceeded",
+        `You have reached your scan limit (${ocrStatus.usedScansCount}/${ocrStatus.maxScansLimit} scans used). Please contact platform administrator to increase your OCR quota.`
+      );
+      return;
+    }
+
     setSelectedPresetId("");
     setImageFile(file);
     setZoomLevel(1);
@@ -280,11 +330,11 @@ export function PurchaseBillScanPage() {
     setScanProgress({ status: "Preparing document for processing…", percent: 10 });
 
     try {
-      // Run document extractor (supports PDF text + canvas render and image OCR)
+      // 1. Run client document extractor (generates image preview canvas & raw text)
       const { text: rawText, previewUrl } = await extractTextFromInvoiceDocument(
         file,
         (status, percent) => {
-          setScanProgress({ status, percent });
+          setScanProgress({ status, percent: Math.min(60, percent) });
         }
       );
 
@@ -295,6 +345,73 @@ export function PurchaseBillScanPage() {
         setImageSrc(objectUrl);
       }
 
+      setScanProgress({
+        status: `Dispatching to AI OCR (${ocrStatus?.activeProviderName || "Active Engine"})…`,
+        percent: 75,
+      });
+
+      // 2. Dispatch to backend dynamic OCR service
+      const formData = new FormData();
+      formData.append("file", file);
+      if (rawText) {
+        formData.append("rawText", rawText);
+      }
+
+      let parsedBill: ExtractedPurchaseBill | null = null;
+
+      try {
+        const serverResult = await apiClient.post<{
+          header: ExtractedBillHeader;
+          items: ExtractedBillItem[];
+          summary: any;
+          rawText: string;
+          confidence: number;
+          providerUsed: string;
+          remainingScans?: number;
+        }>("/ocr/process-invoice", formData);
+
+        if (serverResult && serverResult.header && serverResult.items) {
+          parsedBill = {
+            header: serverResult.header,
+            items: serverResult.items.map((it, idx) => ({
+              ...it,
+              id: it.id || `item-${idx + 1}`,
+              lineNumber: it.lineNumber || idx + 1,
+            })),
+            summary: serverResult.summary,
+            rawText: serverResult.rawText || rawText,
+            confidence: serverResult.confidence || 0.95,
+          };
+
+          if (serverResult.remainingScans !== undefined) {
+            setOcrStatus((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    remainingScans: serverResult.remainingScans ?? prev.remainingScans,
+                    usedScansCount: prev.usedScansCount + 1,
+                  }
+                : null
+            );
+          }
+
+          setBill(parsedBill);
+          notifications.success(
+            `AI Scan Complete (${serverResult.providerUsed})!`,
+            `Extracted ${parsedBill.items.length} item(s) from ${parsedBill.header.vendorName || "invoice"}. (${serverResult.remainingScans} scans remaining)`
+          );
+          return;
+        }
+      } catch (apiErr) {
+        const errMsg = apiErr instanceof Error ? apiErr.message : "Server OCR returned an error";
+        if (errMsg.toLowerCase().includes("quota") || errMsg.toLowerCase().includes("disabled")) {
+          notifications.error("OCR Restriction", errMsg);
+          return;
+        }
+        console.warn("Server OCR dispatch failed, using fallback parser:", apiErr);
+      }
+
+      // 3. Fallback to client layout parser if server API was unreachable
       setScanProgress({ status: "Extracting invoice line items & totals…", percent: 95 });
       const parsed = parsePurchaseBillText(rawText);
       setBill(parsed);
@@ -318,6 +435,7 @@ export function PurchaseBillScanPage() {
       setScanProgress({ status: "", percent: 0 });
     }
   };
+
 
   // Header update
   const handleHeaderChange = (field: keyof ExtractedBillHeader, value: string) => {
@@ -763,6 +881,50 @@ export function PurchaseBillScanPage() {
           />
         </div>
       </div>
+
+      {/* Active AI OCR Engine & Quota Status Banner */}
+      {ocrStatus && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 rounded-2xl border border-indigo-200/70 bg-gradient-to-r from-indigo-50/70 via-sky-50/50 to-white dark:border-indigo-900/50 dark:from-indigo-950/30 dark:to-slate-900 shadow-sm text-xs">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 font-bold text-indigo-950 dark:text-indigo-200">
+              <Sparkles className="size-4 text-indigo-600 animate-pulse" />
+              <span>Active OCR Engine:</span>
+            </div>
+            <span className="font-semibold text-indigo-700 bg-white dark:bg-indigo-900/60 dark:text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-200 shadow-xs">
+              {ocrStatus.activeProviderName}
+            </span>
+            <span className="text-slate-400">•</span>
+            <span className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
+              Type: {ocrStatus.activeProviderType}
+            </span>
+            {!ocrStatus.isOcrEnabled && (
+              <span className="bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full">
+                OCR Disabled by Super Admin
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium">Scans Usage:</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">
+                {ocrStatus.usedScansCount} / {ocrStatus.maxScansLimit}
+              </span>
+            </div>
+            <span
+              className={`px-3 py-1 rounded-full font-bold shadow-xs ${
+                ocrStatus.remainingScans <= 0
+                  ? "bg-rose-100 text-rose-800 border border-rose-300"
+                  : ocrStatus.remainingScans < 20
+                  ? "bg-amber-100 text-amber-800 border border-amber-300"
+                  : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+              }`}
+            >
+              {ocrStatus.remainingScans} scans left
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 4 Supported Mobile Purchase Bills Selector */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">

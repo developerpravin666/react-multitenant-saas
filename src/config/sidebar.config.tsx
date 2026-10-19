@@ -31,6 +31,7 @@ import {
   Warehouse,
   Scale,
   Layers,
+  ScanText,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -103,6 +104,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
         label: "System Settings",
         path: APP_ROUTES.admin.systemSettings,
         icon: Server,
+      },
+      {
+        id: "admin-ocr-settings",
+        label: "OCR & Document AI",
+        path: APP_ROUTES.admin.ocrSettings,
+        icon: ScanText,
       },
     ],
   },

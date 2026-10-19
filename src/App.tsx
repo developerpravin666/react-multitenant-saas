@@ -48,6 +48,7 @@ import { FeatureFlagsAdminPage } from "./features/feature-flags/FeatureFlagsAdmi
 import { TableManagementDashboardPage } from "./features/admin/TableManagementDashboardPage";
 import { DatabaseBackupDashboardPage } from "./features/admin/DatabaseBackupDashboardPage";
 import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
+import { OcrSettingsAdminPage } from "./features/admin/OcrSettingsAdminPage";
 import { AdminRoute } from "./features/auth/AdminRoute";
 
 function RootDashboard() {
@@ -122,6 +123,7 @@ export default function App() {
           <Route path={APP_ROUTES.admin.featureFlags} element={withPageTitle("Feature Flags", <FeatureFlagsAdminPage />)} />
           <Route path={APP_ROUTES.admin.mastersImport} element={withPageTitle("Import Masters", <MasterImportPage isAdminMode={true} />)} />
           <Route path={APP_ROUTES.admin.emailTemplates} element={withPageTitle("Email Templates", <EmailTemplatesPage />)} />
+          <Route path={APP_ROUTES.admin.ocrSettings} element={withPageTitle("OCR & Document AI", <OcrSettingsAdminPage />)} />
 
         </Route>
       </Route>
