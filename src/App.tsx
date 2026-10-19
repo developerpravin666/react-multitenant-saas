@@ -8,6 +8,8 @@ import { TenantApprovalsPage } from "./features/settings/tenants/TenantApprovals
 import { ForgotPasswordPage, ResetPasswordPage } from "./features/auth/PasswordRecoveryPages";
 import { ProtectedRoute } from "./features/auth/ProtectedRoute";
 import { ChangePasswordPage } from "./features/auth/ChangePasswordPage";
+import { OfflineBoundary } from "./components/network/OfflineBoundary";
+import { OfflineFallbackPage } from "./pages/OfflineFallbackPage";
 import { productRoutes } from "./features/products/routes/ProductRoutes";
 import { TaxFormPage } from "./features/settings/tax/pages/TaxFormPage";
 import { TaxListPage } from "./features/settings/tax/pages/TaxListPage";
@@ -68,8 +70,9 @@ export default function App() {
       <Route path="/accept-invitation" element={withPageTitle("Accept Invitation", <AcceptInvitationPage />)} />
       <Route path="/forgot-password" element={withPageTitle("Forgot Password", <ForgotPasswordPage />)} />
       <Route path="/reset-password" element={withPageTitle("Reset Password", <ResetPasswordPage />)} />
+      <Route path="/offline" element={withPageTitle("Offline", <OfflineFallbackPage />)} />
       <Route element={<ProtectedRoute />}>
-        <Route element={<AppShell />}>
+        <Route element={<OfflineBoundary><AppShell /></OfflineBoundary>}>
           <Route path="/" element={<RootDashboard />} />
           <Route path="/account/change-password" element={withPageTitle("Change Password", <ChangePasswordPage />)} />
           <Route path={APP_ROUTES.contraVoucher} element={withPageTitle("Contra Voucher (F4)", <ContraVoucherPage />)} />

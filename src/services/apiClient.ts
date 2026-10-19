@@ -208,13 +208,41 @@ async function request<T>(
   }
   let finalConfig: ApiRequestConfig = { ...config, headers };
 
+  // Fast-fail if browser is strictly offline
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("app:network-offline", { detail: { path } }));
+    }
+    throw new ApiError(
+      "You are currently offline. Please check your internet connection.",
+      0,
+      { isOffline: true }
+    );
+  }
+
   for (const interceptor of requestInterceptors)
     finalConfig = await interceptor(toUrl(path), finalConfig);
 
   activeRequests += 1;
   notifyLoading();
   try {
-    let response = await fetch(toUrl(path), finalConfig);
+    let response: Response;
+    try {
+      response = await fetch(toUrl(path), finalConfig);
+    } catch (fetchError) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("app:network-offline", { detail: { path, originalError: fetchError } }));
+      }
+      const isOfflineNow = typeof navigator !== "undefined" && !navigator.onLine;
+      throw new ApiError(
+        isOfflineNow
+          ? "You are currently offline. Please check your internet connection."
+          : "Network connection lost or server is unreachable. Please verify your connection and try again.",
+        0,
+        { isOffline: true, originalError: fetchError instanceof Error ? fetchError.message : String(fetchError) }
+      );
+    }
+
     if (
       response.status === 401 &&
       finalConfig.authenticate !== false &&
@@ -225,7 +253,15 @@ async function request<T>(
         const retryConfig = { ...config, headers: new Headers(headers) };
         for (const interceptor of requestInterceptors)
           finalConfig = await interceptor(toUrl(path), retryConfig);
-        response = await fetch(toUrl(path), finalConfig);
+        try {
+          response = await fetch(toUrl(path), finalConfig);
+        } catch (fetchError) {
+          throw new ApiError(
+            "Network connection lost during authentication retry.",
+            0,
+            { isOffline: true, originalError: fetchError instanceof Error ? fetchError.message : String(fetchError) }
+          );
+        }
       }
     }
     for (const interceptor of responseInterceptors)
