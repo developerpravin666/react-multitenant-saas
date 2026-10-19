@@ -102,11 +102,21 @@ export function PurchaseBillScanPage() {
     canUploadInvoice: boolean;
     activeProviderName: string;
     activeProviderType: string;
+    activeProviderId?: string | null;
     maxScansLimit: number;
     usedScansCount: number;
     remainingScans: number;
     lastScanAtUtc?: string | null;
+    availableProviders?: Array<{
+      id: string;
+      name: string;
+      providerType: string;
+      description?: string;
+      isDefault: boolean;
+      isAssignedToTenant: boolean;
+    }>;
   } | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("");
 
   useEffect(() => {
     let isMounted = true;
@@ -116,13 +126,27 @@ export function PurchaseBillScanPage() {
         canUploadInvoice: boolean;
         activeProviderName: string;
         activeProviderType: string;
+        activeProviderId?: string | null;
         maxScansLimit: number;
         usedScansCount: number;
         remainingScans: number;
         lastScanAtUtc?: string | null;
+        availableProviders?: Array<{
+          id: string;
+          name: string;
+          providerType: string;
+          description?: string;
+          isDefault: boolean;
+          isAssignedToTenant: boolean;
+        }>;
       }>("/ocr/status")
       .then((res) => {
-        if (isMounted && res) setOcrStatus(res);
+        if (isMounted && res) {
+          setOcrStatus(res);
+          if (res.activeProviderId) {
+            setSelectedProviderId(res.activeProviderId);
+          }
+        }
       })
       .catch(() => {});
     return () => {
@@ -355,6 +379,9 @@ export function PurchaseBillScanPage() {
       formData.append("file", file);
       if (rawText) {
         formData.append("rawText", rawText);
+      }
+      if (selectedProviderId) {
+        formData.append("providerId", selectedProviderId);
       }
 
       let parsedBill: ExtractedPurchaseBill | null = null;
@@ -890,12 +917,27 @@ export function PurchaseBillScanPage() {
               <Sparkles className="size-4 text-indigo-600 animate-pulse" />
               <span>Active OCR Engine:</span>
             </div>
-            <span className="font-semibold text-indigo-700 bg-white dark:bg-indigo-900/60 dark:text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-200 shadow-xs">
-              {ocrStatus.activeProviderName}
-            </span>
+            {ocrStatus.availableProviders && ocrStatus.availableProviders.length > 0 ? (
+              <select
+                value={selectedProviderId}
+                onChange={(e) => setSelectedProviderId(e.target.value)}
+                disabled={isScanning || !ocrStatus.isOcrEnabled}
+                className="font-semibold text-indigo-700 bg-white dark:bg-slate-800 dark:text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 shadow-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs"
+              >
+                {ocrStatus.availableProviders.map((prov) => (
+                  <option key={prov.id} value={prov.id}>
+                    {prov.name} {prov.isAssignedToTenant ? "★ (Assigned by Admin)" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-semibold text-indigo-700 bg-white dark:bg-indigo-900/60 dark:text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-200 shadow-xs">
+                {ocrStatus.activeProviderName}
+              </span>
+            )}
             <span className="text-slate-400">•</span>
             <span className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-              Type: {ocrStatus.activeProviderType}
+              Type: {ocrStatus.availableProviders?.find((p) => p.id === selectedProviderId)?.providerType || ocrStatus.activeProviderType}
             </span>
             {!ocrStatus.isOcrEnabled && (
               <span className="bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full">

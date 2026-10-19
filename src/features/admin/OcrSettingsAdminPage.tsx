@@ -974,13 +974,42 @@ export function OcrSettingsAdminPage() {
                 </div>
               </div>
 
+              {/* Provider-specific guidance alert */}
+              {providerFormData.providerType === "GoogleDocumentAi" && (
+                <div className="text-xs bg-indigo-50 border border-indigo-200 text-indigo-900 p-3 rounded-xl flex items-start gap-2">
+                  <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Google Cloud Document AI Setup:</span>
+                    <p className="mt-0.5 text-indigo-800 text-[11px]">
+                      Paste your downloaded <strong>Service Account JSON key</strong> into <em>Additional Configuration (JSON)</em> below. The system automatically signs RS256 OAuth2 tokens and resolves your processor path <code>projects/PROJECT/locations/LOCATION/processors/ID</code>.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {providerFormData.providerType === "AzureDocumentIntelligence" && (
+                <div className="text-xs bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded-xl flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Azure AI Document Intelligence Setup:</span>
+                    <p className="mt-0.5 text-blue-800 text-[11px]">
+                      Provide your Azure endpoint (e.g. <code>https://&lt;resource&gt;.cognitiveservices.azure.com/</code>), Subscription Key, and Model ID (default: <code>prebuilt-invoice</code>).
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
                   Endpoint URL
                 </label>
                 <input
                   type="text"
-                  placeholder="https://<your-resource-name>.cognitiveservices.azure.com/"
+                  placeholder={
+                    providerFormData.providerType === "GoogleDocumentAi"
+                      ? "https://us-documentai.googleapis.com/v1/"
+                      : "https://<your-resource-name>.cognitiveservices.azure.com/"
+                  }
                   value={providerFormData.endpointUrl}
                   onChange={(e) => {
                     setProviderFormData({ ...providerFormData, endpointUrl: e.target.value });
@@ -1002,11 +1031,15 @@ export function OcrSettingsAdminPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                    API Key / Secret
+                    API Key / Secret {providerFormData.providerType === "GoogleDocumentAi" && "(Optional if SA JSON provided)"}
                   </label>
                   <input
                     type="password"
-                    placeholder="Enter API key or secret token"
+                    placeholder={
+                      providerFormData.providerType === "GoogleDocumentAi"
+                        ? "API key or leave blank if using JSON"
+                        : "Enter API key or secret token"
+                    }
                     value={providerFormData.apiKeyOrSecret}
                     onChange={(e) =>
                       setProviderFormData({ ...providerFormData, apiKeyOrSecret: e.target.value })
@@ -1017,11 +1050,15 @@ export function OcrSettingsAdminPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                    Model / Processor ID
+                    Model / Processor ID *
                   </label>
                   <input
                     type="text"
-                    placeholder="prebuilt-invoice, invoice-processor"
+                    placeholder={
+                      providerFormData.providerType === "GoogleDocumentAi"
+                        ? "e.g. 274ff8b047eaf72e or full path"
+                        : "prebuilt-invoice"
+                    }
                     value={providerFormData.modelIdOrProcessorId}
                     onChange={(e) =>
                       setProviderFormData({ ...providerFormData, modelIdOrProcessorId: e.target.value })
@@ -1036,8 +1073,12 @@ export function OcrSettingsAdminPage() {
                   Additional Configuration (JSON)
                 </label>
                 <textarea
-                  rows={2}
-                  placeholder='{"timeoutMs": 15000, "confidenceThreshold": 0.8}'
+                  rows={4}
+                  placeholder={
+                    providerFormData.providerType === "GoogleDocumentAi"
+                      ? 'Paste your entire Google Cloud Service Account JSON key here (contains "client_email", "private_key", "project_id")'
+                      : '{"timeoutMs": 15000, "confidenceThreshold": 0.8}'
+                  }
                   value={providerFormData.additionalConfigJson}
                   onChange={(e) => {
                     setProviderFormData({ ...providerFormData, additionalConfigJson: e.target.value });
