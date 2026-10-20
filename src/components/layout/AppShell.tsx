@@ -4,6 +4,7 @@ import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Footer } from "./Footer";
 import { APP_ROUTES } from "../../config/routes";
+import { OfflineBanner } from "../network/OfflineBanner";
 
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -44,6 +45,7 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="no-print">
+          <OfflineBanner />
           <Header />
         </div>
 

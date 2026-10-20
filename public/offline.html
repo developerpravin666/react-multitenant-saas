@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline Mode - Siddhi ERP</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
+    body { background-color: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+    .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 1rem; max-width: 520px; width: 100%; padding: 2rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); text-align: center; }
+    .icon { width: 56px; height: 56px; margin: 0 auto 1.5rem auto; border-radius: 50%; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; color: #ef4444; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: #ffffff; }
+    p { font-size: 0.875rem; color: #94a3b8; line-height: 1.5; margin-bottom: 1.5rem; }
+    .badge { display: inline-flex; align-items: center; gap: 0.5rem; background: #334155; color: #e2e8f0; font-size: 0.75rem; font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 9999px; margin-bottom: 1.25rem; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+    .actions { display: flex; gap: 0.75rem; justify-content: center; }
+    button { background-color: #3b82f6; color: #ffffff; border: none; padding: 0.65rem 1.25rem; font-size: 0.875rem; font-weight: 600; border-radius: 0.5rem; cursor: pointer; transition: background-color 0.2s; }
+    button:hover { background-color: #2563eb; }
+    .btn-secondary { background-color: #334155; color: #f8fafc; }
+    .btn-secondary:hover { background-color: #475569; }
+    .tips { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid #334155; text-align: left; font-size: 0.75rem; color: #64748b; }
+    .tips strong { color: #cbd5e1; }
+    .tips ul { margin-top: 0.5rem; padding-left: 1.25rem; }
+    .tips li { margin-bottom: 0.25rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+        <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+        <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+        <line x1="12" y1="20" x2="12.01" y2="20"></line>
+      </svg>
+    </div>
+    <div class="badge">
+      <span class="status-dot"></span>
+      <span>No Internet Connection</span>
+    </div>
+    <h1>You are currently offline</h1>
+    <p>
+      Siddhi ERP can operate locally without an active internet connection if connected to your store's Local LAN or Desktop Server.
+    </p>
+    <div class="actions">
+      <button onclick="window.location.reload()">Retry Connection</button>
+      <button class="btn-secondary" onclick="window.location.href='/'">Go to Home</button>
+    </div>
+    <div class="tips">
+      <strong>Offline Checklist:</strong>
+      <ul>
+        <li>Check if your local Wi-Fi or Ethernet cable is plugged in.</li>
+        <li>Make sure the main desktop store server (port 64114) is turned on.</li>
+        <li>For local billing, navigate directly to your store's local IP address.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
+

@@ -11,6 +11,7 @@ import { AuthProvider } from "./features/auth/AuthContext";
 import { FeatureFlagProvider } from "./features/feature-flags/FeatureFlagContext";
 import { VoiceTypingProvider } from "./features/voice-typing/VoiceTypingContext";
 import { VoiceTypingWidget } from "./features/voice-typing/VoiceTypingWidget";
+import { NetworkStatusProvider } from "./context/NetworkStatusContext";
 
 /**
  * Universally enforces autocomplete="off" on all HTML controls across the entire application:
@@ -93,6 +94,20 @@ if (typeof document !== "undefined") {
   }
 }
 
+// Register Service Worker for offline shell and asset caching
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((reg) => {
+        console.log("Siddhi ServiceWorker registered with scope:", reg.scope);
+      })
+      .catch((err) => {
+        console.warn("ServiceWorker registration failed:", err);
+      });
+  });
+}
+
 const root = document.getElementById("root");
 
 if (!root) {
@@ -102,6 +117,7 @@ if (!root) {
 createRoot(root).render(
   <ThemeProvider>
     <NotificationProvider position="top-right" maxToasts={5}>
+      <NetworkStatusProvider>
         <ApiLoadingProvider>
           <BrowserRouter>
             <AuthProvider>
@@ -116,6 +132,8 @@ createRoot(root).render(
             </AuthProvider>
           </BrowserRouter>
         </ApiLoadingProvider>
+      </NetworkStatusProvider>
     </NotificationProvider>
   </ThemeProvider>,
 );
+

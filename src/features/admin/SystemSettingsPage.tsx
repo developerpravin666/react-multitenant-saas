@@ -11,6 +11,12 @@ import {
   Cloud,
   Mic,
   MicOff,
+  FileSpreadsheet,
+  Download,
+  Laptop,
+  Network,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { Link } from "react-router-dom";
@@ -37,6 +43,36 @@ interface AdminSystemSettings {
   serverTimeUtc: string;
 }
 
+interface DatabaseEngineOption {
+  engineType: string;
+  displayName: string;
+  description: string;
+  isRecommended: boolean;
+  feasibility: string;
+  pros: string;
+  cons: string;
+}
+
+interface DatabaseEngineConfig {
+  activeEngine: string;
+  offlineMode: boolean;
+  databaseHost: string;
+  databasePort: number;
+  databaseName: string;
+  sqliteFilePath: string;
+  excelWorkbookPath: string;
+  lanBindingUrl: string;
+  availableEngines: DatabaseEngineOption[];
+}
+
+interface DatabaseEngineTestResult {
+  success: boolean;
+  engineType: string;
+  latencyMs: number;
+  tableCount: number;
+  message: string;
+}
+
 export function SystemSettingsPage() {
   const notifications = useNotifications();
   const {
@@ -49,6 +85,11 @@ export function SystemSettingsPage() {
   const [voiceTestInput, setVoiceTestInput] = useState("");
 
   const [settings, setSettings] = useState<AdminSystemSettings | null>(null);
+  const [dbConfig, setDbConfig] = useState<DatabaseEngineConfig | null>(null);
+  const [selectedEngine, setSelectedEngine] = useState<string>("PostgreSql");
+  const [isTestingEngine, setIsTestingEngine] = useState<boolean>(false);
+  const [testResult, setTestResult] = useState<DatabaseEngineTestResult | null>(null);
+  const [copiedLanUrl, setCopiedLanUrl] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -65,6 +106,35 @@ export function SystemSettingsPage() {
         "Feature flag 'voice_typing' set to Disabled and stored in PostgreSQL database."
       );
     }
+  };
+
+  const handleTestEngine = async (engineType: string) => {
+    setIsTestingEngine(true);
+    setTestResult(null);
+    try {
+      const res = await apiClient.post<DatabaseEngineTestResult>("/admin/database-engine/test", { engineType });
+      setTestResult(res);
+      if (res.success) {
+        notifications.success("Engine Verification Succeeded", res.message);
+      } else {
+        notifications.error("Engine Verification Failed", res.message);
+      }
+    } catch (err) {
+      notifications.error("Test Failed", err instanceof Error ? err.message : "Database engine verification failed");
+    } finally {
+      setIsTestingEngine(false);
+    }
+  };
+
+  const handleExportDatabaseExcel = () => {
+    notifications.info("Exporting Excel Database", "Generating comprehensive multi-sheet ledger workbook...");
+    window.open("/api/admin/database-engine/export-excel", "_blank");
+  };
+
+  const copyLanUrl = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedLanUrl(true);
+    setTimeout(() => setCopiedLanUrl(false), 2500);
   };
 
   const fetchSettings = async () => {
@@ -92,9 +162,17 @@ export function SystemSettingsPage() {
         systemVersion: "1.4.0",
         serverTimeUtc: new Date().toISOString(),
       });
-    } finally {
-      setLoading(false);
     }
+
+    try {
+      const engineData = await apiClient.get<DatabaseEngineConfig>("/admin/database-engine");
+      if (engineData) {
+        setDbConfig(engineData);
+        setSelectedEngine(engineData.activeEngine || "PostgreSql");
+      }
+    } catch {}
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -312,6 +390,200 @@ export function SystemSettingsPage() {
         </div>
       </div>
 
+      {/* Offline Desktop & Database Engine Architecture (Tally Prime Model) */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-5 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+              <Database className="size-5" />
+            </div>
+            <div>
+              <h2 className="font-bold text-slate-900 dark:text-white text-base">
+                Database Engine & Offline Desktop Architecture
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Configure your offline deployment mode and choose between PostgreSQL (multi-counter LAN), SQLite (single-file portable), or Excel Sync.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <Radio className="size-3 text-emerald-500 animate-pulse" />
+              <span>{settings?.offlineMode ? "Offline Mode (Tally Prime Model)" : "Cloud / Hybrid Mode"}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Engine Selection Cards */}
+        <div>
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-3">
+            Available Database & Sync Engines
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 1. PostgreSQL */}
+            <div
+              onClick={() => setSelectedEngine("PostgreSql")}
+              className={`rounded-xl border p-4 cursor-pointer transition-all ${
+                selectedEngine === "PostgreSql"
+                  ? "border-indigo-600 bg-indigo-50/40 dark:border-indigo-500 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
+                  : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
+                  <Database className="size-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>PostgreSQL (Local / LAN)</span>
+                </div>
+                <span className="rounded-md bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                  Recommended
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Full transactional ACID engine with isolated schema-per-tenant. Supports local offline usage and multiple billing counters on local Wi-Fi / LAN (Tally Gold).
+              </p>
+              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                Target: {settings ? `${settings.databaseHost}:${settings.databasePort}` : "localhost:5432"} ({settings?.databaseName ?? "accounting_inventory"})
+              </div>
+            </div>
+
+            {/* 2. SQLite */}
+            <div
+              onClick={() => setSelectedEngine("Sqlite")}
+              className={`rounded-xl border p-4 cursor-pointer transition-all ${
+                selectedEngine === "Sqlite"
+                  ? "border-indigo-600 bg-indigo-50/40 dark:border-indigo-500 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
+                  : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
+                  <HardDrive className="size-4 text-amber-600 dark:text-amber-400" />
+                  <span>SQLite (Embedded File)</span>
+                </div>
+                <span className="rounded-md bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                  Portable
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Single zero-install embedded database file. Runs inside the application process without any background database service. Ideal for single-laptop stores.
+              </p>
+              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate" title={dbConfig?.sqliteFilePath}>
+                File: {dbConfig?.sqliteFilePath ? dbConfig.sqliteFilePath.split("\\").pop() : "siddhi_store.db"}
+              </div>
+            </div>
+
+            {/* 3. Excel Sync Engine */}
+            <div
+              onClick={() => setSelectedEngine("ExcelSync")}
+              className={`rounded-xl border p-4 cursor-pointer transition-all ${
+                selectedEngine === "ExcelSync"
+                  ? "border-indigo-600 bg-indigo-50/40 dark:border-indigo-500 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
+                  : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
+                  <FileSpreadsheet className="size-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Excel Workbook Sync</span>
+                </div>
+                <span className="rounded-md bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:text-blue-300">
+                  Audit Mirror
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                ClosedXML continuous sync engine. Automatically mirrors ledgers, products, invoices, and vouchers to an organized multi-sheet Excel spreadsheet (.xlsx).
+              </p>
+              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 font-mono text-[11px] text-slate-500 dark:text-slate-400 truncate" title={dbConfig?.excelWorkbookPath}>
+                Mirror: {dbConfig?.excelWorkbookPath ? dbConfig.excelWorkbookPath.split("\\").pop() : "siddhi_ledger_sync.xlsx"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Engine Verification & Export Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleTestEngine(selectedEngine)}
+              disabled={isTestingEngine}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 transition disabled:opacity-50"
+            >
+              <RefreshCw className={`size-3.5 ${isTestingEngine ? "animate-spin" : ""}`} />
+              <span>{isTestingEngine ? "Testing Connection…" : `Test ${selectedEngine} Engine`}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportDatabaseExcel}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 transition shadow-xs"
+            >
+              <Download className="size-3.5" />
+              <span>Export Full Database to Excel (.xlsx)</span>
+            </button>
+          </div>
+
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            Engine Selected: <strong className="text-slate-900 dark:text-white font-mono">{selectedEngine}</strong>
+          </span>
+        </div>
+
+        {/* Verification Result Feedback */}
+        {testResult && (
+          <div
+            className={`rounded-xl border p-4 text-xs font-medium ${
+              testResult.success
+                ? "border-emerald-200 bg-emerald-50/60 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                : "border-rose-200 bg-rose-50/60 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              {testResult.success ? (
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+              ) : (
+                <AlertCircle className="size-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+              )}
+              <div className="flex-1">
+                <div className="font-bold">
+                  {testResult.success ? "Engine Test Succeeded" : "Engine Test Failed"} — Latency: {testResult.latencyMs} ms · Tables: {testResult.tableCount}
+                </div>
+                <p className="mt-1 leading-relaxed opacity-90">{testResult.message}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Multi-Counter LAN Billing (Tally Gold Model) */}
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 dark:border-indigo-900/40 dark:bg-indigo-950/10">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-xs">
+                <Network className="size-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Multi-Counter LAN Billing Setup (Tally Gold Model)</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                In offline store mode, any billing computer or POS tablet on your shop’s local Wi-Fi or LAN cable can connect to this main PC and bill concurrently without internet.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                {window.location.origin}
+              </span>
+              <button
+                type="button"
+                onClick={() => copyLanUrl(window.location.origin)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition shadow-xs"
+              >
+                {copiedLanUrl ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                <span>{copiedLanUrl ? "Copied!" : "Copy LAN URL"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Deployment Mode Overview */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Environment Status */}
@@ -336,8 +608,6 @@ export function SystemSettingsPage() {
                 {settings ? `${settings.databaseHost}:${settings.databasePort}` : "localhost:5432"}
               </span>
             </div>
-
-
 
             <div className="flex items-start justify-between">
               <div>
