@@ -95,8 +95,9 @@ export function AuditLogsPage() {
             isActive: t.isActive,
           }));
         setTenants(activeTenants);
-        if (activeTenants.length > 0 && !selectedTenantId) {
-          setSelectedTenantId(activeTenants[0].id);
+        const firstTenant = activeTenants[0];
+        if (firstTenant && !selectedTenantId) {
+          setSelectedTenantId(firstTenant.id);
         }
       })
       .catch(() => {
