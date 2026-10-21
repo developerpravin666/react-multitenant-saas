@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { X, Building2, RefreshCw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { DynamicGrid } from "../../dynamic-grid/DynamicGrid";
 import { apiClient, type PagedData } from "../../../services/apiClient";
 import type { GridAction, GridColumn, GridQuery, GridServerSource } from "../../../types/grid";
+import { useAuth } from "../../auth/AuthContext";
 
 interface AuditLogRow {
   id: string;
@@ -20,6 +21,14 @@ interface AuditLogRow {
 }
 
 interface AuditLogModule { tableName: string; count: number }
+
+interface AdminTenantOption {
+  id: string;
+  name: string;
+  slug: string;
+  status?: string;
+  isActive?: boolean;
+}
 
 function humanize(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -55,8 +64,11 @@ function queryParams(query: GridQuery, filters: { tableName: string; action: str
 }
 
 export function AuditLogsPage() {
+  const { isProductOwner } = useAuth();
   const [searchParams] = useSearchParams();
   const [modules, setModules] = useState<AuditLogModule[]>([]);
+  const [tenants, setTenants] = useState<AdminTenantOption[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [tableName, setTableName] = useState(() => searchParams.get("tableName") ?? "");
   const [action, setAction] = useState("");
   const [recordId, setRecordId] = useState(() => searchParams.get("recordId") ?? "");
@@ -67,19 +79,51 @@ export function AuditLogsPage() {
   const [selected, setSelected] = useState<AuditLogRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // If super admin / product owner, load active tenants so they can pick which tenant's logs to inspect
   useEffect(() => {
-    void apiClient.get<AuditLogModule[]>("/audit-logs/modules")
+    if (!isProductOwner) return;
+    apiClient.get<any[]>("/admin/tenants")
+      .then((data) => {
+        const raw = Array.isArray(data) ? data : (data as any)?.items ?? [];
+        const activeTenants: AdminTenantOption[] = raw
+          .filter((t: any) => t.status === "Active" || t.isActive !== false)
+          .map((t: any) => ({
+            id: String(t.id),
+            name: String(t.name || t.tenantName || "Unnamed Tenant"),
+            slug: String(t.slug || t.tenantSlug || ""),
+            status: t.status,
+            isActive: t.isActive,
+          }));
+        setTenants(activeTenants);
+        if (activeTenants.length > 0 && !selectedTenantId) {
+          setSelectedTenantId(activeTenants[0].id);
+        }
+      })
+      .catch(() => {
+        // Ignored
+      });
+  }, [isProductOwner]);
+
+  // Load audit modules
+  useEffect(() => {
+    setError(null);
+    const config = selectedTenantId ? { headers: { "X-Tenant-Id": selectedTenantId } } : undefined;
+    void apiClient.get<AuditLogModule[]>("/audit-logs/modules", config)
       .then(setModules)
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load audit modules."));
-  }, []);
+  }, [selectedTenantId]);
 
   const filters = useMemo(() => ({ tableName, action, recordId: recordFilter, fromDate, toDate }), [tableName, action, recordFilter, fromDate, toDate]);
   const source = useMemo<GridServerSource<AuditLogRow>>(() => ({
     async load(query, signal): Promise<{ rows: AuditLogRow[]; totalCount: number; page: number; pageSize: number; totalPages: number }> {
-      const page = await apiClient.get<PagedData<AuditLogRow>>(`/audit-logs?${queryParams(query, filters)}`, { signal });
+      const config = {
+        signal,
+        headers: selectedTenantId ? { "X-Tenant-Id": selectedTenantId } : undefined,
+      };
+      const page = await apiClient.get<PagedData<AuditLogRow>>(`/audit-logs?${queryParams(query, filters)}`, config);
       return { rows: page.items, totalCount: page.totalCount, page: page.page, pageSize: page.pageSize, totalPages: page.totalPages };
     },
-  }), [filters]);
+  }), [filters, selectedTenantId]);
 
   const actions: GridAction<AuditLogRow>[] = useMemo(() => [
     { id: "view", label: "View change details", icon: "view", onClick: setSelected },
@@ -90,13 +134,53 @@ export function AuditLogsPage() {
 
   return (
     <section className="space-y-3">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">Audit Logs</h1>
-        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Review changes across tenant modules, including who changed each record and its before and after values.</p>
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {isProductOwner ? "Platform Tenant Audit Logs" : "Audit Logs"}
+          </h1>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            Review changes across tenant modules, including who changed each record and its before and after values.
+          </p>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-        <label className="flex flex-col gap-1 text-xs font-medium">Module / table<select className={inputClass} value={tableName} onChange={(event) => { setTableName(event.target.value); filterChanged(); }}><option value="">All modules</option>{modules.map((module) => <option key={module.tableName} value={module.tableName}>{humanize(module.tableName)} ({module.count})</option>)}</select></label>
+        {/* Super admin tenant selector */}
+        {isProductOwner && tenants.length > 0 && (
+          <label className="flex flex-col gap-1 text-xs font-medium">
+            <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold">
+              <Building2 size={13} />
+              Tenant Store
+            </span>
+            <select
+              className={`${inputClass} border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-950/30 font-semibold`}
+              value={selectedTenantId}
+              onChange={(event) => {
+                setSelectedTenantId(event.target.value);
+                filterChanged();
+              }}
+            >
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.slug})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <label className="flex flex-col gap-1 text-xs font-medium">
+          Module / table
+          <select className={inputClass} value={tableName} onChange={(event) => { setTableName(event.target.value); filterChanged(); }}>
+            <option value="">All modules</option>
+            {modules.map((module) => (
+              <option key={module.tableName} value={module.tableName}>
+                {humanize(module.tableName)} ({module.count})
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-xs font-medium">Action<select className={inputClass} value={action} onChange={(event) => { setAction(event.target.value); filterChanged(); }}><option value="">All actions</option><option value="Create">Create</option><option value="Update">Update</option><option value="Delete">Delete</option></select></label>
         <label className="flex flex-col gap-1 text-xs font-medium">Record ID<input className={inputClass} value={recordId} onChange={(event) => setRecordId(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { setRecordFilter(recordId); filterChanged(); } }} placeholder="Filter by record ID" /></label>
         <label className="flex flex-col gap-1 text-xs font-medium">From<input type="date" className={inputClass} value={fromDate} onChange={(event) => { setFromDate(event.target.value); filterChanged(); }} /></label>

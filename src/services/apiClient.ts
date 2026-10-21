@@ -35,7 +35,7 @@ export interface ApiRequestConfig extends RequestInit {
 type RequestInterceptor = (
   url: string,
   config: ApiRequestConfig,
-) => Promise<ApiRequestConfig> | ApiRequestConfig;
+  ) => Promise<ApiRequestConfig> | ApiRequestConfig;
 type ResponseInterceptor = (response: Response) => Promise<Response> | Response;
 type UnauthorizedHandler = () => Promise<boolean>;
 type LoadingListener = (isLoading: boolean) => void;
@@ -174,8 +174,21 @@ addRequestInterceptor((_, config) => {
   const token = localStorage.getItem("auth_token");
   if (!token) return config;
   const headers = new Headers(config.headers);
-  if (!headers.has("X-Tenant-ID")) {
-    const tenantId = localStorage.getItem("tenant_id");
+  if (!headers.has("X-Tenant-ID") && !headers.has("X-Tenant-Id") && !headers.has("x-tenant-id")) {
+    let tenantId = localStorage.getItem("tenant_id");
+    if (!tenantId) {
+      try {
+        const stored = localStorage.getItem("auth_session");
+        if (stored) {
+          const parsed = JSON.parse(stored) as { tenantId?: string };
+          if (parsed?.tenantId) {
+            tenantId = parsed.tenantId;
+          }
+        }
+      } catch {
+        // Ignore JSON parse errors
+      }
+    }
     if (tenantId && tenantId !== "00000000-0000-0000-0000-000000000000" && tenantId !== "system") {
       headers.set("X-Tenant-ID", tenantId);
     }
