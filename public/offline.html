@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline · Siddhi Platform</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --amber-bg: #fef3c7;
+      --amber-border: #fde68a;
+      --amber-text: #d97706;
+      --rose-bg: #ffe4e6;
+      --rose-text: #e11d48;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #020617;
+        --card-bg: #0f172a;
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --border: #1e293b;
+        --amber-bg: #451a03;
+        --amber-border: #78350f;
+        --amber-text: #fbbf24;
+        --rose-bg: #4c0519;
+        --rose-text: #fda4af;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1.25rem;
+      padding: 2.5rem 2rem;
+      max-width: 28rem;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    }
+    .icon-wrapper {
+      position: relative;
+      width: 5rem;
+      height: 5rem;
+      margin: 0 auto 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 1rem;
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      color: var(--amber-text);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--rose-bg);
+      color: var(--rose-text);
+      margin-bottom: 1rem;
+    }
+    .dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 1.75rem;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: 0.625rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-secondary {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: rgba(0, 0, 0, 0.03);
+    }
+    .tips {
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+      text-align: left;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .tips ul {
+      margin-top: 0.5rem;
+      padding-left: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="icon-wrapper">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="2" y1="2" x2="22" y2="22"></line>
+        <path d="M8.5 16.5a5 5 0 0 1 7 0"></path>
+        <path d="M2 8.82a15 15 0 0 1 4.17-2.65"></path>
+        <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"></path>
+        <path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"></path>
+        <path d="M5 13a10 10 0 0 1 5.24-2.76"></path>
+        <line x1="12" y1="20" x2="12.01" y2="20"></line>
+      </svg>
+    </div>
+
+    <div class="badge">
+      <span class="dot"></span>
+      <span>No Internet Connection</span>
+    </div>
+
+    <h1>You're Offline</h1>
+    <p>We couldn't connect to the Siddhi Platform. Please check your network cables, Wi-Fi, or mobile data.</p>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" id="retryBtn" onclick="retryConnection()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        <span id="btnText">Retry Connection</span>
+      </button>
+      <button class="btn btn-secondary" onclick="window.location.reload()">Reload Page</button>
+    </div>
+
+    <div class="tips">
+      <strong>Quick checklist:</strong>
+      <ul>
+        <li>Check if your Wi-Fi or Ethernet cable is connected.</li>
+        <li>Turn your Wi-Fi or router off and back on.</li>
+        <li>If on a local network, confirm the backend API is running.</li>
+      </ul>
+    </div>
+  </main>
+
+  <script>
+    // Automatically reload as soon as network comes back online
+    window.addEventListener('online', function() {
+      document.getElementById('btnText').textContent = 'Online! Reloading…';
+      setTimeout(function() {
+        window.location.reload();
+      }, 500);
+    });
+
+    function retryConnection() {
+      var btnText = document.getElementById('btnText');
+      btnText.textContent = 'Checking…';
+      fetch('/health?_t=' + Date.now(), { method: 'GET', cache: 'no-store' })
+        .then(function(res) {
+          if (res.ok || res.status < 500) {
+            btnText.textContent = 'Connected! Reloading…';
+            window.location.reload();
+          } else {
+            btnText.textContent = 'Server Unreachable (Retry)';
+          }
+        })
+        .catch(function() {
+          btnText.textContent = 'Still Offline (Retry)';
+        });
+    }
+  </script>
+</body>
+</html>
+

@@ -42,6 +42,13 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<AuthSession | null>(readStoredSession);
 
+  // Synchronize localStorage tenant_id from active session
+  useEffect(() => {
+    if (session?.tenantId && session.tenantId !== "00000000-0000-0000-0000-000000000000") {
+      localStorage.setItem(tenantIdKey, session.tenantId);
+    }
+  }, [session]);
+
   const clearSession = useCallback(() => {
     localStorage.removeItem(sessionKey);
     localStorage.removeItem(tokenKey);
@@ -53,7 +60,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const nextSession = await authService.login(input);
     localStorage.setItem(tokenKey, nextSession.token);
     localStorage.setItem(sessionKey, JSON.stringify(nextSession));
-    localStorage.setItem(tenantIdKey, nextSession.tenantId ?? "");
+    if (nextSession.tenantId) {
+      localStorage.setItem(tenantIdKey, nextSession.tenantId);
+    }
     setSession(nextSession);
   }, []);
 
@@ -91,7 +100,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
             const next = { ...current, ...tokens };
             localStorage.setItem(tokenKey, next.token);
             localStorage.setItem(sessionKey, JSON.stringify(next));
-            localStorage.setItem(tenantIdKey, next.tenantId ?? "");
+            if (next.tenantId) {
+              localStorage.setItem(tenantIdKey, next.tenantId);
+            }
             setSession(next);
             return next.token;
           })

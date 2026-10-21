@@ -11,6 +11,8 @@ import { AuthProvider } from "./features/auth/AuthContext";
 import { FeatureFlagProvider } from "./features/feature-flags/FeatureFlagContext";
 import { VoiceTypingProvider } from "./features/voice-typing/VoiceTypingContext";
 import { VoiceTypingWidget } from "./features/voice-typing/VoiceTypingWidget";
+import { NetworkStatusProvider } from "./context/NetworkStatusContext";
+import { OfflineBanner } from "./components/network/OfflineBanner";
 
 /**
  * Universally enforces autocomplete="off" on all HTML controls across the entire application:
@@ -99,23 +101,41 @@ if (!root) {
   throw new Error("Root element was not found.");
 }
 
+// Register Service Worker for seamless offline navigation fallback
+if (typeof window !== "undefined" && "serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((reg) => {
+        // Periodically check for service worker updates
+        reg.update().catch(() => {});
+      })
+      .catch((err) => {
+        console.debug("Service worker registration skipped:", err);
+      });
+  });
+}
+
 createRoot(root).render(
   <ThemeProvider>
     <NotificationProvider position="top-right" maxToasts={5}>
+      <NetworkStatusProvider>
+        <OfflineBanner />
         <ApiLoadingProvider>
           <BrowserRouter>
             <AuthProvider>
               <TenantProvider tenant={defaultTenant}>
-              <FeatureFlagProvider>
-                <VoiceTypingProvider>
-                  <App />
-                  <VoiceTypingWidget />
-                </VoiceTypingProvider>
-              </FeatureFlagProvider>
+                <FeatureFlagProvider>
+                  <VoiceTypingProvider>
+                    <App />
+                    <VoiceTypingWidget />
+                  </VoiceTypingProvider>
+                </FeatureFlagProvider>
               </TenantProvider>
             </AuthProvider>
           </BrowserRouter>
         </ApiLoadingProvider>
+      </NetworkStatusProvider>
     </NotificationProvider>
   </ThemeProvider>,
 );

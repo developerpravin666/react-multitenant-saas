@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../features/auth/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useTheme } from "../../context/ThemeContext";
+import { NetworkStatusIndicator } from "../network/NetworkStatusIndicator";
 
 export function Header() {
   const { tenant } = useTenant();
@@ -60,6 +61,8 @@ export function Header() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <NetworkStatusIndicator />
+
         <button
           type="button"
           onClick={toggleTheme}

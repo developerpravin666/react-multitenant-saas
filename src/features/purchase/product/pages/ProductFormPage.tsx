@@ -365,65 +365,81 @@ function createRowFromBillItem(
   index: number,
   lookups: ProductLookupsData
 ): ProductRowItem {
-  // 1. Identify Brand first
+  // 1. Identify Brand
   const brandId = matchBrand(item.brand, lookups.brands, item.description);
+  const matchedBrand = lookups.brands.find((b) => b.id === brandId);
+  const finalBrandName =
+    item.brand && item.brand.toLowerCase() !== "generic"
+      ? item.brand
+      : matchedBrand?.name || "Generic";
+  const finalBrandId = brandId || (finalBrandName ? `temp-brand-${finalBrandName.toLowerCase()}` : "");
 
   // 2. Identify Model with preferred brand so models belonging to that brand are prioritized
   const matchedModel = matchModelRecord(item, lookups.models, brandId);
-
-  let finalBrandId = brandId;
-  let productTypeId = "";
   let productModelId = "";
+  let finalModelName = "";
+  let productTypeId = "";
 
   if (matchedModel) {
     productModelId = matchedModel.id;
-    if (matchedModel.brandId) {
-      finalBrandId = matchedModel.brandId;
-    }
-    productTypeId =
-      matchedModel.productTypeId ?? matchProductType(finalBrandId, lookups.productTypes);
+    finalModelName = matchedModel.name;
+    productTypeId = matchedModel.productTypeId ?? matchProductType(finalBrandId, lookups.productTypes);
   } else {
+    // If not in database lookups, keep the real extracted model from the invoice!
+    finalModelName =
+      item.model && item.model.toLowerCase() !== "standard"
+        ? item.model
+        : item.description || "Smart Model";
+    productModelId = `temp-model-${finalModelName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
     productTypeId = matchProductType(finalBrandId, lookups.productTypes);
-    const candidateModels = lookups.models.filter(
-      (m) => !m.brandId || m.brandId === finalBrandId
-    );
-    productModelId = candidateModels[0]?.id ?? "";
-    const chosenModel = lookups.models.find((m) => m.id === productModelId);
-    if (chosenModel) {
-      if (chosenModel.brandId) finalBrandId = chosenModel.brandId;
-      if (chosenModel.productTypeId) productTypeId = chosenModel.productTypeId;
-    }
   }
 
+  // 3. Variant
   const variantId = matchVariant(item.variant, item.description, lookups.variants);
-  const colorId = matchColor(item.color, item.description, lookups.colors);
+  const matchedVariant = lookups.variants.find((v) => v.id === variantId);
+  const finalVariantName =
+    item.variant && item.variant.toLowerCase() !== "standard"
+      ? canonicalizeVariantName(item.variant)
+      : matchedVariant?.name || "Standard";
+  const finalVariantId = variantId || `temp-variant-${finalVariantName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
 
-  const s1 = item.serialNumber.trim();
-  let s2 = item.serialNumber1?.trim() || "";
-  if (!s2 && s1.length > 1) {
+  // 4. Color
+  const colorId = matchColor(item.color, item.description, lookups.colors);
+  const matchedColor = lookups.colors.find((c) => c.id === colorId);
+  const finalColorName =
+    item.color && item.color.toLowerCase() !== "standard"
+      ? item.color
+      : matchedColor?.name || "Standard";
+  const finalColorId = colorId || `temp-color-${finalColorName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+
+  // 5. Serial / IMEI Numbers
+  const s1 = item.serialNumber ? item.serialNumber.trim() : "";
+  let s2 = item.serialNumber1 ? item.serialNumber1.trim() : "";
+  if (!s2 && s1.length === 15) {
     const lastDigit = Number(s1.slice(-1));
-    s2 = !isNaN(lastDigit) ? `${s1.slice(0, -1)}${(lastDigit + 1) % 10}` : `${s1}1`;
+    s2 = !isNaN(lastDigit) ? `${s1.slice(0, -1)}${(lastDigit + 1) % 10}` : "";
   }
 
+  // 6. Rates, Taxes & Totals
   const rate = item.taxableRate || 0;
   const cgst = item.cgstRate ?? lookups.taxRates.cgst ?? 9;
   const sgst = item.sgstRate ?? lookups.taxRates.sgst ?? 9;
-  const tax = cgst + sgst;
-  const total = Number((rate + (rate * tax) / 100).toFixed(2));
+  const tax = item.gstRate ?? (cgst + sgst);
+  const total = item.totalAmount || Number((rate + (rate * tax) / 100).toFixed(2));
 
   return {
     id: `row-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
     lineNumber: index + 1,
     description: item.description,
     brandId: finalBrandId,
-    brandName: item.brand || lookups.brands.find((b) => b.id === finalBrandId)?.name || "",
+    brandName: finalBrandName,
     productTypeId,
     productModelId,
-    modelName: item.model || lookups.models.find((m) => m.id === productModelId)?.name || "",
-    variantId,
-    variantName: item.variant || lookups.variants.find((v) => v.id === variantId)?.name || "",
-    colorId,
-    colorName: item.color || lookups.colors.find((c) => c.id === colorId)?.name || "",
+    modelName: finalModelName,
+    variantId: finalVariantId,
+    variantName: finalVariantName,
+    colorId: finalColorId,
+    colorName: finalColorName,
     serialNumber: s1,
     serialNumber1: s2,
     purchasePrice: rate,
@@ -498,6 +514,64 @@ function BulkProductCreateForm() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // Tenant OCR Provider & Quota Status
+  const [ocrStatus, setOcrStatus] = useState<{
+    isOcrEnabled: boolean;
+    canUploadInvoice: boolean;
+    activeProviderName: string;
+    activeProviderType: string;
+    activeProviderId?: string | null;
+    maxScansLimit: number;
+    usedScansCount: number;
+    remainingScans: number;
+    lastScanAtUtc?: string | null;
+    availableProviders?: Array<{
+      id: string;
+      name: string;
+      providerType: string;
+      description?: string;
+      isDefault: boolean;
+      isAssignedToTenant: boolean;
+    }>;
+  } | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("");
+
+  useEffect(() => {
+    let isMounted = true;
+    apiClient
+      .get<{
+        isOcrEnabled: boolean;
+        canUploadInvoice: boolean;
+        activeProviderName: string;
+        activeProviderType: string;
+        activeProviderId?: string | null;
+        maxScansLimit: number;
+        usedScansCount: number;
+        remainingScans: number;
+        lastScanAtUtc?: string | null;
+        availableProviders?: Array<{
+          id: string;
+          name: string;
+          providerType: string;
+          description?: string;
+          isDefault: boolean;
+          isAssignedToTenant: boolean;
+        }>;
+      }>("/ocr/status")
+      .then((res) => {
+        if (isMounted && res) {
+          setOcrStatus(res);
+          if (res.activeProviderId) {
+            setSelectedProviderId(res.activeProviderId);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Load Lookups on mount
   useEffect(() => {
@@ -598,15 +672,28 @@ function BulkProductCreateForm() {
     const matchedVendorId = matchVendor(bill.header, currentLookups.vendors);
     setHeader({
       vendorId: matchedVendorId || currentLookups.vendors[0]?.id || "",
-      billNumber: bill.header.billNumber,
+      billNumber: bill.header.billNumber || "",
       purchaseDate: bill.header.billDate || new Date().toISOString().slice(0, 10),
       paymentTermsDays: bill.header.paymentTermsDays || 7,
     });
 
-    // 2. Auto-create multi-line items for ALL items in invoice
-    const newRows: ProductRowItem[] = bill.items.map((item, idx) =>
-      createRowFromBillItem(item, idx, currentLookups)
-    );
+    // 2. Auto-create multi-line items for ALL items in invoice (expanding multi-quantity items)
+    const newRows: ProductRowItem[] = [];
+    bill.items.forEach((item) => {
+      const qty = Math.max(1, item.quantity || 1);
+      if (qty > 1) {
+        for (let u = 0; u < qty; u++) {
+          const unitItem: ExtractedBillItem = {
+            ...item,
+            quantity: 1,
+            description: `${item.description} (Unit ${u + 1}/${qty})`,
+          };
+          newRows.push(createRowFromBillItem(unitItem, newRows.length, currentLookups));
+        }
+      } else {
+        newRows.push(createRowFromBillItem(item, newRows.length, currentLookups));
+      }
+    });
 
     setRows(newRows.length > 0 ? newRows : [createEmptyRow(currentLookups, 0)]);
   }, [lookups]);
@@ -618,13 +705,35 @@ function BulkProductCreateForm() {
       return;
     }
 
+    if (ocrStatus && !ocrStatus.isOcrEnabled) {
+      notifications.error(
+        "OCR Disabled",
+        "AI OCR functionality is currently disabled for your store by the platform administrator."
+      );
+      return;
+    }
+
+    if (ocrStatus && ocrStatus.remainingScans <= 0) {
+      notifications.error(
+        "OCR Quota Exceeded",
+        `You have reached your scan limit (${ocrStatus.usedScansCount}/${ocrStatus.maxScansLimit} scans used). Please contact administrator to increase quota.`
+      );
+      return;
+    }
+
+    const currentProvider =
+      ocrStatus?.availableProviders?.find((p) => p.id === selectedProviderId) ||
+      (ocrStatus?.activeProviderName ? { name: ocrStatus.activeProviderName } : null);
+    const providerName = currentProvider?.name || "Assigned AI OCR Engine";
+
     setActivePresetId(null);
     setIsScanning(true);
-    setScanProgress({ status: "Reading invoice document…", percent: 15 });
+    setScanProgress({ status: `Preparing document for ${providerName}…`, percent: 15 });
 
     try {
+      // 1. Client document extractor for preview & raw client text
       const { text, previewUrl } = await extractTextFromInvoiceDocument(file, (status, percent) => {
-        setScanProgress({ status, percent });
+        setScanProgress({ status, percent: Math.min(50, percent) });
       });
 
       if (previewUrl) {
@@ -632,14 +741,79 @@ function BulkProductCreateForm() {
         setShowDocPreview(true);
       }
 
-      setScanProgress({ status: "Extracting GST line items & IMEI serial numbers…", percent: 90 });
-      const parsedBill = parsePurchaseBillText(text);
+      setScanProgress({ status: `Extracting invoice with ${providerName}…`, percent: 70 });
+
+      // 2. Dispatch to backend dynamic OCR service with the assigned/selected provider
+      const formData = new FormData();
+      formData.append("file", file);
+      if (text) {
+        formData.append("rawText", text);
+      }
+      if (selectedProviderId) {
+        formData.append("providerId", selectedProviderId);
+      }
+
+      let parsedBill: ExtractedPurchaseBill | null = null;
+      let usedEngineName = providerName;
+
+      try {
+        const serverResult = await apiClient.post<{
+          header: ExtractedBillHeader;
+          items: ExtractedBillItem[];
+          summary: any;
+          rawText: string;
+          confidence: number;
+          providerUsed: string;
+          remainingScans?: number;
+        }>("/ocr/process-invoice", formData);
+
+        if (serverResult && serverResult.header && serverResult.items) {
+          parsedBill = {
+            header: serverResult.header,
+            items: serverResult.items.map((it, idx) => ({
+              ...it,
+              id: it.id || `item-${idx + 1}`,
+              lineNumber: it.lineNumber || idx + 1,
+            })),
+            summary: serverResult.summary,
+            rawText: serverResult.rawText || text,
+            confidence: serverResult.confidence || 0.95,
+          };
+          usedEngineName = serverResult.providerUsed || providerName;
+
+          if (serverResult.remainingScans !== undefined) {
+            setOcrStatus((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    remainingScans: serverResult.remainingScans ?? prev.remainingScans,
+                    usedScansCount: prev.usedScansCount + 1,
+                  }
+                : null
+            );
+          }
+        }
+      } catch (apiErr) {
+        const errMsg = apiErr instanceof Error ? apiErr.message : "Server OCR returned an error";
+        if (errMsg.toLowerCase().includes("quota") || errMsg.toLowerCase().includes("disabled")) {
+          notifications.error("OCR Restriction", errMsg);
+          return;
+        }
+        console.warn("Server OCR dispatch failed, using fallback parser:", apiErr);
+      }
+
+      // 3. Fallback to local layout parser if server OCR didn't return items
+      if (!parsedBill) {
+        setScanProgress({ status: "Parsing extracted document text…", percent: 85 });
+        parsedBill = parsePurchaseBillText(text);
+      }
+
       setUploadedBill(parsedBill);
       applyExtractedBillToAllItems(parsedBill);
 
       notifications.success(
         "Invoice Auto-Filled!",
-        `Extracted and created ${parsedBill.items.length} product line(s) from ${parsedBill.header.vendorName || "Invoice"}!`
+        `Extracted and created ${parsedBill.items.length} product line(s) from ${parsedBill.header.vendorName || "Invoice"} via ${usedEngineName}!`
       );
     } catch (err) {
       notifications.error(
@@ -650,7 +824,7 @@ function BulkProductCreateForm() {
       setIsScanning(false);
       setScanProgress({ status: "", percent: 0 });
     }
-  }, [applyExtractedBillToAllItems, notifications]);
+  }, [applyExtractedBillToAllItems, notifications, ocrStatus, selectedProviderId]);
 
   // Handle Preset Select
   const handleSelectPreset = (preset: BillPresetInfo) => {
@@ -1085,11 +1259,10 @@ function BulkProductCreateForm() {
           const file = e.dataTransfer.files?.[0];
           if (file) void handleFileUpload(file);
         }}
-        className={`overflow-hidden rounded-2xl border transition-all p-5 shadow-xs ${
-          isDraggingOver
+        className={`overflow-hidden rounded-2xl border transition-all p-5 shadow-xs ${isDraggingOver
             ? "border-indigo-500 bg-indigo-50/90 ring-4 ring-indigo-500/20 dark:bg-indigo-950/40"
             : "border-indigo-100 bg-linear-to-br from-indigo-50/70 via-white to-slate-50 dark:border-indigo-950/60 dark:from-slate-900 dark:via-slate-900/90 dark:to-indigo-950/20"
-        }`}
+          }`}
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3.5">
@@ -1162,6 +1335,58 @@ function BulkProductCreateForm() {
               </>
             )}
           </div>
+        </div>
+
+        {/* OCR Engine & Provider Selection Bar */}
+        <div className="mt-3.5 pt-3 border-t border-indigo-100/70 dark:border-indigo-950/50 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+              OCR Provider Engine:
+            </span>
+
+            {ocrStatus?.availableProviders && ocrStatus.availableProviders.length > 0 ? (
+              <select
+                value={selectedProviderId}
+                onChange={(e) => setSelectedProviderId(e.target.value)}
+                disabled={isScanning || !ocrStatus.isOcrEnabled}
+                className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-800 shadow-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                {ocrStatus.availableProviders.map((prov) => (
+                  <option key={prov.id} value={prov.id}>
+                    {prov.name} {prov.isAssignedToTenant ? "★ (Assigned by Admin)" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                {ocrStatus?.activeProviderName || "System Default OCR"}
+              </span>
+            )}
+
+            {ocrStatus?.isOcrEnabled === false && (
+              <span className="px-2 py-0.5 rounded-full bg-rose-50 text-[11px] font-medium text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                OCR Disabled by Super Admin
+              </span>
+            )}
+          </div>
+
+          {ocrStatus && (
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <span>Monthly Quota:</span>
+              <span
+                className={`font-mono font-semibold px-2 py-0.5 rounded-full ${
+                  ocrStatus.remainingScans <= 0
+                    ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+                    : ocrStatus.remainingScans < 20
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                }`}
+              >
+                {ocrStatus.remainingScans} scans left ({ocrStatus.usedScansCount}/{ocrStatus.maxScansLimit})
+              </span>
+            </div>
+          )}
         </div>
 
         {/* 4 Sample Distributor Invoices Selector */}
@@ -1574,11 +1799,10 @@ function BulkProductCreateForm() {
                         value={row.serialNumber}
                         onChange={(e) => updateRowField(row.id, "serialNumber", e.target.value)}
                         placeholder="e.g. 865238087752275"
-                        className={`w-full rounded-lg border px-2 py-1.5 font-mono text-xs outline-none focus:border-indigo-500 dark:bg-slate-800 dark:text-white ${
-                          !row.serialNumber.trim()
+                        className={`w-full rounded-lg border px-2 py-1.5 font-mono text-xs outline-none focus:border-indigo-500 dark:bg-slate-800 dark:text-white ${!row.serialNumber.trim()
                             ? "border-amber-300 bg-amber-50/50 dark:border-amber-800"
                             : "border-slate-200 bg-white dark:border-slate-700"
-                        }`}
+                          }`}
                       />
                     </td>
 

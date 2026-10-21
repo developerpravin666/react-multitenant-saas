@@ -120,10 +120,12 @@ export const APP_ROUTES = {
     pendingApprovals: "/admin/tenants/pending",
     databaseMigrations: "/admin/database-migrations",
     databaseTables: "/admin/database-tables",
+    databaseBackups: "/admin/database-backups",
     systemSettings: "/admin/system-settings",
     featureFlags: "/admin/feature-flags",
     mastersImport: "/admin/masters-import",
     emailTemplates: "/admin/email-templates",
+    ocrSettings: "/admin/ocr-settings",
     login: "/admin/login",
   },
 } as const;

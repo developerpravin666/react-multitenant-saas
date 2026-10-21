@@ -30,6 +30,8 @@ import {
   Mail,
   Warehouse,
   Scale,
+  Layers,
+  ScanText,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -43,52 +45,98 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
     icon: LayoutDashboard,
   },
   {
-    id: "admin-approvals",
-    label: "Store Approvals",
-    path: APP_ROUTES.admin.pendingApprovals,
-    icon: ShieldCheck,
-  },
-  {
-    id: "admin-tenants",
-    label: "Tenant Directory",
-    path: APP_ROUTES.admin.tenants,
+    id: "admin-tenants-group",
+    label: "Tenants & Stores",
     icon: Building2,
+    children: [
+      {
+        id: "admin-tenants",
+        label: "Tenant Directory",
+        path: APP_ROUTES.admin.tenants,
+        icon: Building2,
+      },
+      {
+        id: "admin-approvals",
+        label: "Store Approvals",
+        path: APP_ROUTES.admin.pendingApprovals,
+        icon: ShieldCheck,
+      },
+    ],
   },
   {
-    id: "admin-migrations",
-    label: "Database Migrations",
-    path: APP_ROUTES.admin.databaseMigrations,
-    icon: Database,
+    id: "admin-data-group",
+    label: "Data & Master Catalog",
+    icon: Layers,
+    children: [
+      {
+        id: "admin-masters-import",
+        label: "Master Data Import",
+        path: APP_ROUTES.admin.mastersImport,
+        icon: FileSpreadsheet,
+      },
+      {
+        id: "admin-database-tables",
+        label: "Table Management",
+        path: APP_ROUTES.admin.databaseTables,
+        icon: Database,
+      },
+    ],
   },
   {
-    id: "admin-database-tables",
-    label: "Table Management",
-    path: APP_ROUTES.admin.databaseTables,
-    icon: Database,
-  },
-  {
-    id: "admin-settings",
-    label: "System Settings",
-    path: APP_ROUTES.admin.systemSettings,
+    id: "admin-infrastructure-group",
+    label: "Infrastructure & DB",
     icon: Server,
+    children: [
+      {
+        id: "admin-database-backups",
+        label: "Database Backups & Restore",
+        path: APP_ROUTES.admin.databaseBackups,
+        icon: Database,
+      },
+      {
+        id: "admin-migrations",
+        label: "Database Migrations",
+        path: APP_ROUTES.admin.databaseMigrations,
+        icon: Database,
+      },
+      {
+        id: "admin-settings",
+        label: "System Settings",
+        path: APP_ROUTES.admin.systemSettings,
+        icon: Server,
+      },
+      {
+        id: "admin-ocr-settings",
+        label: "OCR & Document AI",
+        path: APP_ROUTES.admin.ocrSettings,
+        icon: ScanText,
+      },
+    ],
   },
   {
-    id: "admin-feature-flags",
-    label: "Feature Flags",
-    path: APP_ROUTES.admin.featureFlags,
-    icon: ToggleRight,
-  },
-  {
-    id: "admin-masters-import",
-    label: "Master Data Import",
-    path: APP_ROUTES.admin.mastersImport,
-    icon: FileSpreadsheet,
-  },
-  {
-    id: "admin-email-templates",
-    label: "Welcome Email Format",
-    path: APP_ROUTES.admin.emailTemplates,
-    icon: Mail,
+    id: "admin-governance-group",
+    label: "Platform Governance",
+    icon: SettingsIcon,
+    children: [
+      {
+        id: "admin-feature-flags",
+        label: "Feature Flags",
+        path: APP_ROUTES.admin.featureFlags,
+        icon: ToggleRight,
+      },
+      {
+        id: "admin-email-templates",
+        label: "Welcome Email Format",
+        path: APP_ROUTES.admin.emailTemplates,
+        icon: Mail,
+      },
+      {
+        id: "admin-audit-logs",
+        label: "Platform Audit Logs",
+        path: APP_ROUTES.settings.auditLogs,
+        icon: ClipboardList,
+      },
+    ],
   },
 ];
 

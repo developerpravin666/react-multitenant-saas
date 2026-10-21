@@ -8,6 +8,8 @@ import { TenantApprovalsPage } from "./features/settings/tenants/TenantApprovals
 import { ForgotPasswordPage, ResetPasswordPage } from "./features/auth/PasswordRecoveryPages";
 import { ProtectedRoute } from "./features/auth/ProtectedRoute";
 import { ChangePasswordPage } from "./features/auth/ChangePasswordPage";
+import { OfflineBoundary } from "./components/network/OfflineBoundary";
+import { OfflineFallbackPage } from "./pages/OfflineFallbackPage";
 import { productRoutes } from "./features/products/routes/ProductRoutes";
 import { TaxFormPage } from "./features/settings/tax/pages/TaxFormPage";
 import { TaxListPage } from "./features/settings/tax/pages/TaxListPage";
@@ -46,7 +48,9 @@ import { SystemSettingsPage } from "./features/admin/SystemSettingsPage";
 import { MasterImportPage } from "./features/products/import/MasterImportPage";
 import { FeatureFlagsAdminPage } from "./features/feature-flags/FeatureFlagsAdminPage";
 import { TableManagementDashboardPage } from "./features/admin/TableManagementDashboardPage";
+import { DatabaseBackupDashboardPage } from "./features/admin/DatabaseBackupDashboardPage";
 import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
+import { OcrSettingsAdminPage } from "./features/admin/OcrSettingsAdminPage";
 import { AdminRoute } from "./features/auth/AdminRoute";
 
 function RootDashboard() {
@@ -66,8 +70,9 @@ export default function App() {
       <Route path="/accept-invitation" element={withPageTitle("Accept Invitation", <AcceptInvitationPage />)} />
       <Route path="/forgot-password" element={withPageTitle("Forgot Password", <ForgotPasswordPage />)} />
       <Route path="/reset-password" element={withPageTitle("Reset Password", <ResetPasswordPage />)} />
+      <Route path="/offline" element={withPageTitle("Offline", <OfflineFallbackPage />)} />
       <Route element={<ProtectedRoute />}>
-        <Route element={<AppShell />}>
+        <Route element={<OfflineBoundary><AppShell /></OfflineBoundary>}>
           <Route path="/" element={<RootDashboard />} />
           <Route path="/account/change-password" element={withPageTitle("Change Password", <ChangePasswordPage />)} />
           <Route path={APP_ROUTES.contraVoucher} element={withPageTitle("Contra Voucher (F4)", <ContraVoucherPage />)} />
@@ -116,10 +121,12 @@ export default function App() {
           <Route path={APP_ROUTES.admin.tenants} element={withPageTitle("Tenant Directory", <TenantDirectoryPage />)} />
           <Route path={APP_ROUTES.admin.pendingApprovals} element={withPageTitle("Tenant Approvals", <TenantApprovalsPage />)} />
           <Route path={APP_ROUTES.admin.databaseMigrations} element={withPageTitle("Database Migrations", <DatabaseMigrationsPage />)} />
+          <Route path={APP_ROUTES.admin.databaseBackups} element={withPageTitle("Database Backups & Restore", <DatabaseBackupDashboardPage />)} />
           <Route path={APP_ROUTES.admin.systemSettings} element={withPageTitle("System Settings", <SystemSettingsPage />)} />
           <Route path={APP_ROUTES.admin.featureFlags} element={withPageTitle("Feature Flags", <FeatureFlagsAdminPage />)} />
           <Route path={APP_ROUTES.admin.mastersImport} element={withPageTitle("Import Masters", <MasterImportPage isAdminMode={true} />)} />
           <Route path={APP_ROUTES.admin.emailTemplates} element={withPageTitle("Email Templates", <EmailTemplatesPage />)} />
+          <Route path={APP_ROUTES.admin.ocrSettings} element={withPageTitle("OCR & Document AI", <OcrSettingsAdminPage />)} />
 
         </Route>
       </Route>
