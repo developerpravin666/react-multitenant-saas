@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type FormEvent } from "react";
-import { X, CheckCircle2, DollarSign, ArrowRight, Zap, RefreshCw, AlertCircle, FileText, Sparkles, Lightbulb } from "lucide-react";
+import { X, CheckCircle2, DollarSign, ArrowRight, Zap, RefreshCw, AlertCircle, FileText, Sparkles, Lightbulb, Search, User } from "lucide-react";
 import { Button } from "../../../../components/ui/Button";
 import { apiClient } from "../../../../services/apiClient";
 import { useNotifications } from "../../../../context/NotificationContext";
@@ -17,6 +17,13 @@ interface Props {
   onSuccess: () => void;
 }
 
+interface CustomerOption {
+  id: string;
+  name: string;
+  mobile: string;
+  address?: string;
+}
+
 const currency = (amount: number) =>
   `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -24,8 +31,9 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
   const notifications = useNotifications();
 
   // Customer state
-  const [customers, setCustomers] = useState<Array<{ id: string; name: string; mobile: string }>>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(initialCustomerId || "");
+  const [customerSearchQuery, setCustomerSearchQuery] = useState<string>("");
   const [loadingCustomers, setLoadingCustomers] = useState(false);
 
   // Invoices state
@@ -46,26 +54,105 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<PaymentAllocationResult | null>(null);
 
-  // Load customer list if no initial customer
-  useEffect(() => {
-    async function loadCustomers() {
-      setLoadingCustomers(true);
-      try {
-        const list = await apiClient.get<Array<{ id: string; name: string; mobile: string }>>("/customers?limit=100");
-        setCustomers(list);
-        if (!selectedCustomerId && list[0]) {
-          setSelectedCustomerId(list[0].id);
-        }
-      } catch {
-        setCustomers([]);
-      } finally {
-        setLoadingCustomers(false);
+  // Load customer list
+  const loadCustomers = async () => {
+    setLoadingCustomers(true);
+    try {
+      const res = await apiClient.get<any>("/customers?limit=100");
+      const rawList = Array.isArray(res) ? res : (res?.items ?? []);
+      const list: CustomerOption[] = rawList.map((c: any) => ({
+        id: String(c.id || c.Id),
+        name: String(c.name || c.Name || "Unnamed Customer"),
+        mobile: String(c.mobile || c.Mobile || ""),
+        address: c.address || c.Address || "",
+      }));
+      setCustomers(list);
+      if (!selectedCustomerId && list[0]) {
+        setSelectedCustomerId(list[0].id);
       }
+    } catch {
+      setCustomers([]);
+    } finally {
+      setLoadingCustomers(false);
     }
+  };
+
+  useEffect(() => {
     void loadCustomers();
   }, []);
 
-  // Load customer unpaid invoices when customerId changes
+  // Ensure initialCustomerId is present in customers list
+  useEffect(() => {
+    if (!initialCustomerId) return;
+    setSelectedCustomerId(initialCustomerId);
+    async function ensureInitialCustomer() {
+      try {
+        const c = await apiClient.get<any>(`/customers/${initialCustomerId}`);
+        if (c && (c.id || c.Id)) {
+          const loaded: CustomerOption = {
+            id: String(c.id || c.Id),
+            name: String(c.name || c.Name || "Unnamed Customer"),
+            mobile: String(c.mobile || c.Mobile || ""),
+            address: c.address || c.Address || "",
+          };
+          setCustomers((prev) => {
+            if (prev.some((item) => item.id === loaded.id)) return prev;
+            return [loaded, ...prev];
+          });
+        }
+      } catch {
+        // Ignored
+      }
+    }
+    void ensureInitialCustomer();
+  }, [initialCustomerId]);
+
+  // Live remote search when user types 2+ characters
+  useEffect(() => {
+    const q = customerSearchQuery.trim();
+    if (!q || q.length < 2) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiClient.get<any>(`/customers?search=${encodeURIComponent(q)}&limit=50`);
+        const rawList = Array.isArray(res) ? res : (res?.items ?? []);
+        if (rawList && rawList.length > 0) {
+          setCustomers((prev) => {
+            const map = new Map<string, CustomerOption>();
+            prev.forEach((item) => map.set(item.id, item));
+            rawList.forEach((c: any) => {
+              const id = String(c.id || c.Id);
+              if (id) {
+                map.set(id, {
+                  id,
+                  name: String(c.name || c.Name || "Unnamed Customer"),
+                  mobile: String(c.mobile || c.Mobile || ""),
+                  address: c.address || c.Address || "",
+                });
+              }
+            });
+            return Array.from(map.values());
+          });
+        }
+      } catch {
+        // Ignored
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [customerSearchQuery]);
+
+  // Filter customers locally by search query
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearchQuery.trim()) return customers;
+    const q = customerSearchQuery.toLowerCase().trim();
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.mobile.toLowerCase().includes(q) ||
+        (c.address && c.address.toLowerCase().includes(q))
+    );
+  }, [customers, customerSearchQuery]);
+
+  // Load customer unpaid invoices when selectedCustomerId changes
   useEffect(() => {
     let active = true;
     setSummary(null);
@@ -297,20 +384,75 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
             </div>
 
             {/* Customer selector */}
-            <div>
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Customer *</label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Select Customer *
+                </label>
+                <div className="flex items-center gap-2">
+                  {loadingCustomers && (
+                    <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                      <RefreshCw size={12} className="animate-spin text-blue-600" />
+                      Loading...
+                    </span>
+                  )}
+                  <span className="text-[11px] text-slate-500">
+                    {filteredCustomers.length} customer(s) available
+                  </span>
+                </div>
+              </div>
+
+              {/* Customer search bar */}
+              {!initialCustomerId && (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={customerSearchQuery}
+                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                    placeholder="Type name, phone or address to filter..."
+                    className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-8 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:outline-hidden dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                  {customerSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomerSearchQuery("")}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      title="Clear search"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Customer dropdown */}
               <select
                 value={selectedCustomerId}
                 onChange={(e) => setSelectedCustomerId(e.target.value)}
-                disabled={Boolean(initialCustomerId)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                disabled={Boolean(initialCustomerId) || loadingCustomers}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-hidden dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               >
-                {customers.map((c) => (
+                {!selectedCustomerId && (
+                  <option value="">-- Choose a Customer ({filteredCustomers.length} available) --</option>
+                )}
+                {filteredCustomers.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} ({c.mobile})
+                    {c.name} {c.mobile ? `(${c.mobile})` : ""} {c.address ? `— ${c.address}` : ""}
                   </option>
                 ))}
               </select>
+
+              {filteredCustomers.length === 0 && !loadingCustomers && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                  <AlertCircle size={14} className="shrink-0 text-amber-600" />
+                  <span>
+                    {customerSearchQuery
+                      ? `No customers match "${customerSearchQuery}". Try clearing search.`
+                      : "No customers found in database. Create a customer or sales bill first."}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Customer Outstanding Header */}
@@ -361,36 +503,54 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
                       onClick={() => setPaymentAmount(Math.ceil(summary.totalOutstanding / 1000) * 1000)}
                       className="rounded-md border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-800 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950/60 dark:text-purple-300"
                     >
-                      Round Figure ({currency(Math.ceil(summary.totalOutstanding / 1000) * 1000)})
+                      Round Up to {currency(Math.ceil(summary.totalOutstanding / 1000) * 1000)} (+Advance)
                     </button>
                   )}
-                  {[1000, 2000, 5000].filter(amt => amt < summary.totalOutstanding && amt !== Math.round(summary.totalOutstanding / 2)).map(amt => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setPaymentAmount(amt)}
-                      className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                    >
-                      {currency(amt)}
-                    </button>
-                  ))}
                 </div>
               </div>
             )}
 
-            {/* Payment Input Grid */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {/* Smart Settlement Live Preview Banner */}
+            {summary && summary.invoices.length > 0 && paymentAmount > 0 && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                <div className="flex items-center gap-2 font-semibold text-emerald-900 dark:text-emerald-200">
+                  <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <span>Settlement Preview:</span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-emerald-800 dark:text-emerald-300">
+                  <span>
+                    ✓ <strong>{settlementStats.fullyPaid}</strong> bill(s) fully cleared
+                  </span>
+                  {settlementStats.partiallyPaid > 0 && (
+                    <span>
+                      • <strong>{settlementStats.partiallyPaid}</strong> bill partially paid
+                    </span>
+                  )}
+                  {unallocatedAdvance > 0 && (
+                    <span className="rounded-md bg-purple-100 px-2 py-0.5 font-bold text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                      ★ {currency(unallocatedAdvance)} saved as Store Advance Credit
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Payment Details Form */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Payment Amount (₹) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                  className="mt-1 w-full text-base font-bold text-slate-900 rounded-lg border border-slate-300 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                />
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Payment Amount (₹) *</label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-2 text-sm text-slate-400">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={paymentAmount || ""}
+                    onChange={(e) => setPaymentAmount(Math.max(0, Number(e.target.value)))}
+                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-7 pr-3 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800"
+                  />
+                </div>
               </div>
 
               <div>
@@ -398,12 +558,12 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
                 <select
                   value={paymentMode}
                   onChange={(e) => setPaymentMode(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
                 >
                   <option value="Cash">Cash</option>
-                  <option value="UPI">UPI / GPay / PhonePe</option>
-                  <option value="Card">Credit / Debit Card</option>
-                  <option value="Bank">Bank Transfer / NEFT</option>
+                  <option value="UPI">UPI / QR Code</option>
+                  <option value="Card">Card</option>
+                  <option value="BankTransfer">Bank Transfer / NEFT</option>
                   <option value="Cheque">Cheque</option>
                 </select>
               </div>
@@ -412,89 +572,73 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Payment Date *</label>
                 <input
                   type="date"
+                  required
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Reference / Cheque / UTR #
-                </label>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Reference / Txn #</label>
                 <input
                   type="text"
-                  placeholder="Optional reference"
+                  placeholder="e.g. UPI Ref / Cheque No"
                   value={referenceNumber}
                   onChange={(e) => setReferenceNumber(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Memo / Note</label>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Notes / Remarks</label>
                 <input
                   type="text"
-                  placeholder="Optional note"
+                  placeholder="Optional internal remarks"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
                 />
               </div>
             </div>
 
-            {/* Live Settlement Suggestion Preview */}
-            {summary && summary.invoices.length > 0 && paymentAmount > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-2.5 text-xs text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200">
-                <div className="flex items-center gap-1.5 font-medium">
-                  <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
-                  <span>
-                    Will clear <strong>{settlementStats.fullyPaid}</strong> bill(s) completely
-                    {settlementStats.partiallyPaid > 0 ? " and partially pay 1 bill" : ""}.
+            {/* Unpaid Invoices Table & Allocation Strategy */}
+            {summary && summary.invoices.length > 0 && (
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+                {/* Allocation Strategy Selection */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Allocation Mode:</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsFifo(true)}
+                      className={`rounded-lg px-2.5 py-1 font-semibold transition ${isFifo
+                          ? "bg-indigo-600 text-white shadow-2xs"
+                          : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        }`}
+                    >
+                      ★ Auto-Allocate FIFO (Oldest First)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsFifo(false)}
+                      className={`rounded-lg px-2.5 py-1 font-semibold transition ${!isFifo
+                          ? "bg-indigo-600 text-white shadow-2xs"
+                          : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        }`}
+                    >
+                      Manual / Custom Allocation
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    {isFifo ? "System automatically allocates funds to oldest bills" : "Enter specific amounts per invoice below"}
                   </span>
                 </div>
-                {unallocatedAdvance > 0 && (
-                  <span className="rounded bg-purple-100 px-2 py-0.5 font-bold text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                    + {currency(unallocatedAdvance)} saved safely as Customer Advance
-                  </span>
-                )}
-              </div>
-            )}
 
-            {/* Allocation Strategy Selection */}
-            <div className="flex items-center gap-4 rounded-lg bg-slate-50 p-2.5 text-xs dark:bg-slate-800/50">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">Allocation Mode:</span>
-              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-900 dark:text-slate-100">
-                <input
-                  type="radio"
-                  name="allocMode"
-                  checked={isFifo}
-                  onChange={() => setIsFifo(true)}
-                  className="accent-blue-600"
-                />
-                Auto-Allocate FIFO (Oldest First)
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-900 dark:text-slate-100">
-                <input
-                  type="radio"
-                  name="allocMode"
-                  checked={!isFifo}
-                  onChange={() => setIsFifo(false)}
-                  className="accent-blue-600"
-                />
-                Custom Manual Split
-              </label>
-            </div>
-
-            {/* Invoices List Table */}
-            {summary && summary.invoices.length > 0 && (
-              <div className="rounded-xl border border-slate-200 overflow-hidden dark:border-slate-800">
-                <div className="max-h-56 overflow-y-auto">
+                <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-950">
+                      <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-800">
                         <th className="py-2 pl-3">Invoice #</th>
                         <th className="py-2">Date</th>
                         <th className="py-2 text-right">Invoice Total</th>
@@ -585,4 +729,3 @@ export function MultiInvoicePaymentModal({ initialCustomerId, onClose, onSuccess
     </div>
   );
 }
-
