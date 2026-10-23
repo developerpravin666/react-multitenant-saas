@@ -51,6 +51,7 @@ import { TableManagementDashboardPage } from "./features/admin/TableManagementDa
 import { DatabaseBackupDashboardPage } from "./features/admin/DatabaseBackupDashboardPage";
 import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
 import { OcrSettingsAdminPage } from "./features/admin/OcrSettingsAdminPage";
+import { LoadTestingDashboardPage } from "./features/admin/LoadTestingDashboardPage";
 import { AdminRoute } from "./features/auth/AdminRoute";
 
 function RootDashboard() {
@@ -127,6 +128,7 @@ export default function App() {
           <Route path={APP_ROUTES.admin.mastersImport} element={withPageTitle("Import Masters", <MasterImportPage isAdminMode={true} />)} />
           <Route path={APP_ROUTES.admin.emailTemplates} element={withPageTitle("Email Templates", <EmailTemplatesPage />)} />
           <Route path={APP_ROUTES.admin.ocrSettings} element={withPageTitle("OCR & Document AI", <OcrSettingsAdminPage />)} />
+          <Route path={APP_ROUTES.admin.loadTesting} element={withPageTitle("Load Testing & Benchmarks", <LoadTestingDashboardPage />)} />
 
         </Route>
       </Route>

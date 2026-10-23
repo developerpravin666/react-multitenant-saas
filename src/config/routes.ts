@@ -126,6 +126,7 @@ export const APP_ROUTES = {
     mastersImport: "/admin/masters-import",
     emailTemplates: "/admin/email-templates",
     ocrSettings: "/admin/ocr-settings",
+    loadTesting: "/admin/load-test",
     login: "/admin/login",
   },
 } as const;

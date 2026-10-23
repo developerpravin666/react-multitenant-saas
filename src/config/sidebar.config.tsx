@@ -1,4 +1,5 @@
 import {
+  Gauge,
   Boxes,
   Factory,
   HandCoins,
