@@ -112,6 +112,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
         path: APP_ROUTES.admin.ocrSettings,
         icon: ScanText,
       },
+      {
+        id: "load-test",
+        label: "Load Testing",
+        path: APP_ROUTES.admin.loadTesting,
+        icon: Gauge,
+      },
     ],
   },
   {

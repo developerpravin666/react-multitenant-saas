@@ -30,6 +30,8 @@ export interface ApiRequestConfig extends RequestInit {
   authenticate?: boolean;
   /** Prevent auth refresh requests and their retries from entering the refresh flow. */
   skipAuthRefresh?: boolean;
+  /** Set true to suppress the global full-screen modal loader (e.g. for background polling). */
+  skipLoading?: boolean;
 }
 
 type RequestInterceptor = (
@@ -236,8 +238,11 @@ async function request<T>(
   for (const interceptor of requestInterceptors)
     finalConfig = await interceptor(toUrl(path), finalConfig);
 
-  activeRequests += 1;
-  notifyLoading();
+  const showGlobalLoading = finalConfig.skipLoading !== true;
+  if (showGlobalLoading) {
+    activeRequests += 1;
+    notifyLoading();
+  }
   try {
     let response: Response;
     try {
@@ -287,8 +292,10 @@ async function request<T>(
     if (retryStorageKey) sessionStorage.removeItem(retryStorageKey);
     return result;
   } finally {
-    activeRequests -= 1;
-    notifyLoading();
+    if (showGlobalLoading) {
+      activeRequests -= 1;
+      notifyLoading();
+    }
   }
 }
 

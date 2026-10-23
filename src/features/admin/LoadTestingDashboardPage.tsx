@@ -25,6 +25,7 @@ import {
   Database,
   ArrowRight,
   ExternalLink,
+  LoaderCircle,
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
@@ -94,10 +95,10 @@ export function LoadTestingDashboardPage() {
   const loadInitialData = useCallback(async () => {
     try {
       const [scenariosRes, tenantsRes, historyRes, currentRes] = await Promise.all([
-        apiClient.get<LoadTestScenario[]>("/admin/load-test/scenarios").catch(() => []),
-        apiClient.get<AdminTenantOption[]>("/admin/tenants").catch(() => []),
-        apiClient.get<LoadTestRunSummary[]>("/admin/load-test/history").catch(() => []),
-        apiClient.get<{ hasActiveTest: boolean; current: LoadTestRunSummary | null }>("/admin/load-test/current").catch(() => ({ hasActiveTest: false, current: null })),
+        apiClient.get<LoadTestScenario[]>("/admin/load-test/scenarios", { skipLoading: true }).catch(() => []),
+        apiClient.get<AdminTenantOption[]>("/admin/tenants", { skipLoading: true }).catch(() => []),
+        apiClient.get<LoadTestRunSummary[]>("/admin/load-test/history", { skipLoading: true }).catch(() => []),
+        apiClient.get<{ hasActiveTest: boolean; current: LoadTestRunSummary | null }>("/admin/load-test/current", { skipLoading: true }).catch(() => ({ hasActiveTest: false, current: null })),
       ]);
 
       if (Array.isArray(scenariosRes) && scenariosRes.length > 0) {
@@ -132,7 +133,10 @@ export function LoadTestingDashboardPage() {
     if (activeTest && activeTest.status === "Running") {
       pollingRef.current = setInterval(async () => {
         try {
-          const res = await apiClient.get<{ hasActiveTest: boolean; current: LoadTestRunSummary | null }>("/admin/load-test/current");
+          const res = await apiClient.get<{ hasActiveTest: boolean; current: LoadTestRunSummary | null }>(
+            "/admin/load-test/current",
+            { skipLoading: true }
+          );
           if (res?.current) {
             setActiveTest(res.current);
             if (res.current.status !== "Running") {
@@ -161,7 +165,7 @@ export function LoadTestingDashboardPage() {
 
   const reloadHistory = async () => {
     try {
-      const historyRes = await apiClient.get<LoadTestRunSummary[]>("/admin/load-test/history");
+      const historyRes = await apiClient.get<LoadTestRunSummary[]>("/admin/load-test/history", { skipLoading: true });
       if (Array.isArray(historyRes)) {
         setHistory(historyRes);
       }
@@ -197,7 +201,8 @@ export function LoadTestingDashboardPage() {
         targetBaseUrl: config.targetBaseUrl,
         tenantId: config.tenantId,
         authToken: config.authToken,
-      });
+        bypassRateLimiter: config.bypassRateLimiter ?? true,
+      }, { skipLoading: true });
       setQuickPingResult(res);
       if (res.success) {
         notifications.success("Ping Succeeded", `${res.message}`);
@@ -221,10 +226,20 @@ export function LoadTestingDashboardPage() {
         tenantId: config.tenantId ? config.tenantId : undefined,
       };
 
-      const res = await apiClient.post<{ success: boolean; message: string; summary: LoadTestRunSummary }>("/admin/load-test/start", payload);
-      if (res.summary) {
-        setActiveTest(res.summary);
+      const res = await apiClient.post<any>("/admin/load-test/start", payload, { skipLoading: true });
+      const summary: LoadTestRunSummary | null =
+        res?.summary ?? res?.data?.summary ?? (res?.runId ? res : null);
+      if (summary) {
+        setActiveTest(summary);
         notifications.success("Load Test Started", `Executing ${config.virtualUsers} VUs for ${config.durationSeconds}s`);
+      } else {
+        const cur = await apiClient.get<{ hasActiveTest: boolean; current: LoadTestRunSummary | null }>(
+          "/admin/load-test/current",
+          { skipLoading: true }
+        );
+        if (cur?.current) {
+          setActiveTest(cur.current);
+        }
       }
     } catch (err) {
       notifications.error("Start Failed", err instanceof Error ? err.message : "Failed to initiate load test.");
@@ -237,9 +252,12 @@ export function LoadTestingDashboardPage() {
   const handleStopTest = async () => {
     setIsStopping(true);
     try {
-      await apiClient.post("/admin/load-test/stop", {});
+      await apiClient.post("/admin/load-test/stop", {}, { skipLoading: true });
       notifications.info("Load Test Aborted", "Stopping virtual user threads gracefully.");
-      const currentRes = await apiClient.get<{ hasActiveTest: boolean; current: LoadTestRunSummary | null }>("/admin/load-test/current");
+      const currentRes = await apiClient.get<{ hasActiveTest: boolean; current: LoadTestRunSummary | null }>(
+        "/admin/load-test/current",
+        { skipLoading: true }
+      );
       if (currentRes?.current) {
         setActiveTest(currentRes.current);
       }
@@ -323,16 +341,18 @@ export function LoadTestingDashboardPage() {
   // Current displayed run: either user is inspecting an old run, or showing the active/last run
   const displayedRun = inspectingRun || activeTest;
   const isRunning = activeTest?.status === "Running";
+  const isProcessActive = isStarting || isRunning;
 
   const getStatusBadge = (status?: string) => {
+    if (isProcessActive || status === "Running") {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 animate-pulse dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">
+          <LoaderCircle className="size-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+          <span>TEST RUNNING</span>
+        </span>
+      );
+    }
     switch (status) {
-      case "Running":
-        return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 animate-pulse dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">
-            <span className="size-2 rounded-full bg-indigo-600 dark:bg-indigo-400 animate-ping" />
-            <span>TEST RUNNING</span>
-          </span>
-        );
       case "Completed":
         return (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
@@ -392,7 +412,7 @@ export function LoadTestingDashboardPage() {
             variant="secondary"
             onClick={handleQuickPing}
             isLoading={isPinging}
-            disabled={isRunning}
+            disabled={isProcessActive}
             className="text-xs"
           >
             <Zap className="size-3.5 text-amber-500" />
@@ -464,11 +484,11 @@ export function LoadTestingDashboardPage() {
                 key={sc.id}
                 type="button"
                 onClick={() => handleSelectScenario(sc)}
-                disabled={isRunning}
+                disabled={isProcessActive}
                 className={`flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all ${isSelected
                   ? "border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20 dark:border-indigo-500 dark:bg-indigo-950/40"
                   : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
-                  } ${isRunning ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                  } ${isProcessActive ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-1">
@@ -519,7 +539,7 @@ export function LoadTestingDashboardPage() {
             <select
               value={config.targetBaseUrl}
               onChange={(e) => setConfig({ ...config, targetBaseUrl: e.target.value })}
-              disabled={isRunning}
+              disabled={isProcessActive}
               className={inputClass}
             >
               <option value="https://localhost:64115">ApiGateway (https://localhost:64115)</option>
@@ -538,7 +558,7 @@ export function LoadTestingDashboardPage() {
               type="text"
               value={config.targetEndpoint}
               onChange={(e) => setConfig({ ...config, targetEndpoint: e.target.value })}
-              disabled={isRunning}
+              disabled={isProcessActive}
               placeholder="/health or /api/admin/metrics"
               className={inputClass}
             />
@@ -552,7 +572,7 @@ export function LoadTestingDashboardPage() {
             <select
               value={config.method}
               onChange={(e) => setConfig({ ...config, method: e.target.value })}
-              disabled={isRunning}
+              disabled={isProcessActive}
               className={inputClass}
             >
               <option value="GET">GET</option>
@@ -571,7 +591,7 @@ export function LoadTestingDashboardPage() {
                 setSelectedTenantId(e.target.value);
                 setConfig({ ...config, tenantId: e.target.value || undefined });
               }}
-              disabled={isRunning}
+              disabled={isProcessActive}
               className={inputClass}
             >
               <option value="">None (Public / System)</option>
@@ -596,7 +616,7 @@ export function LoadTestingDashboardPage() {
               step="1"
               value={config.virtualUsers}
               onChange={(e) => setConfig({ ...config, virtualUsers: Number(e.target.value) })}
-              disabled={isRunning}
+              disabled={isProcessActive}
               className="w-full accent-indigo-600 cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-slate-400">
@@ -619,7 +639,7 @@ export function LoadTestingDashboardPage() {
               step="5"
               value={config.durationSeconds}
               onChange={(e) => setConfig({ ...config, durationSeconds: Number(e.target.value) })}
-              disabled={isRunning}
+              disabled={isProcessActive}
               className="w-full accent-indigo-600 cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-slate-400">
@@ -642,7 +662,7 @@ export function LoadTestingDashboardPage() {
               step="1"
               value={config.rampUpSeconds}
               onChange={(e) => setConfig({ ...config, rampUpSeconds: Number(e.target.value) })}
-              disabled={isRunning}
+              disabled={isProcessActive}
               className="w-full accent-indigo-600 cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-slate-400">
@@ -659,7 +679,7 @@ export function LoadTestingDashboardPage() {
                 type="checkbox"
                 checked={config.bypassRateLimiter ?? true}
                 onChange={(e) => setConfig({ ...config, bypassRateLimiter: e.target.checked })}
-                disabled={isRunning}
+                disabled={isProcessActive}
                 className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
               <span>Bypass API Gateway Rate Limiter (attach authorized X-Load-Test header)</span>
@@ -671,30 +691,111 @@ export function LoadTestingDashboardPage() {
 
           {/* Action Trigger Buttons */}
           <div className="flex items-end gap-2 lg:col-span-1">
-            {!isRunning ? (
+            {!isProcessActive ? (
               <Button
                 variant="primary"
                 onClick={handleStartTest}
-                isLoading={isStarting}
                 className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20 hover:from-indigo-700 hover:to-violet-700"
               >
                 <Play className="size-4 fill-white" />
                 <span>Launch Load Test</span>
               </Button>
             ) : (
-              <Button
-                variant="secondary"
-                onClick={handleStopTest}
-                isLoading={isStopping}
-                className="w-full border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-              >
-                <Square className="size-4 fill-current" />
-                <span>Emergency Abort</span>
-              </Button>
+              <div className="flex w-full items-center gap-2">
+                <Button
+                  variant="primary"
+                  disabled
+                  isLoading={true}
+                  className="flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20 opacity-90 cursor-wait whitespace-nowrap"
+                >
+                  <span>
+                    {isStarting
+                      ? "Starting..."
+                      : `Testing (${activeTest?.elapsedSeconds ?? 0}s / ${activeTest?.configuredDurationSeconds ?? config.durationSeconds}s)`}
+                  </span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleStopTest}
+                  isLoading={isStopping}
+                  title="Emergency Abort Test"
+                  className="border-rose-300 bg-rose-50 px-3 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                >
+                  <Square className="size-4 fill-current text-rose-600" />
+                  <span className="hidden sm:inline">Abort</span>
+                </Button>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Active In-Progress Execution Progress Banner (keeps showing till process completed) */}
+      {isProcessActive && (
+        <div className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50/90 via-violet-50/70 to-indigo-50/90 p-4 shadow-sm dark:border-indigo-900/50 dark:bg-slate-900">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <LoaderCircle className="size-6 animate-spin text-indigo-600 dark:text-indigo-400" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
+                    Load Test Execution in Progress...
+                  </h4>
+                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold tracking-wide text-indigo-700 uppercase dark:bg-indigo-950 dark:text-indigo-300">
+                    Active
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                  Simulating {activeTest?.configuredVUs || config.virtualUsers} virtual users against{" "}
+                  <code className="font-mono font-semibold text-indigo-600 dark:text-indigo-300">
+                    {activeTest?.targetEndpoint || config.targetEndpoint}
+                  </code>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs">
+              <div className="text-right">
+                <div className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                  {activeTest?.elapsedSeconds ?? 0}s / {activeTest?.configuredDurationSeconds ?? config.durationSeconds}s
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {activeTest
+                    ? `${activeTest.totalRequests.toLocaleString()} reqs (${activeTest.currentRps} req/s)`
+                    : "Initializing..."}
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleStopTest}
+                isLoading={isStopping}
+                className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+              >
+                <Square className="size-3.5 fill-current" />
+                <span>Abort</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Real-time Progress Bar */}
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-indigo-100 dark:bg-slate-800">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-600 to-violet-600 transition-all duration-500 ease-out"
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.round(
+                    ((activeTest?.elapsedSeconds ?? 0) /
+                      (activeTest?.configuredDurationSeconds || config.durationSeconds || 1)) *
+                      100
+                  )
+                )}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Inspecting Past Run Alert Banner */}
       {inspectingRun && (
@@ -927,7 +1028,7 @@ export function LoadTestingDashboardPage() {
               <Button
                 variant="secondary"
                 onClick={handleClearHistory}
-                disabled={isRunning}
+                disabled={isProcessActive}
                 className="text-xs text-rose-600 hover:bg-rose-50 dark:text-rose-400"
               >
                 <Trash2 className="size-3.5" />
