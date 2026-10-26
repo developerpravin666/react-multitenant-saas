@@ -127,6 +127,7 @@ export const APP_ROUTES = {
     emailTemplates: "/admin/email-templates",
     ocrSettings: "/admin/ocr-settings",
     loadTesting: "/admin/load-test",
+    grafana: "/admin/grafana",
     login: "/admin/login",
   },
 } as const;

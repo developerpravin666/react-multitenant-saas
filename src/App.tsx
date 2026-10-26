@@ -52,6 +52,7 @@ import { DatabaseBackupDashboardPage } from "./features/admin/DatabaseBackupDash
 import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
 import { OcrSettingsAdminPage } from "./features/admin/OcrSettingsAdminPage";
 import { LoadTestingDashboardPage } from "./features/admin/LoadTestingDashboardPage";
+import { GrafanaDashboardPage } from "./features/admin/GrafanaDashboardPage";
 import { AdminRoute } from "./features/auth/AdminRoute";
 
 function RootDashboard() {
@@ -129,6 +130,7 @@ export default function App() {
           <Route path={APP_ROUTES.admin.emailTemplates} element={withPageTitle("Email Templates", <EmailTemplatesPage />)} />
           <Route path={APP_ROUTES.admin.ocrSettings} element={withPageTitle("OCR & Document AI", <OcrSettingsAdminPage />)} />
           <Route path={APP_ROUTES.admin.loadTesting} element={withPageTitle("Load Testing & Benchmarks", <LoadTestingDashboardPage />)} />
+          <Route path={APP_ROUTES.admin.grafana} element={withPageTitle("Grafana Observability", <GrafanaDashboardPage />)} />
 
         </Route>
       </Route>

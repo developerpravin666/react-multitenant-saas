@@ -1,5 +1,6 @@
 import {
   Gauge,
+  Activity,
   Boxes,
   Factory,
   HandCoins,
@@ -117,6 +118,12 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
         label: "Load Testing",
         path: APP_ROUTES.admin.loadTesting,
         icon: Gauge,
+      },
+      {
+        id: "grafana-dashboard",
+        label: "Grafana Observability",
+        path: APP_ROUTES.admin.grafana,
+        icon: Activity,
       },
     ],
   },
