@@ -114,6 +114,17 @@ export const APP_ROUTES = {
     databaseTables: "/settings/database-tables",
   },
 
+  hr: {
+    root: "/hr",
+    employees: "/hr/employees",
+    employeeAdd: "/hr/employees/new",
+    employeeEdit: (id: string) => `/hr/employees/${id}/edit`,
+    leaves: "/hr/leaves",
+    payroll: "/hr/payroll",
+    masters: "/hr/masters",
+    hierarchy: "/hr/hierarchy",
+  },
+
   admin: {
     dashboard: "/admin/dashboard",
     tenants: "/admin/tenants",
@@ -123,6 +134,7 @@ export const APP_ROUTES = {
     databaseBackups: "/admin/database-backups",
     systemSettings: "/admin/system-settings",
     featureFlags: "/admin/feature-flags",
+    hrOverview: "/admin/hr-overview",
     mastersImport: "/admin/masters-import",
     emailTemplates: "/admin/email-templates",
     ocrSettings: "/admin/ocr-settings",

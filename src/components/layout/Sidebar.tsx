@@ -5,6 +5,7 @@ import { sidebarConfiguration, productOwnerSidebarConfiguration } from "../../co
 import { SidebarMenuItem } from "../navigation/SidebarMenuItem";
 import { useAccountingAccess } from "../../features/accounting/AccountingAccess";
 import { useAuth } from "../../features/auth/AuthContext";
+import { useFeatureFlags } from "../../features/feature-flags/FeatureFlagContext";
 import type { NavigationItem } from "../../types/navigation";
 
 interface SidebarProps {
@@ -16,10 +17,22 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { isOwner } = useAccountingAccess();
   const { isProductOwner } = useAuth();
+  const { isEnabled } = useFeatureFlags();
 
-  const filter = (items: NavigationItem[]): NavigationItem[] => items
-    .filter(item => item.id !== "staff-access" || isOwner)
-    .map(item => ({ ...item, children: item.children ? filter(item.children) : undefined }));
+  const filter = (items: NavigationItem[]): NavigationItem[] =>
+    items
+      .filter((item) => {
+        if (item.id === "staff-access" && !isOwner) return false;
+        if (item.id === "hr-payroll") {
+          return isEnabled("smart_hr") || isEnabled("leave_management") || isEnabled("payroll");
+        }
+        if (item.id === "hr-employees") return isEnabled("smart_hr");
+        if (item.id === "hr-leaves") return isEnabled("leave_management");
+        if (item.id === "hr-payroll-menu") return isEnabled("payroll");
+        return true;
+      })
+      .map((item) => ({ ...item, children: item.children ? filter(item.children) : undefined }))
+      .filter((item) => !item.children || item.children.length > 0 || Boolean(item.path));
 
   const activeNavItems = isProductOwner
     ? productOwnerSidebarConfiguration

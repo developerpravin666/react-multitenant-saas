@@ -52,6 +52,13 @@ import { DatabaseBackupDashboardPage } from "./features/admin/DatabaseBackupDash
 import { EmailTemplatesPage } from "./features/admin/EmailTemplatesPage";
 import { OcrSettingsAdminPage } from "./features/admin/OcrSettingsAdminPage";
 import { AdminRoute } from "./features/auth/AdminRoute";
+import { EmployeeDirectoryPage } from "./features/hr/EmployeeDirectoryPage";
+import { EmployeeFormPage } from "./features/hr/EmployeeFormPage";
+import { HrMastersPage } from "./features/hr/HrMastersPage";
+import { OrgHierarchyPage } from "./features/hr/OrgHierarchyPage";
+import { LeaveManagementPage } from "./features/hr/LeaveManagementPage";
+import { PayrollManagementPage } from "./features/hr/PayrollManagementPage";
+import { AdminHrOverviewPage } from "./features/hr/AdminHrOverviewPage";
 
 function RootDashboard() {
   const { isProductOwner } = useAuth();
@@ -92,6 +99,17 @@ export default function App() {
           <Route path="/accounting/opening-balances" element={withPageTitle("Opening Balances", <OpeningBalancesPage />)} />
           <Route path="/accounting/opening-stock/add" element={withPageTitle("Add Opening Stock", <OpeningStockFormPage />)} />
           <Route path="/accounting/staff" element={withPageTitle("Staff Access", <StaffAccessPage />)} />
+
+          {/* Smart HR, Leaves & Payroll Routes */}
+          <Route path="/hr" element={<Navigate to="/hr/employees" replace />} />
+          <Route path={APP_ROUTES.hr.employees} element={withPageTitle("Employee Directory", <EmployeeDirectoryPage />)} />
+          <Route path={APP_ROUTES.hr.employeeAdd} element={withPageTitle("Add Employee", <EmployeeFormPage />)} />
+          <Route path="/hr/employees/:id/edit" element={withPageTitle("Edit Employee", <EmployeeFormPage />)} />
+          <Route path={APP_ROUTES.hr.hierarchy} element={withPageTitle("Organization Hierarchy", <OrgHierarchyPage />)} />
+          <Route path={APP_ROUTES.hr.leaves} element={withPageTitle("Leave Management", <LeaveManagementPage />)} />
+          <Route path={APP_ROUTES.hr.payroll} element={withPageTitle("Payroll & Compensation", <PayrollManagementPage />)} />
+          <Route path={APP_ROUTES.hr.masters} element={withPageTitle("HR Masters & Setup", <HrMastersPage />)} />
+
           {productRoutes}
           {purchaseRoutes}
           {saleRoutes}
@@ -124,6 +142,7 @@ export default function App() {
           <Route path={APP_ROUTES.admin.databaseBackups} element={withPageTitle("Database Backups & Restore", <DatabaseBackupDashboardPage />)} />
           <Route path={APP_ROUTES.admin.systemSettings} element={withPageTitle("System Settings", <SystemSettingsPage />)} />
           <Route path={APP_ROUTES.admin.featureFlags} element={withPageTitle("Feature Flags", <FeatureFlagsAdminPage />)} />
+          <Route path={APP_ROUTES.admin.hrOverview} element={withPageTitle("Workforce & HR Governance", <AdminHrOverviewPage />)} />
           <Route path={APP_ROUTES.admin.mastersImport} element={withPageTitle("Import Masters", <MasterImportPage isAdminMode={true} />)} />
           <Route path={APP_ROUTES.admin.emailTemplates} element={withPageTitle("Email Templates", <EmailTemplatesPage />)} />
           <Route path={APP_ROUTES.admin.ocrSettings} element={withPageTitle("OCR & Document AI", <OcrSettingsAdminPage />)} />

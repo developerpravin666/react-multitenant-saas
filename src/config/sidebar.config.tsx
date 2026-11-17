@@ -32,6 +32,9 @@ import {
   Scale,
   Layers,
   ScanText,
+  UserPlus,
+  Network,
+  Sliders,
 } from "lucide-react";
 
 import type { NavigationItem } from "../types/navigation";
@@ -123,6 +126,18 @@ export const productOwnerSidebarConfiguration: NavigationItem[] = [
         label: "Feature Flags",
         path: APP_ROUTES.admin.featureFlags,
         icon: ToggleRight,
+      },
+      {
+        id: "admin-hr-overview",
+        label: "Workforce & HR Governance",
+        path: APP_ROUTES.admin.hrOverview,
+        icon: Users,
+      },
+      {
+        id: "admin-hr-masters",
+        label: "HR Master Catalog",
+        path: APP_ROUTES.hr.masters,
+        icon: Sliders,
       },
       {
         id: "admin-email-templates",
@@ -294,6 +309,49 @@ export const sidebarConfiguration: NavigationItem[] = [
         label: "Bills & Payments",
         path: APP_ROUTES.sale.accounting,
         icon: HandCoins,
+      },
+    ],
+  },
+  {
+    id: "hr-payroll",
+    label: "Smart HR & Payroll",
+    icon: Users,
+    children: [
+      {
+        id: "hr-employees",
+        label: "Employee Directory",
+        path: APP_ROUTES.hr.employees,
+        icon: Users,
+      },
+      {
+        id: "hr-employee-add",
+        label: "Add Employee",
+        path: APP_ROUTES.hr.employeeAdd,
+        icon: UserPlus,
+      },
+      {
+        id: "hr-hierarchy",
+        label: "Organization Hierarchy",
+        path: APP_ROUTES.hr.hierarchy,
+        icon: Network,
+      },
+      {
+        id: "hr-leaves",
+        label: "Leaves & Attendance",
+        path: APP_ROUTES.hr.leaves,
+        icon: CalendarDays,
+      },
+      {
+        id: "hr-payroll-menu",
+        label: "Payroll & Statutory",
+        path: APP_ROUTES.hr.payroll,
+        icon: Landmark,
+      },
+      {
+        id: "hr-masters",
+        label: "HR Masters & Setup",
+        path: APP_ROUTES.hr.masters,
+        icon: Sliders,
       },
     ],
   },
