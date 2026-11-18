@@ -59,6 +59,7 @@ import { OrgHierarchyPage } from "./features/hr/OrgHierarchyPage";
 import { LeaveManagementPage } from "./features/hr/LeaveManagementPage";
 import { PayrollManagementPage } from "./features/hr/PayrollManagementPage";
 import { AdminHrOverviewPage } from "./features/hr/AdminHrOverviewPage";
+import { ModuleRouteGuard } from "./components/layout/ModuleRouteGuard";
 
 function RootDashboard() {
   const { isProductOwner } = useAuth();
@@ -82,37 +83,45 @@ export default function App() {
         <Route element={<OfflineBoundary><AppShell /></OfflineBoundary>}>
           <Route path="/" element={<RootDashboard />} />
           <Route path="/account/change-password" element={withPageTitle("Change Password", <ChangePasswordPage />)} />
-          <Route path={APP_ROUTES.contraVoucher} element={withPageTitle("Contra Voucher (F4)", <ContraVoucherPage />)} />
-          <Route path={APP_ROUTES.journalVoucher} element={withPageTitle("Journal Voucher (F7)", <JournalVoucherPage />)} />
-          <Route path={APP_ROUTES.generalLedger} element={withPageTitle("General Ledger", <GeneralLedgerPage />)} />
-          <Route path={APP_ROUTES.accountingAging} element={withPageTitle("Aging Report", <AgingReportPage />)} />
-          <Route path={APP_ROUTES.taxReports} element={withPageTitle("Tax Reports", <TaxReportsPage />)} />
-          <Route path={APP_ROUTES.rcm} element={withPageTitle("RCM Self-Invoicing", <RcmManagementPage />)} />
-          <Route path={APP_ROUTES.partyStatement} element={withPageTitle("Party Statement", <PartyStatementPage />)} />
-          <Route path={APP_ROUTES.accountingPeriods} element={withPageTitle("Accounting Periods", <AccountingPeriodsPage />)} />
-          <Route path={APP_ROUTES.bankReconciliation} element={withPageTitle("Bank Reconciliation", <BankReconciliationPage />)} />
-          <Route path={APP_ROUTES.stockMovements} element={withPageTitle("Stock Movements", <StockMovementsPage />)} />
-          <Route path={APP_ROUTES.godowns} element={withPageTitle("Godowns & Stock Journal", <GodownsPage />)} />
-          <Route path={APP_ROUTES.stockValuation} element={withPageTitle("Stock Valuation & Alternate Units", <StockValuationPage />)} />
-          <Route path={APP_ROUTES.accountingControls} element={withPageTitle("Accounting Controls", <AccountingControlsPage />)} />
-          <Route path="/accounting/corrections" element={withPageTitle("Invoice Corrections", <InvoiceCorrectionsPage />)} />
-          <Route path="/accounting/opening-balances" element={withPageTitle("Opening Balances", <OpeningBalancesPage />)} />
-          <Route path="/accounting/opening-stock/add" element={withPageTitle("Add Opening Stock", <OpeningStockFormPage />)} />
-          <Route path="/accounting/staff" element={withPageTitle("Staff Access", <StaffAccessPage />)} />
+          {/* Double-Entry General Ledger & Accounting Routes */}
+          <Route element={<ModuleRouteGuard flag="accounting" moduleName="Double-Entry Accounting & Ledger" />}>
+            <Route path={APP_ROUTES.contraVoucher} element={withPageTitle("Contra Voucher (F4)", <ContraVoucherPage />)} />
+            <Route path={APP_ROUTES.journalVoucher} element={withPageTitle("Journal Voucher (F7)", <JournalVoucherPage />)} />
+            <Route path={APP_ROUTES.generalLedger} element={withPageTitle("General Ledger", <GeneralLedgerPage />)} />
+            <Route path={APP_ROUTES.accountingAging} element={withPageTitle("Aging Report", <AgingReportPage />)} />
+            <Route path={APP_ROUTES.taxReports} element={withPageTitle("Tax Reports", <TaxReportsPage />)} />
+            <Route path={APP_ROUTES.rcm} element={withPageTitle("RCM Self-Invoicing", <RcmManagementPage />)} />
+            <Route path={APP_ROUTES.partyStatement} element={withPageTitle("Party Statement", <PartyStatementPage />)} />
+            <Route path={APP_ROUTES.accountingPeriods} element={withPageTitle("Accounting Periods", <AccountingPeriodsPage />)} />
+            <Route path={APP_ROUTES.bankReconciliation} element={withPageTitle("Bank Reconciliation", <BankReconciliationPage />)} />
+            <Route path={APP_ROUTES.stockMovements} element={withPageTitle("Stock Movements", <StockMovementsPage />)} />
+            <Route path={APP_ROUTES.accountingControls} element={withPageTitle("Accounting Controls", <AccountingControlsPage />)} />
+            <Route path="/accounting/corrections" element={withPageTitle("Invoice Corrections", <InvoiceCorrectionsPage />)} />
+            <Route path="/accounting/opening-balances" element={withPageTitle("Opening Balances", <OpeningBalancesPage />)} />
+            <Route path="/accounting/opening-stock/add" element={withPageTitle("Add Opening Stock", <OpeningStockFormPage />)} />
+            <Route path="/accounting/staff" element={withPageTitle("Staff Access", <StaffAccessPage />)} />
+          </Route>
+
+          {/* Inventory, Products, Purchases & Sales Routes */}
+          <Route element={<ModuleRouteGuard flag="inventory" moduleName="Inventory & Sales" />}>
+            <Route path={APP_ROUTES.godowns} element={withPageTitle("Godowns & Stock Journal", <GodownsPage />)} />
+            <Route path={APP_ROUTES.stockValuation} element={withPageTitle("Stock Valuation & Alternate Units", <StockValuationPage />)} />
+            {productRoutes}
+            {purchaseRoutes}
+            {saleRoutes}
+          </Route>
 
           {/* Smart HR, Leaves & Payroll Routes */}
-          <Route path="/hr" element={<Navigate to="/hr/employees" replace />} />
-          <Route path={APP_ROUTES.hr.employees} element={withPageTitle("Employee Directory", <EmployeeDirectoryPage />)} />
-          <Route path={APP_ROUTES.hr.employeeAdd} element={withPageTitle("Add Employee", <EmployeeFormPage />)} />
-          <Route path="/hr/employees/:id/edit" element={withPageTitle("Edit Employee", <EmployeeFormPage />)} />
-          <Route path={APP_ROUTES.hr.hierarchy} element={withPageTitle("Organization Hierarchy", <OrgHierarchyPage />)} />
-          <Route path={APP_ROUTES.hr.leaves} element={withPageTitle("Leave Management", <LeaveManagementPage />)} />
-          <Route path={APP_ROUTES.hr.payroll} element={withPageTitle("Payroll & Compensation", <PayrollManagementPage />)} />
-          <Route path={APP_ROUTES.hr.masters} element={withPageTitle("HR Masters & Setup", <HrMastersPage />)} />
-
-          {productRoutes}
-          {purchaseRoutes}
-          {saleRoutes}
+          <Route element={<ModuleRouteGuard flag="smart_hr" moduleName="Smart HR & Payroll" />}>
+            <Route path="/hr" element={<Navigate to="/hr/employees" replace />} />
+            <Route path={APP_ROUTES.hr.employees} element={withPageTitle("Employee Directory", <EmployeeDirectoryPage />)} />
+            <Route path={APP_ROUTES.hr.employeeAdd} element={withPageTitle("Add Employee", <EmployeeFormPage />)} />
+            <Route path="/hr/employees/:id/edit" element={withPageTitle("Edit Employee", <EmployeeFormPage />)} />
+            <Route path={APP_ROUTES.hr.hierarchy} element={withPageTitle("Organization Hierarchy", <OrgHierarchyPage />)} />
+            <Route path={APP_ROUTES.hr.leaves} element={withPageTitle("Leave Management", <LeaveManagementPage />)} />
+            <Route path={APP_ROUTES.hr.payroll} element={withPageTitle("Payroll & Compensation", <PayrollManagementPage />)} />
+            <Route path={APP_ROUTES.hr.masters} element={withPageTitle("HR Masters & Setup", <HrMastersPage />)} />
+          </Route>
           <Route path="/settings/taxes">
             <Route index element={<Navigate to="list" replace />} />
             <Route path="list" element={withPageTitle("Taxes", <TaxListPage />)} />

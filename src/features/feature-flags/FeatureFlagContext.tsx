@@ -8,10 +8,12 @@ import {
 } from "react";
 import type { FeatureFlag, FeatureFlagContextValue, TenantSummary } from "./types";
 import { featureFlagService } from "./featureFlagService";
+import { useAuth } from "../auth/AuthContext";
 
 const FeatureFlagContext = createContext<FeatureFlagContextValue | null>(null);
 
 export function FeatureFlagProvider({ children }: PropsWithChildren) {
+  const { session, isProductOwner } = useAuth();
   const initialCache = featureFlagService.getCache();
   const [flags, setFlags] = useState<Record<string, boolean>>(initialCache.flags);
   const [items, setItems] = useState<FeatureFlag[]>(initialCache.items);
@@ -24,25 +26,31 @@ export function FeatureFlagProvider({ children }: PropsWithChildren) {
     setLoading(true);
     setError(null);
     try {
-      const activeTenant = tenantId !== undefined ? tenantId : selectedTenantId;
-      // Fetch admin feature flags which return full tenant lists and overrides
-      const data = await featureFlagService.getAdminFeatureFlags(activeTenant);
-      setFlags(data.flags);
-      setItems(data.items);
-      if (data.tenants && data.tenants.length > 0) {
-        setTenants(data.tenants);
+      if (isProductOwner) {
+        const activeTenant = tenantId !== undefined ? tenantId : selectedTenantId;
+        const data = await featureFlagService.getAdminFeatureFlags(activeTenant);
+        setFlags(data.flags);
+        setItems(data.items);
+        if (data.tenants && data.tenants.length > 0) {
+          setTenants(data.tenants);
+        }
+      } else {
+        const targetTenant = tenantId ?? session?.tenantId ?? localStorage.getItem("tenant_id");
+        const data = await featureFlagService.getFeatureFlags(targetTenant);
+        setFlags(data.flags);
+        setItems(data.items);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load feature flags.");
     } finally {
       setLoading(false);
     }
-  }, [selectedTenantId]);
+  }, [isProductOwner, selectedTenantId, session?.tenantId]);
 
-  // Fetch flags on initial mount
+  // Fetch flags on initial mount and when session/tenant changes
   useEffect(() => {
     void refreshFlags();
-  }, [refreshFlags]);
+  }, [session?.tenantId, isProductOwner, refreshFlags]);
 
   // Sync across tabs and components
   useEffect(() => {

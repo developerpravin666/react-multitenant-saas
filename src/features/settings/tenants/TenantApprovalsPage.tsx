@@ -19,6 +19,8 @@ import {
   FileText,
   AlertCircle,
   Database,
+  Boxes,
+  Users,
 } from "lucide-react";
 
 interface PendingTenant {
@@ -34,6 +36,7 @@ interface PendingTenant {
   gstin: string | null;
   address: string | null;
   createdAt: string;
+  subscribedModules: string | null;
 }
 
 export function TenantApprovalsPage() {
@@ -49,6 +52,23 @@ export function TenantApprovalsPage() {
   const [rejectModalTenant, setRejectModalTenant] = useState<PendingTenant | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  // Assigned modules per tenant
+  const [assignedModulesMap, setAssignedModulesMap] = useState<Record<string, string[]>>({});
+
+  const toggleTenantModule = (tenantId: string, modId: string) => {
+    setAssignedModulesMap((prev) => {
+      const current = prev[tenantId] ?? ["accounting_inventory", "hr_payroll"];
+      let next: string[];
+      if (current.includes(modId)) {
+        if (current.length === 1) return prev; // Keep at least one
+        next = current.filter((m) => m !== modId);
+      } else {
+        next = [...current, modId];
+      }
+      return { ...prev, [tenantId]: next };
+    });
+  };
+
   const fetchPendingTenants = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -56,6 +76,16 @@ export function TenantApprovalsPage() {
       const pending = await apiClient.get<PendingTenant[]>("/admin/tenants/pending");
       if (!Array.isArray(pending)) throw new Error("The service returned an invalid pending registrations list.");
       setTenants(pending);
+
+      const initialMap: Record<string, string[]> = {};
+      pending.forEach((t) => {
+        if (t.subscribedModules) {
+          initialMap[t.id] = t.subscribedModules.split(",").map((s) => s.trim().toLowerCase());
+        } else {
+          initialMap[t.id] = ["accounting_inventory", "hr_payroll"];
+        }
+      });
+      setAssignedModulesMap(initialMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load pending registrations.");
     } finally {
@@ -68,9 +98,14 @@ export function TenantApprovalsPage() {
   }, [fetchPendingTenants]);
 
   const handleApprove = async (tenant: PendingTenant) => {
+    const modulesToAssign = assignedModulesMap[tenant.id] ?? ["accounting_inventory", "hr_payroll"];
+    const moduleNames = modulesToAssign.map((m) =>
+      m === "accounting_inventory" ? "Accounting & Inventory" : "Smart HR & Payroll"
+    ).join(", ");
+
     const confirmed = await notifications.confirm({
       title: "Approve Store Registration?",
-      message: `Are you sure you want to approve "${tenant.name}"? This will create its isolated PostgreSQL schema, apply all database migrations, and seed default ledgers.`,
+      message: `Are you sure you want to approve "${tenant.name}" with modules: ${moduleNames}? This will create its isolated PostgreSQL schema, configure module feature flags, apply all database migrations, and seed default ledgers.`,
       variant: "warning",
       confirmLabel: "Approve & Provision",
       cancelLabel: "Cancel",
@@ -84,13 +119,13 @@ export function TenantApprovalsPage() {
     setSuccessMessage(null);
     try {
       const res = await apiClient.post<{ ownerUsername: string; message: string }>(
-        `/admin/tenants/${tenant.id}/approve`, {}
+        `/admin/tenants/${tenant.id}/approve`, { assignedModules: modulesToAssign }
       ).catch(() => apiClient.post<{ ownerUsername: string; message: string }>(
-        `/tenants/${tenant.id}/approve`, {}
+        `/tenants/${tenant.id}/approve`, { assignedModules: modulesToAssign }
       ));
 
       setSuccessMessage(
-        `Store "${tenant.name}" approved successfully! Schema "${tenant.schemaName}" provisioned, seed ledgers initialized, and owner account "${res.ownerUsername || "admin"}" activated.`
+        `Store "${tenant.name}" approved successfully! Assigned modules: ${moduleNames}. Schema "${tenant.schemaName}" provisioned, seed ledgers initialized, and owner account "${res.ownerUsername || "admin"}" activated.`
       );
       await fetchPendingTenants();
     } catch (err) {
@@ -272,6 +307,49 @@ export function TenantApprovalsPage() {
                       <div className="flex items-center gap-2 text-[11px] text-slate-400">
                         <Database className="size-3 text-slate-400" />
                         <span>Target Schema: {t.schemaName}</span>
+                      </div>
+
+                      {/* Module Assignment Box */}
+                      <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            Assign Modules:
+                          </span>
+                          <span className="text-[10px] text-slate-500">Click to toggle before approval</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => toggleTenantModule(t.id, "accounting_inventory")}
+                            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                              (assignedModulesMap[t.id] ?? []).includes("accounting_inventory")
+                                ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-300"
+                                : "border-slate-200 bg-white text-slate-400 opacity-60 dark:border-slate-700 dark:bg-slate-800"
+                            }`}
+                          >
+                            <Boxes className="size-3.5" />
+                            <span>Accounting & Inventory</span>
+                            {(assignedModulesMap[t.id] ?? []).includes("accounting_inventory") && (
+                              <Check className="size-3 stroke-[3]" />
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleTenantModule(t.id, "hr_payroll")}
+                            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                              (assignedModulesMap[t.id] ?? []).includes("hr_payroll")
+                                ? "border-indigo-600 bg-indigo-50 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-300"
+                                : "border-slate-200 bg-white text-slate-400 opacity-60 dark:border-slate-700 dark:bg-slate-800"
+                            }`}
+                          >
+                            <Users className="size-3.5" />
+                            <span>Smart HR & Payroll</span>
+                            {(assignedModulesMap[t.id] ?? []).includes("hr_payroll") && (
+                              <Check className="size-3 stroke-[3]" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

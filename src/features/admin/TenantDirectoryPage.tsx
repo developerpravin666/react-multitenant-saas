@@ -22,7 +22,10 @@ import {
   Mail,
   Phone,
   MapPin,
-  FileText
+  FileText,
+  Boxes,
+  Users,
+  Sliders,
 } from "lucide-react";
 import { apiClient } from "../../services/apiClient";
 import { useNotifications } from "../../context/NotificationContext";
@@ -44,6 +47,7 @@ interface AdminTenant {
   rejectionReason: string | null;
   isActive: boolean;
   createdAt: string;
+  subscribedModules: string | null;
 }
 
 export function TenantDirectoryPage() {
@@ -58,7 +62,7 @@ export function TenantDirectoryPage() {
 
   // Details Modal
   const [selectedTenant, setSelectedTenant] = useState<AdminTenant | null>(null);
-  const [management, setManagement] = useState<{ tenant: AdminTenant; mode: "profile" | "password" } | null>(null);
+  const [management, setManagement] = useState<{ tenant: AdminTenant; mode: "profile" | "password" | "modules" } | null>(null);
 
   // Reject Modal
   const [rejectTenant, setRejectTenant] = useState<AdminTenant | null>(null);
@@ -286,6 +290,7 @@ export function TenantDirectoryPage() {
                 <th className="px-5 py-3.5 font-semibold">Workspace Slug</th>
                 <th className="px-5 py-3.5 font-semibold">Store Owner</th>
                 <th className="px-5 py-3.5 font-semibold">Tax & Region</th>
+                <th className="px-5 py-3.5 font-semibold">Assigned Modules</th>
                 <th className="px-5 py-3.5 font-semibold">Status</th>
                 <th className="px-5 py-3.5 font-semibold">Registered</th>
                 <th className="px-5 py-3.5 font-semibold text-right">Actions</th>
@@ -339,6 +344,23 @@ export function TenantDirectoryPage() {
                       </td>
 
                       <td className="px-5 py-3.5">
+                        <div className="flex flex-wrap gap-1">
+                          {(!t.subscribedModules || t.subscribedModules.toLowerCase().includes("accounting")) && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                              <Boxes className="size-3" />
+                              <span>Accounting & Inv</span>
+                            </span>
+                          )}
+                          {(!t.subscribedModules || t.subscribedModules.toLowerCase().includes("hr")) && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                              <Users className="size-3" />
+                              <span>HR & Payroll</span>
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3.5">
                         {isActive && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                             <CheckCircle2 className="size-3" />
@@ -380,8 +402,16 @@ export function TenantDirectoryPage() {
                           </button>
 
                           <button type="button" title="Edit tenant profile" onClick={() => setManagement({ tenant: t, mode: "profile" })}
-                            className="rounded-lg border border-slate-200 p-1.5 text-indigo-600 dark:border-slate-700">
+                            className="rounded-lg border border-slate-200 p-1.5 text-indigo-600 hover:bg-indigo-50 dark:border-slate-700 dark:hover:bg-indigo-950/30">
                             <Pencil className="size-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Manage Assigned Modules"
+                            onClick={() => setManagement({ tenant: t, mode: "modules" })}
+                            className="rounded-lg border border-slate-200 p-1.5 text-blue-600 hover:bg-blue-50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                          >
+                            <Sliders className="size-3.5" />
                           </button>
                           {!isRejected && <button type="button" title="Reset owner password" onClick={() => setManagement({ tenant: t, mode: "password" })}
                             className="rounded-lg border border-slate-200 p-1.5 text-indigo-600 dark:border-slate-700">

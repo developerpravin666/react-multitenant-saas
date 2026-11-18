@@ -1,7 +1,22 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import { Building2, CheckCircle2, ShieldCheck, ArrowRight, Store, User, Mail, Phone, Lock, MapPin } from "lucide-react";
+import {
+  Building2,
+  CheckCircle2,
+  ShieldCheck,
+  ArrowRight,
+  Store,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  MapPin,
+  Boxes,
+  Users,
+  Check,
+  Package,
+} from "lucide-react";
 
 const GST_STATES = [
   { code: "01", name: "01 - Jammu and Kashmir" },
@@ -61,12 +76,21 @@ export function RegisterTenantPage() {
   const [stateCode, setStateCode] = useState("23"); // Default Maharashtra
   const [gstin, setGstin] = useState("");
   const [address, setAddress] = useState("");
+  const [selectedModules, setSelectedModules] = useState<string[]>([
+    "accounting_inventory",
+    "hr_payroll",
+  ]);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [registeredData, setRegisteredData] = useState<{ name: string; slug: string; email: string } | null>(null);
+  const [registeredData, setRegisteredData] = useState<{
+    name: string;
+    slug: string;
+    email: string;
+    modules: string[];
+  } | null>(null);
 
   const clearFieldError = (fieldName: string) => {
     if (fieldErrors[fieldName]) {
@@ -76,6 +100,17 @@ export function RegisterTenantPage() {
         return copy;
       });
     }
+  };
+
+  const toggleModule = (modId: string) => {
+    clearFieldError("selectedModules");
+    setSelectedModules((prev) => {
+      if (prev.includes(modId)) {
+        if (prev.length === 1) return prev; // At least one required
+        return prev.filter((m) => m !== modId);
+      }
+      return [...prev, modId];
+    });
   };
 
   const handleNameChange = (val: string) => {
@@ -143,6 +178,10 @@ export function RegisterTenantPage() {
       errors.confirmPassword = "Passwords do not match.";
     }
 
+    if (selectedModules.length === 0) {
+      errors.selectedModules = "Please select at least one module for your store subscription.";
+    }
+
     return errors;
   };
 
@@ -173,12 +212,14 @@ export function RegisterTenantPage() {
         stateCode: stateCode || undefined,
         gstin: gstin.trim() || undefined,
         address: address.trim() || undefined,
+        selectedModules: selectedModules,
       });
 
       setRegisteredData({
         name: name.trim(),
         slug: slug.trim(),
         email: ownerEmail.trim(),
+        modules: selectedModules,
       });
       setSuccess(true);
     } catch (err) {
@@ -236,6 +277,26 @@ export function RegisterTenantPage() {
                   </span>
                 </li>
               </ul>
+            </div>
+
+            <div className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-left dark:border-slate-800 dark:bg-slate-800/40">
+              <h5 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Selected Modules on Store Provisioning:
+              </h5>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {registeredData.modules.includes("accounting_inventory") && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+                    <Boxes className="size-3.5" />
+                    <span>Accounting & Inventory</span>
+                  </span>
+                )}
+                {registeredData.modules.includes("hr_payroll") && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300">
+                    <Users className="size-3.5" />
+                    <span>Smart HR & Payroll</span>
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="mt-8 flex w-full flex-col gap-3">
@@ -400,6 +461,156 @@ export function RegisterTenantPage() {
                   onChange={(e) => setAddress(e.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
+              </div>
+            </div>
+
+            {/* Subscription Modules Selection */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+                <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
+                  <Package className="size-4 text-blue-600" />
+                  <span>Choose Your Subscription Modules</span>
+                  <span className="text-rose-500">*</span>
+                </div>
+                <span className="text-[11px] text-slate-500">Select one or both modules</span>
+              </div>
+
+              {fieldErrors.selectedModules && (
+                <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-400">
+                  {fieldErrors.selectedModules}
+                </p>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Module 1: Accounting & Inventory */}
+                <div
+                  onClick={() => toggleModule("accounting_inventory")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleModule("accounting_inventory");
+                    }
+                  }}
+                  className={`relative cursor-pointer rounded-2xl border-2 p-4 transition-all duration-200 ${
+                    selectedModules.includes("accounting_inventory")
+                      ? "border-blue-600 bg-blue-50/40 shadow-sm dark:border-blue-500 dark:bg-blue-950/20"
+                      : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`grid size-9 place-items-center rounded-xl ${
+                          selectedModules.includes("accounting_inventory")
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                        }`}
+                      >
+                        <Boxes className="size-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Accounting & Inventory
+                        </h4>
+                        <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">
+                          POS, Stock & Ledger
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`grid size-5 place-items-center rounded-full border ${
+                        selectedModules.includes("accounting_inventory")
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800"
+                      }`}
+                    >
+                      {selectedModules.includes("accounting_inventory") && (
+                        <Check className="size-3 stroke-[3]" />
+                      )}
+                    </div>
+                  </div>
+                  <ul className="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                    <li className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-blue-500" />
+                      <span>Point of Sale Billing & GST Invoices</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-blue-500" />
+                      <span>Serialized Stock, IMEI Tracking & Godowns</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-blue-500" />
+                      <span>Double-Entry General Ledger & Balance Sheet</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Module 2: Smart HR & Payroll */}
+                <div
+                  onClick={() => toggleModule("hr_payroll")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleModule("hr_payroll");
+                    }
+                  }}
+                  className={`relative cursor-pointer rounded-2xl border-2 p-4 transition-all duration-200 ${
+                    selectedModules.includes("hr_payroll")
+                      ? "border-indigo-600 bg-indigo-50/40 shadow-sm dark:border-indigo-500 dark:bg-indigo-950/20"
+                      : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`grid size-9 place-items-center rounded-xl ${
+                          selectedModules.includes("hr_payroll")
+                            ? "bg-indigo-600 text-white"
+                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                        }`}
+                      >
+                        <Users className="size-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Smart HR & Payroll
+                        </h4>
+                        <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">
+                          Employees & Statutory
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`grid size-5 place-items-center rounded-full border ${
+                        selectedModules.includes("hr_payroll")
+                          ? "border-indigo-600 bg-indigo-600 text-white"
+                          : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800"
+                      }`}
+                    >
+                      {selectedModules.includes("hr_payroll") && (
+                        <Check className="size-3 stroke-[3]" />
+                      )}
+                    </div>
+                  </div>
+                  <ul className="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                    <li className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-indigo-500" />
+                      <span>Employee Directory, KYC & Org Hierarchy</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-indigo-500" />
+                      <span>Leave Balances & Multi-Level Approvals</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-indigo-500" />
+                      <span>Indian Statutory Payroll Engine (PF, ESI, PT)</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
 

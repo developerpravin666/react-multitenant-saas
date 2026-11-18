@@ -23,6 +23,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     items
       .filter((item) => {
         if (item.id === "staff-access" && !isOwner) return false;
+
+        // Accounting & Inventory module gating
+        if (item.id === "products" || item.id === "purchase" || item.id === "sale") {
+          return isEnabled("inventory");
+        }
+        if (item.id === "accounting") {
+          return isEnabled("accounting");
+        }
+
+        // Settings sub-items gating
+        if (item.id === "tax" && !isEnabled("accounting") && !isEnabled("inventory")) return false;
+        if (item.id === "finance-vendors" && !isEnabled("inventory")) return false;
+        if (item.id === "customer-bill" && !isEnabled("inventory")) return false;
+
+        // Smart HR & Payroll module gating
         if (item.id === "hr-payroll") {
           return isEnabled("smart_hr") || isEnabled("leave_management") || isEnabled("payroll");
         }
