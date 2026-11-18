@@ -72,6 +72,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={withPageTitle("Sign In", <LoginPage />)} />
+
       <Route path="/admin/login" element={withPageTitle("Administrator Sign In", <AdminLoginPage />)} />
       <Route path="/register-tenant" element={withPageTitle("Register Business", <RegisterTenantPage />)} />
       <Route path="/register" element={withPageTitle("Register Business", <RegisterTenantPage />)} />
