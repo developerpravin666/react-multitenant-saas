@@ -642,19 +642,19 @@ export function EmployeeDirectoryPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                       <div className="p-2.5 bg-white rounded border border-gray-200">
                         <span className="text-gray-500">Monthly Gross</span>
-                        <div className="text-sm font-bold text-gray-900">₹{employeeStatutory.monthlyGross.toLocaleString()}</div>
+                        <div className="text-sm font-bold text-gray-900">₹{(employeeStatutory.monthlyGross ?? employeeStatutory.grossMonthlySalary ?? 0).toLocaleString()}</div>
                       </div>
                       <div className="p-2.5 bg-white rounded border border-gray-200">
                         <span className="text-gray-500">Basic (50%)</span>
-                        <div className="text-sm font-bold text-gray-900">₹{employeeStatutory.basicSalary.toLocaleString()}</div>
+                        <div className="text-sm font-bold text-gray-900">₹{(employeeStatutory.basicSalary ?? 0).toLocaleString()}</div>
                       </div>
                       <div className="p-2.5 bg-white rounded border border-gray-200">
                         <span className="text-gray-500">HRA (20%)</span>
-                        <div className="text-sm font-bold text-gray-900">₹{employeeStatutory.houseRentAllowance.toLocaleString()}</div>
+                        <div className="text-sm font-bold text-gray-900">₹{(employeeStatutory.houseRentAllowance ?? employeeStatutory.hra ?? 0).toLocaleString()}</div>
                       </div>
                       <div className="p-2.5 bg-white rounded border border-gray-200">
                         <span className="text-gray-500">Total Deductions</span>
-                        <div className="text-sm font-bold text-red-600">₹{employeeStatutory.totalDeductions.toLocaleString()}</div>
+                        <div className="text-sm font-bold text-red-600">₹{(employeeStatutory.totalDeductions ?? 0).toLocaleString()}</div>
                       </div>
                     </div>
 
@@ -664,7 +664,7 @@ export function EmployeeDirectoryPage() {
                         <p className="text-[11px] text-emerald-700">Gross earnings less Employee PF, PT, ESIC and TDS</p>
                       </div>
                       <div className="text-xl font-bold text-emerald-800">
-                        ₹{employeeStatutory.netTakeHome.toLocaleString()} <span className="text-xs font-normal">/ month</span>
+                        ₹{(employeeStatutory.netTakeHome ?? employeeStatutory.netMonthlySalary ?? 0).toLocaleString()} <span className="text-xs font-normal">/ month</span>
                       </div>
                     </div>
                   </div>

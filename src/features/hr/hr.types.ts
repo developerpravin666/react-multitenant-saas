@@ -59,21 +59,28 @@ export interface Employee {
 }
 
 export interface StatutoryBreakdown {
-  salaryType: string;
-  annualCtc: number;
+  salaryType?: string;
+  annualCtc?: number;
   monthlyGross: number;
+  grossMonthlySalary?: number;
   basicSalary: number;
   houseRentAllowance: number;
-  conveyanceAllowance: number;
-  medicalAllowance: number;
-  specialAllowance: number;
+  hra?: number;
+  conveyanceAllowance?: number;
+  medicalAllowance?: number;
+  specialAllowance?: number;
+  performanceBonus?: number;
   providentFundEmployee: number;
   providentFundEmployer: number;
   employeeStateInsurance: number;
+  esiEmployee?: number;
+  esiEmployer?: number;
   professionalTax: number;
   taxDeductedAtSource: number;
+  tdsTax?: number;
   totalDeductions: number;
   netTakeHome: number;
+  netMonthlySalary?: number;
 }
 
 export interface LeaveWorkingDaysResult {

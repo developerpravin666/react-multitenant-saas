@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { z } from "zod";
 import {
   CreditCard,
   DollarSign,
@@ -145,17 +146,46 @@ export function PayrollManagementPage() {
     }
   };
 
-  // Process Payroll with Product Master validation
+const processPayrollSchema = z.object({
+  month: z
+    .number({ error: "Select a valid month (1 to 12)." })
+    .min(1, "Select a valid month (1 to 12).")
+    .max(12, "Select a valid month (1 to 12)."),
+  year: z
+    .number({ error: "Enter a valid year between 2020 and 2035." })
+    .min(2020, "Enter a valid year between 2020 and 2035.")
+    .max(2035, "Enter a valid year between 2020 and 2035."),
+  remarks: z
+    .string()
+    .max(500, "Remarks cannot exceed 500 characters.")
+    .optional(),
+});
+
+const salaryStructureSchema = z.object({
+  basicSalary: z.number({ error: "Invalid basic salary" }).min(0, "Basic salary cannot be negative."),
+  houseRentAllowance: z.number({ error: "Invalid HRA" }).min(0, "HRA cannot be negative."),
+  specialAllowance: z.number({ error: "Invalid special allowance" }).min(0, "Special allowance cannot be negative."),
+  providentFundEmployee: z.number({ error: "Invalid PF" }).min(0, "Provident fund deduction cannot be negative."),
+  professionalTax: z.number({ error: "Invalid PT" }).min(0, "Professional tax cannot be negative."),
+});
+
+  // Process Payroll with Product Master Zod validation
   const validateProcessForm = (): boolean => {
     const errs: Record<string, string> = {};
-    if (processForm.month < 1 || processForm.month > 12) {
-      errs.month = "Select a valid month (1 to 12).";
-    }
-    if (processForm.year < 2020 || processForm.year > 2035) {
-      errs.year = "Enter a valid year between 2020 and 2035.";
-    }
-    if (processForm.remarks && processForm.remarks.length > 500) {
-      errs.remarks = "Remarks cannot exceed 500 characters.";
+
+    const parseResult = processPayrollSchema.safeParse({
+      month: Number(processForm.month),
+      year: Number(processForm.year),
+      remarks: processForm.remarks || undefined,
+    });
+
+    if (!parseResult.success) {
+      for (const issue of parseResult.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) {
+          errs[field] = issue.message;
+        }
+      }
     }
 
     setProcessErrors(errs);
@@ -252,7 +282,7 @@ export function PayrollManagementPage() {
   const handleDeletePayslip = async (slip: Payslip) => {
     const confirmed = await notifications.confirm({
       title: `Void Payslip for ${slip.employeeName}?`,
-      message: `Are you sure you want to void this payslip (Net: ₹${slip.netSalary.toLocaleString("en-IN")})?`,
+      message: `Are you sure you want to void this payslip (Net: ₹${(slip.netSalary ?? 0).toLocaleString("en-IN")})?`,
       variant: "danger",
       confirmLabel: "Void Payslip",
     });
@@ -317,25 +347,26 @@ export function PayrollManagementPage() {
     setSalaryErrors({});
   };
 
-  // Product Master validation for Salary Structure
+  // Product Master Zod validation for Salary Structure
   const validateSalaryModal = (): boolean => {
     if (!salaryModal) return false;
     const errs: Record<string, string> = {};
 
-    if (salaryModal.basicSalary < 0) {
-      errs.basicSalary = "Basic salary cannot be negative.";
-    }
-    if (salaryModal.houseRentAllowance < 0) {
-      errs.houseRentAllowance = "HRA cannot be negative.";
-    }
-    if (salaryModal.specialAllowance < 0) {
-      errs.specialAllowance = "Special allowance cannot be negative.";
-    }
-    if (salaryModal.providentFundEmployee < 0) {
-      errs.providentFundEmployee = "Provident fund deduction cannot be negative.";
-    }
-    if (salaryModal.professionalTax < 0) {
-      errs.professionalTax = "Professional tax cannot be negative.";
+    const parseResult = salaryStructureSchema.safeParse({
+      basicSalary: Number(salaryModal.basicSalary),
+      houseRentAllowance: Number(salaryModal.houseRentAllowance),
+      specialAllowance: Number(salaryModal.specialAllowance),
+      providentFundEmployee: Number(salaryModal.providentFundEmployee),
+      professionalTax: Number(salaryModal.professionalTax),
+    });
+
+    if (!parseResult.success) {
+      for (const issue of parseResult.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) {
+          errs[field] = issue.message;
+        }
+      }
     }
 
     setSalaryErrors(errs);
@@ -690,27 +721,27 @@ export function PayrollManagementPage() {
                           <div className="text-xs text-slate-400 font-mono">{slip.employeeCode}</div>
                         </td>
                         <td className="px-4 py-3.5 text-xs text-slate-600 dark:text-slate-300">
-                          {slip.presentDays} / {slip.totalWorkingDays} Days
-                          {slip.unpaidLeaveDays > 0 && (
+                          {slip.presentDays} / {(slip.totalWorkingDays ?? (slip as any).workingDays ?? 30)} Days
+                          {(slip.unpaidLeaveDays ?? 0) > 0 && (
                             <span className="block text-rose-500 font-medium">
                               {slip.unpaidLeaveDays}d Unpaid LOP
                             </span>
                           )}
                         </td>
                         <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">
-                          ₹{slip.grossEarnings.toLocaleString("en-IN")}
+                          ₹{(slip.grossEarnings ?? 0).toLocaleString("en-IN")}
                         </td>
                         <td className="px-4 py-3.5 font-medium text-rose-600">
-                          {slip.lossOfPayDeduction > 0
-                            ? `-₹${slip.lossOfPayDeduction.toLocaleString("en-IN")}`
+                          {(slip.lossOfPayDeduction ?? (slip as any).lopDeduction ?? 0) > 0
+                            ? `-₹${(slip.lossOfPayDeduction ?? (slip as any).lopDeduction ?? 0).toLocaleString("en-IN")}`
                             : "₹0"}
                         </td>
                         <td className="px-4 py-3.5 text-xs text-slate-600 dark:text-slate-300">
-                          <div>PF: ₹{slip.providentFund.toLocaleString("en-IN")}</div>
-                          <div>PT: ₹{slip.professionalTax.toLocaleString("en-IN")}</div>
+                          <div>PF: ₹{(slip.providentFund ?? (slip as any).pfDeduction ?? 0).toLocaleString("en-IN")}</div>
+                          <div>PT: ₹{(slip.professionalTax ?? 0).toLocaleString("en-IN")}</div>
                         </td>
                         <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-white">
-                          ₹{slip.netSalary.toLocaleString("en-IN")}
+                          ₹{(slip.netSalary ?? 0).toLocaleString("en-IN")}
                         </td>
                         <td className="px-4 py-3.5">
                           <span
@@ -988,7 +1019,7 @@ export function PayrollManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditRun} className="space-y-4">
+            <form onSubmit={handleSaveEditRun} noValidate className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Batch Remarks / Notes
@@ -1037,7 +1068,7 @@ export function PayrollManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditPayslip} className="space-y-4">
+            <form onSubmit={handleSaveEditPayslip} noValidate className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -1233,7 +1264,7 @@ export function PayrollManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleProcessSubmit} className="space-y-4">
+            <form onSubmit={handleProcessSubmit} noValidate className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -1329,7 +1360,7 @@ export function PayrollManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveSalary} className="space-y-4">
+            <form onSubmit={handleSaveSalary} noValidate className="space-y-4">
               <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                 Monthly Earnings
               </h4>
@@ -1516,7 +1547,7 @@ export function PayrollManagementPage() {
                 <div>
                   <span className="text-slate-400 block">Days Present:</span>
                   <span className="font-bold text-emerald-600">
-                    {selectedPayslip.presentDays} / {selectedPayslip.totalWorkingDays}
+                    {selectedPayslip.presentDays} / {(selectedPayslip.totalWorkingDays ?? (selectedPayslip as any).workingDays ?? 30)}
                   </span>
                 </div>
               </div>
@@ -1532,30 +1563,30 @@ export function PayrollManagementPage() {
                     <div className="flex justify-between">
                       <span className="text-slate-500">Basic Salary:</span>
                       <span className="font-medium text-slate-800 dark:text-slate-200">
-                        ₹{selectedPayslip.basicSalary.toLocaleString("en-IN")}
+                        ₹{(selectedPayslip.basicSalary ?? 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">House Rent Allowance:</span>
                       <span className="font-medium text-slate-800 dark:text-slate-200">
-                        ₹{selectedPayslip.houseRentAllowance.toLocaleString("en-IN")}
+                        ₹{(selectedPayslip.houseRentAllowance ?? (selectedPayslip as any).hra ?? 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Special Allowance:</span>
                       <span className="font-medium text-slate-800 dark:text-slate-200">
-                        ₹{selectedPayslip.specialAllowance.toLocaleString("en-IN")}
+                        ₹{(selectedPayslip.specialAllowance ?? (selectedPayslip as any).allowances ?? 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Conveyance / Medical:</span>
                       <span className="font-medium text-slate-800 dark:text-slate-200">
-                        ₹{(selectedPayslip.conveyanceAllowance + selectedPayslip.medicalAllowance).toLocaleString("en-IN")}
+                        ₹{((selectedPayslip.conveyanceAllowance ?? 0) + (selectedPayslip.medicalAllowance ?? 0)).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between font-bold text-slate-900 dark:text-white">
                       <span>Total Gross:</span>
-                      <span>₹{selectedPayslip.grossEarnings.toLocaleString("en-IN")}</span>
+                      <span>₹{(selectedPayslip.grossEarnings ?? 0).toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </div>
@@ -1569,30 +1600,30 @@ export function PayrollManagementPage() {
                     <div className="flex justify-between">
                       <span className="text-slate-500">Provident Fund (EPF):</span>
                       <span className="font-medium text-rose-600">
-                        ₹{selectedPayslip.providentFund.toLocaleString("en-IN")}
+                        ₹{(selectedPayslip.providentFund ?? (selectedPayslip as any).pfDeduction ?? 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Professional Tax (PT):</span>
                       <span className="font-medium text-rose-600">
-                        ₹{selectedPayslip.professionalTax.toLocaleString("en-IN")}
+                        ₹{(selectedPayslip.professionalTax ?? 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Loss of Pay (LOP):</span>
                       <span className="font-medium text-rose-600">
-                        ₹{selectedPayslip.lossOfPayDeduction.toLocaleString("en-IN")}
+                        ₹{(selectedPayslip.lossOfPayDeduction ?? (selectedPayslip as any).lopDeduction ?? 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Income Tax (TDS):</span>
                       <span className="font-medium text-rose-600">
-                        ₹{selectedPayslip.taxDeductedAtSource.toLocaleString("en-IN")}
+                        ₹{(selectedPayslip.taxDeductedAtSource ?? (selectedPayslip as any).tdsDeduction ?? 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between font-bold text-rose-600">
                       <span>Total Deductions:</span>
-                      <span>₹{selectedPayslip.totalDeductions.toLocaleString("en-IN")}</span>
+                      <span>₹{(selectedPayslip.totalDeductions ?? 0).toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </div>
@@ -1607,7 +1638,7 @@ export function PayrollManagementPage() {
                   <span className="text-xs text-slate-500">Directly credited to verified employee bank account</span>
                 </div>
                 <div className="text-2xl font-extrabold text-indigo-700 dark:text-indigo-300">
-                  ₹{selectedPayslip.netSalary.toLocaleString("en-IN")}
+                  ₹{(selectedPayslip.netSalary ?? 0).toLocaleString("en-IN")}
                 </div>
               </div>
             </div>
@@ -1635,7 +1666,7 @@ export function PayrollManagementPage() {
             </h3>
 
             <p className="text-xs text-slate-500">
-              Confirm bank transfer of ₹{markPaidModal.payslip.netSalary.toLocaleString("en-IN")} to{" "}
+              Confirm bank transfer of ₹{(markPaidModal.payslip.netSalary ?? 0).toLocaleString("en-IN")} to{" "}
               {markPaidModal.payslip.employeeName}.
             </p>
 

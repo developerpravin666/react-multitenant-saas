@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { z } from "zod";
 import {
   Sliders,
   Plus,
@@ -84,48 +85,73 @@ export function HrMastersPage() {
     });
   }, [masters, activeCategory, search]);
 
+const hrMasterSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters.")
+    .max(150, "Name cannot exceed 150 characters."),
+  code: z
+    .string()
+    .trim()
+    .max(50, "Code cannot exceed 50 characters.")
+    .refine((val) => !val || /^[A-Z0-9_]+$/.test(val), {
+      message: "Code must contain only uppercase letters, numbers, and underscores.",
+    }),
+  description: z
+    .string()
+    .max(500, "Description cannot exceed 500 characters.")
+    .optional(),
+});
+
   const validateForm = (isEdit: boolean): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Name validations (same as product master)
-    if (!form.name.trim()) {
-      newErrors.name = "Name is required.";
-    } else if (form.name.trim().length < 2) {
-      newErrors.name = "Name must be at least 2 characters.";
-    } else if (form.name.trim().length > 150) {
-      newErrors.name = "Name cannot exceed 150 characters.";
-    } else {
-      // Duplicate Name check within current category
+    const effectiveCode = !isEdit
+      ? (form.code.trim() || form.name.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_")).slice(0, 50)
+      : form.code.trim();
+
+    const parseResult = hrMasterSchema.safeParse({
+      name: form.name,
+      code: effectiveCode,
+      description: form.description || undefined,
+    });
+
+    if (!parseResult.success) {
+      for (const issue of parseResult.error.issues) {
+        const field = issue.path[0] as string;
+        if (!newErrors[field]) {
+          newErrors[field] = issue.message;
+        }
+      }
+    }
+
+    if (!isEdit && !effectiveCode) {
+      newErrors.code = "Code is required.";
+    }
+
+    // Duplicate Name check within current category
+    const trimmedName = form.name.trim().toLowerCase();
+    if (trimmedName && !newErrors.name) {
       const duplicateName = masters.some(
         (m) =>
           m.category === activeCategory &&
           m.id !== editingItem?.id &&
-          m.name.trim().toLowerCase() === form.name.trim().toLowerCase()
+          m.name.trim().toLowerCase() === trimmedName
       );
       if (duplicateName) {
         newErrors.name = `A ${currentCategoryMeta.label.toLowerCase()} with this name already exists.`;
       }
     }
 
-    // Code validations (same as product master: alphanumeric, uppercase, unique)
-    if (!isEdit) {
-      const trimmedCode = (form.code.trim() || form.name.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_")).slice(0, 50);
-      if (!trimmedCode) {
-        newErrors.code = "Code is required.";
-      } else if (!/^[A-Z0-9_]+$/.test(trimmedCode)) {
-        newErrors.code = "Code must contain only uppercase letters, numbers, and underscores.";
-      } else {
-        const duplicateCode = masters.some(
-          (m) => m.category === activeCategory && m.code.toUpperCase() === trimmedCode.toUpperCase()
-        );
-        if (duplicateCode) {
-          newErrors.code = `Code '${trimmedCode}' is already used by another item in this category.`;
-        }
+    // Duplicate Code check within current category
+    if (!isEdit && effectiveCode && !newErrors.code) {
+      const duplicateCode = masters.some(
+        (m) => m.category === activeCategory && m.code.toUpperCase() === effectiveCode.toUpperCase()
+      );
+      if (duplicateCode) {
+        newErrors.code = `Code '${effectiveCode}' is already used by another item in this category.`;
       }
-    }
-
-    if (form.description && form.description.length > 500) {
-      newErrors.description = "Description cannot exceed 500 characters.";
     }
 
     setErrors(newErrors);
@@ -512,7 +538,7 @@ export function HrMastersPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-5 space-y-4">
+            <form onSubmit={handleSave} noValidate className="p-5 space-y-4">
               {/* Name Field */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -520,7 +546,6 @@ export function HrMastersPage() {
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder={`e.g. ${currentCategoryMeta.key === "DEPARTMENT" ? "Operations" : currentCategoryMeta.key === "JOB_TITLE" ? "Lead Architect" : "Standard"}`}
                   value={form.name}
                   onChange={(e) => {

@@ -33,6 +33,19 @@ export const hrService = {
     return await apiClient.get<Employee>(`/hr/employees/${id}`);
   },
 
+  async getNextEmployeeCode(): Promise<string> {
+    try {
+      const res = await apiClient.get<{ code: string }>("/hr/employees/next-code");
+      if (res?.code) return res.code;
+    } catch {
+      // Fallback handled by client generator
+    }
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}-000001`;
+  },
+
   async createEmployee(payload: Partial<Employee>): Promise<Employee> {
     return await apiClient.post<Employee>("/hr/employees", payload);
   },
@@ -113,19 +126,37 @@ export const hrService = {
 
   // Payroll
   async getSalaryStructures(): Promise<SalaryStructure[]> {
-    return await apiClient.get<SalaryStructure[]>("/hr/payroll/structures");
+    const list = await apiClient.get<SalaryStructure[]>("/hr/payroll/structures");
+    return (list || []).map((s: any) => ({
+      ...s,
+      houseRentAllowance: s.houseRentAllowance ?? s.hra ?? 0,
+    }));
   },
 
   async getSalaryStructureByEmployee(employeeId: string): Promise<SalaryStructure | null> {
     try {
-      return await apiClient.get<SalaryStructure>(`/hr/payroll/structures/${employeeId}`);
+      const s = await apiClient.get<SalaryStructure>(`/hr/payroll/structures/${employeeId}`);
+      if (!s) return null;
+      return {
+        ...s,
+        houseRentAllowance: (s as any).houseRentAllowance ?? (s as any).hra ?? 0,
+      };
     } catch {
       return null;
     }
   },
 
   async saveSalaryStructure(payload: Partial<SalaryStructure>): Promise<SalaryStructure> {
-    return await apiClient.post<SalaryStructure>("/hr/payroll/structures", payload);
+    const hraValue = payload.houseRentAllowance ?? (payload as any).hra ?? 0;
+    const body = {
+      ...payload,
+      houseRentAllowance: hraValue,
+      hra: hraValue,
+    };
+    const endpoint = payload.employeeId
+      ? `/hr/payroll/structures/${payload.employeeId}`
+      : "/hr/payroll/structures";
+    return await apiClient.post<SalaryStructure>(endpoint, body);
   },
 
   async getPayrollRuns(): Promise<PayrollRun[]> {
@@ -137,11 +168,43 @@ export const hrService = {
   },
 
   async getPayslipsForRun(runId: string): Promise<Payslip[]> {
-    return await apiClient.get<Payslip[]>(`/hr/payroll/runs/${runId}/payslips`);
+    const list = await apiClient.get<Payslip[]>(`/hr/payroll/runs/${runId}/payslips`);
+    return (list || []).map((p: any) => ({
+      ...p,
+      providentFund: p.providentFund ?? p.pfDeduction ?? 0,
+      pfDeduction: p.providentFund ?? p.pfDeduction ?? 0,
+      employeeStateInsurance: p.employeeStateInsurance ?? p.esiDeduction ?? 0,
+      esiDeduction: p.employeeStateInsurance ?? p.esiDeduction ?? 0,
+      taxDeductedAtSource: p.taxDeductedAtSource ?? p.tdsDeduction ?? 0,
+      tdsDeduction: p.taxDeductedAtSource ?? p.tdsDeduction ?? 0,
+      lossOfPayDeduction: p.lossOfPayDeduction ?? p.lopDeduction ?? 0,
+      lopDeduction: p.lossOfPayDeduction ?? p.lopDeduction ?? 0,
+      totalWorkingDays: p.totalWorkingDays ?? p.workingDays ?? 30,
+      workingDays: p.totalWorkingDays ?? p.workingDays ?? 30,
+      houseRentAllowance: p.houseRentAllowance ?? p.hra ?? 0,
+      hra: p.houseRentAllowance ?? p.hra ?? 0,
+      departmentName: p.departmentName ?? p.department ?? "",
+    }));
   },
 
   async getPayslip(payslipId: string): Promise<Payslip> {
-    return await apiClient.get<Payslip>(`/hr/payroll/payslips/${payslipId}`);
+    const p: any = await apiClient.get<Payslip>(`/hr/payroll/payslips/${payslipId}`);
+    return {
+      ...p,
+      providentFund: p?.providentFund ?? p?.pfDeduction ?? 0,
+      pfDeduction: p?.providentFund ?? p?.pfDeduction ?? 0,
+      employeeStateInsurance: p?.employeeStateInsurance ?? p?.esiDeduction ?? 0,
+      esiDeduction: p?.employeeStateInsurance ?? p?.esiDeduction ?? 0,
+      taxDeductedAtSource: p?.taxDeductedAtSource ?? p?.tdsDeduction ?? 0,
+      tdsDeduction: p?.taxDeductedAtSource ?? p?.tdsDeduction ?? 0,
+      lossOfPayDeduction: p?.lossOfPayDeduction ?? p?.lopDeduction ?? 0,
+      lopDeduction: p?.lossOfPayDeduction ?? p?.lopDeduction ?? 0,
+      totalWorkingDays: p?.totalWorkingDays ?? p?.workingDays ?? 30,
+      workingDays: p?.totalWorkingDays ?? p?.workingDays ?? 30,
+      houseRentAllowance: p?.houseRentAllowance ?? p?.hra ?? 0,
+      hra: p?.houseRentAllowance ?? p?.hra ?? 0,
+      departmentName: p?.departmentName ?? p?.department ?? "",
+    };
   },
 
   async markPayslipPaid(payslipId: string, payload: { paymentMode: string; paymentReference: string }): Promise<Payslip> {
@@ -203,7 +266,49 @@ export const hrService = {
 
   // Statutory Calculations & Exclusions
   async calculateStatutory(salary: number, isCtc: boolean = false): Promise<StatutoryBreakdown> {
-    return await apiClient.get<StatutoryBreakdown>(`/hr/payroll/calculate-statutory?salary=${salary}&isCtc=${isCtc}`);
+    const raw = await apiClient.get<any>(`/hr/payroll/calculate-statutory?salary=${salary}&isCtc=${isCtc}`);
+    const gross = Number(raw?.monthlyGross ?? raw?.grossMonthlySalary ?? (isCtc ? Math.round(salary / 12) : salary) ?? 0);
+    const basic = Number(raw?.basicSalary ?? Math.round(gross * 0.5));
+    const hra = Number(raw?.houseRentAllowance ?? raw?.hra ?? Math.round(gross * 0.2));
+    const conveyance = Number(raw?.conveyanceAllowance ?? Math.min(1600, Math.max(0, gross - basic - hra)));
+    const medical = Number(raw?.medicalAllowance ?? Math.min(1250, Math.max(0, gross - basic - hra - conveyance)));
+    const special = Number(raw?.specialAllowance ?? Math.max(0, gross - (basic + hra + conveyance + medical)));
+    const bonus = Number(raw?.performanceBonus ?? 0);
+    const pfEmp = Number(raw?.providentFundEmployee ?? (basic > 0 ? Math.round(Math.min(basic, 15000) * 0.12) : 0));
+    const pfEmplr = Number(raw?.providentFundEmployer ?? pfEmp);
+    const esi = Number(raw?.employeeStateInsurance ?? raw?.esiEmployee ?? (gross <= 21000 && gross > 0 ? Math.round(gross * 0.0075) : 0));
+    const esiEmplr = Number(raw?.esiEmployer ?? (gross <= 21000 && gross > 0 ? Math.round(gross * 0.0325) : 0));
+    const pt = Number(raw?.professionalTax ?? (gross > 10000 ? 200 : gross > 7500 ? 175 : 0));
+    const tds = Number(raw?.taxDeductedAtSource ?? raw?.tdsTax ?? 0);
+    const totalDed = Number(raw?.totalDeductions ?? (pfEmp + esi + pt + tds));
+    const net = Number(raw?.netTakeHome ?? raw?.netMonthlySalary ?? Math.max(0, gross - totalDed));
+    const ctc = Number(raw?.annualCtc ?? (isCtc ? salary : (gross * 12) + (pfEmplr * 12) + (esiEmplr * 12)));
+    const salType = String(raw?.salaryType ?? (isCtc ? "Annual CTC" : "Monthly"));
+
+    return {
+      monthlyGross: gross,
+      grossMonthlySalary: gross,
+      basicSalary: basic,
+      houseRentAllowance: hra,
+      hra: hra,
+      conveyanceAllowance: conveyance,
+      medicalAllowance: medical,
+      specialAllowance: special,
+      performanceBonus: bonus,
+      providentFundEmployee: pfEmp,
+      providentFundEmployer: pfEmplr,
+      employeeStateInsurance: esi,
+      esiEmployee: esi,
+      esiEmployer: esiEmplr,
+      professionalTax: pt,
+      taxDeductedAtSource: tds,
+      tdsTax: tds,
+      totalDeductions: totalDed,
+      netTakeHome: net,
+      netMonthlySalary: net,
+      annualCtc: ctc,
+      salaryType: salType,
+    };
   },
 
   async calculateWorkingDays(startDate: string, endDate: string): Promise<LeaveWorkingDaysResult> {

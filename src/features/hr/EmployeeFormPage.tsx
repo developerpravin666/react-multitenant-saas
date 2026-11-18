@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { z } from "zod";
 import {
   Users,
   Briefcase,
@@ -16,11 +17,224 @@ import {
   Calendar,
   Layers,
   Network,
+  RotateCcw,
 } from "lucide-react";
 import { hrService } from "./hrService";
 import type { Employee, HrMasterItem, StatutoryBreakdown } from "./hr.types";
 import { useNotifications } from "../../context/NotificationContext";
 import { APP_ROUTES } from "../../config/routes";
+
+// Step 1: Basic & Contact Validation Schema
+export const basicStepSchema = z.object({
+  employeeCode: z
+    .string()
+    .trim()
+    .min(2, "Employee code must be at least 2 characters.")
+    .max(50, "Employee code cannot exceed 50 characters.")
+    .regex(/^[A-Z0-9_-]+$/, "Employee code must contain only uppercase letters, numbers, hyphens, and underscores."),
+  firstName: z
+    .string()
+    .trim()
+    .min(2, "First name must be at least 2 characters.")
+    .max(100, "First name cannot exceed 100 characters.")
+    .regex(/^[a-zA-Z\s'-]+$/, "First name contains invalid characters. Only letters and spaces are allowed."),
+  lastName: z
+    .string()
+    .trim()
+    .min(1, "Last name is required.")
+    .max(100, "Last name cannot exceed 100 characters.")
+    .regex(/^[a-zA-Z\s'-]+$/, "Last name contains invalid characters. Only letters and spaces are allowed."),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Official email is required.")
+    .email("Please enter a valid email address (e.g. employee@company.com)."),
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Contact phone number is required.")
+    .refine((val) => /^[6-9]\d{9}$/.test(val.replace(/\D/g, "")), {
+      message: "Enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.",
+    }),
+  joiningDate: z
+    .string()
+    .trim()
+    .min(1, "Date of joining is required."),
+  emergencyContactPhone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val.replace(/\D/g, "")), {
+      message: "Emergency contact phone must be a valid 10-digit mobile number.",
+    }),
+});
+
+// Step 2: Role & Hierarchy Validation Schema
+export const employmentStepSchema = z.object({
+  department: z
+    .string()
+    .trim()
+    .min(1, "Department master entry is required. Please select a department."),
+  designation: z
+    .string()
+    .trim()
+    .min(1, "Job title / Designation is required. Please select a job title."),
+  employmentType: z
+    .string()
+    .trim()
+    .min(1, "Employment type is required."),
+  status: z
+    .string()
+    .trim()
+    .min(1, "Employee status is required."),
+});
+
+// Step 3: Compensation Validation Schema
+export const compensationStepSchema = z.object({
+  salaryType: z
+    .string()
+    .trim()
+    .min(1, "Salary structure type is required."),
+  salaryAmount: z
+    .number({ error: "Salary amount must be a valid number." })
+    .min(1000, "Salary amount must be a positive number of at least ₹1,000."),
+});
+
+// Step 4: Bank & KYC Validation Schema
+export const bankStepSchema = z.object({
+  panNumber: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(val.toUpperCase()), {
+      message: "Invalid PAN format. Standard format is 5 uppercase letters, 4 digits, 1 letter (e.g. ABCDE1234F).",
+    }),
+  aadhaarNumber: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^\d{12}$/.test(val.replace(/\s/g, "")), {
+      message: "Aadhaar number must consist of exactly 12 numeric digits.",
+    }),
+  bankAccountNumber: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^\d{9,18}$/.test(val), {
+      message: "Bank account number must be between 9 and 18 digits.",
+    }),
+  bankIfscCode: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[A-Z]{4}0[A-Z0-9]{6}$/.test(val.toUpperCase()), {
+      message: "Invalid IFSC Code. Standard format is 4 letters, 0, and 6 alphanumeric characters (e.g. HDFC0001234).",
+    }),
+  uanNumber: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^\d{12}$/.test(val), {
+      message: "Universal Account Number (UAN) must be exactly 12 digits.",
+    }),
+});
+
+const TAB_ORDER = ["BASIC", "EMPLOYMENT", "COMPENSATION", "BANK"] as const;
+type TabType = typeof TAB_ORDER[number];
+
+const STEP_LABELS: Record<TabType, string> = {
+  BASIC: "Basic & Contact",
+  EMPLOYMENT: "Role & Hierarchy",
+  COMPENSATION: "Salary & Statutory",
+  BANK: "Bank & KYC",
+};
+
+// Database Master Normalization Helpers for Reliable Form Prefill
+const normalizeEmploymentType = (raw?: string | number, masters: HrMasterItem[] = []) => {
+  if (!raw) return "FULL_TIME";
+  const str = String(raw).trim();
+  const exactCode = masters.find((m) => m.code === str);
+  if (exactCode) return exactCode.code;
+  const exactName = masters.find((m) => m.name.toLowerCase() === str.toLowerCase());
+  if (exactName) return exactName.code || exactName.name;
+
+  const clean = str.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const matched = masters.find((m) => {
+    const c = (m.code || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const n = (m.name || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    return c === clean || n === clean;
+  });
+  if (matched) return matched.code || matched.name;
+
+  if (clean.includes("full") || clean === "1") return masters.find((m) => m.code?.includes("FULL"))?.code || "FULL_TIME";
+  if (clean.includes("part") || clean === "2") return masters.find((m) => m.code?.includes("PART"))?.code || "PART_TIME";
+  if (clean.includes("contract") || clean === "3") return masters.find((m) => m.code?.includes("CONTRACT"))?.code || "CONTRACT";
+  if (clean.includes("intern") || clean.includes("train") || clean === "4") return masters.find((m) => m.code?.includes("INTERN"))?.code || "INTERN";
+
+  return str;
+};
+
+const normalizeEmploymentStatus = (raw?: string | number, masters: HrMasterItem[] = []) => {
+  if (!raw) return "ACTIVE";
+  const str = String(raw).trim();
+  const exactCode = masters.find((m) => m.code === str);
+  if (exactCode) return exactCode.code;
+  const exactName = masters.find((m) => m.name.toLowerCase() === str.toLowerCase());
+  if (exactName) return exactName.code || exactName.name;
+
+  const clean = str.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const matched = masters.find((m) => {
+    const c = (m.code || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const n = (m.name || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    return c === clean || n === clean;
+  });
+  if (matched) return matched.code || matched.name;
+
+  if (clean.includes("active") || clean === "1") return masters.find((m) => m.code?.includes("ACTIVE"))?.code || "ACTIVE";
+  if (clean.includes("probation") || clean === "2") return masters.find((m) => m.code?.includes("PROBATION"))?.code || "PROBATION";
+  if (clean.includes("leave") || clean === "3") return masters.find((m) => m.code?.includes("LEAVE"))?.code || "ON_LEAVE";
+  if (clean.includes("resign") || clean === "4") return masters.find((m) => m.code?.includes("RESIGN"))?.code || "RESIGNED";
+  if (clean.includes("terminat") || clean === "5") return masters.find((m) => m.code?.includes("TERMINAT"))?.code || "TERMINATED";
+
+  return str;
+};
+
+const normalizeSalaryType = (raw?: string, masters: HrMasterItem[] = []) => {
+  if (!raw) return "Monthly";
+  const str = raw.trim();
+  const exact = masters.find((m) => m.name.toLowerCase() === str.toLowerCase() || m.code?.toLowerCase() === str.toLowerCase());
+  if (exact) return exact.name;
+  if (str.toLowerCase().includes("ctc") || str.toLowerCase().includes("annual") || str.toLowerCase().includes("yearly")) {
+    const ctcMatch = masters.find((m) => m.name.toLowerCase().includes("ctc") || m.name.toLowerCase().includes("annual"));
+    return ctcMatch ? ctcMatch.name : "Annual CTC";
+  }
+  const monthlyMatch = masters.find((m) => m.name.toLowerCase().includes("month"));
+  return monthlyMatch ? monthlyMatch.name : "Monthly";
+};
+
+const normalizeGender = (raw?: string) => {
+  if (!raw) return "MALE";
+  const clean = raw.trim().toUpperCase();
+  if (clean === "FEMALE" || clean === "F") return "FEMALE";
+  if (clean === "OTHER" || clean === "O") return "OTHER";
+  return "MALE";
+};
+
+// Generates next employee code in standard format: YYYY-MM-000001
+export const generateNextEmployeeCode = (existingEmployees: { employeeCode?: string }[] = []) => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const prefix = `${year}-${month}-`;
+  let maxSeq = 0;
+
+  for (const emp of existingEmployees) {
+    const code = (emp.employeeCode || "").trim().toUpperCase();
+    if (code.startsWith(prefix)) {
+      const suffix = code.slice(prefix.length);
+      const parsed = parseInt(suffix, 10);
+      if (!isNaN(parsed) && parsed > maxSeq) {
+        maxSeq = parsed;
+      }
+    }
+  }
+
+  return `${prefix}${String(maxSeq + 1).padStart(6, "0")}`;
+};
 
 export function EmployeeFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,7 +244,7 @@ export function EmployeeFormPage() {
 
   const [loading, setLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"BASIC" | "EMPLOYMENT" | "COMPENSATION" | "BANK">("BASIC");
+  const [activeTab, setActiveTab] = useState<TabType>("BASIC");
 
   // Dynamic Masters from DB
   const [departments, setDepartments] = useState<HrMasterItem[]>([]);
@@ -50,7 +264,7 @@ export function EmployeeFormPage() {
     lastName: "",
     email: "",
     phone: "",
-    employeeCode: `EMP${Math.floor(1000 + Math.random() * 9000)}`,
+    employeeCode: generateNextEmployeeCode(),
     designation: "",
     department: "",
     joiningDate: new Date().toISOString().slice(0, 10),
@@ -110,6 +324,13 @@ export function EmployeeFormPage() {
       if (id) {
         const emp = await hrService.getEmployeeById(id);
         if (emp) {
+          const rawEmp = emp as any;
+          const prefilledSalaryType = normalizeSalaryType(emp.salaryType, salTypes);
+          const prefilledSalaryAmount = Number(emp.monthlyBaseSalary ?? emp.baseSalary ?? 45000);
+          const prefilledEmpType = normalizeEmploymentType(rawEmp.employmentType || emp.employmentType, empTypes);
+          const prefilledStatus = normalizeEmploymentStatus(rawEmp.employmentStatus || emp.status, empStats);
+          const prefilledGender = normalizeGender(emp.gender);
+
           setForm({
             firstName: emp.firstName || "",
             lastName: emp.lastName || "",
@@ -118,35 +339,45 @@ export function EmployeeFormPage() {
             employeeCode: emp.employeeCode || "",
             designation: emp.designation || "",
             department: emp.department || emp.departmentName || "",
-            joiningDate: (emp.joiningDate || emp.dateOfJoining || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
-            employmentType: emp.employmentType || "FULL_TIME",
-            status: emp.status || "ACTIVE",
-            salaryType: emp.salaryType || "Monthly",
-            salaryAmount: emp.monthlyBaseSalary || emp.baseSalary || 45000,
-            reportsToEmployeeId: emp.reportsToEmployeeId || "",
+            joiningDate: (emp.joiningDate || (emp as any).dateOfJoining || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+            employmentType: prefilledEmpType,
+            status: prefilledStatus,
+            salaryType: prefilledSalaryType,
+            salaryAmount: prefilledSalaryAmount,
+            reportsToEmployeeId: emp.reportsToEmployeeId ? String(emp.reportsToEmployeeId).toLowerCase() : "",
             reportsToEmployeeName: emp.reportsToEmployeeName || "",
-            panNumber: emp.panNumber || emp.pan || "",
-            aadhaarNumber: emp.aadhaarNumber || emp.aadhaar || "",
-            uanNumber: emp.uanNumber || emp.uan || "",
+            panNumber: emp.panNumber || rawEmp.pan || "",
+            aadhaarNumber: emp.aadhaarNumber || rawEmp.aadhaar || "",
+            uanNumber: emp.uanNumber || rawEmp.uan || "",
             bankAccountNumber: emp.bankAccountNumber || "",
             bankName: emp.bankName || "",
-            bankIfscCode: emp.bankIfscCode || emp.bankIfsc || "",
-            gender: emp.gender || "MALE",
-            dateOfBirth: emp.dateOfBirth ? emp.dateOfBirth.slice(0, 10) : "",
+            bankIfscCode: emp.bankIfscCode || rawEmp.bankIfsc || "",
+            gender: prefilledGender,
+            dateOfBirth: emp.dateOfBirth ? String(emp.dateOfBirth).slice(0, 10) : "",
             address: emp.address || "",
             emergencyContactName: emp.emergencyContactName || "",
             emergencyContactPhone: emp.emergencyContactPhone || "",
             notes: emp.notes || "",
           });
-          triggerStatutoryCalc(emp.monthlyBaseSalary || emp.baseSalary || 45000, emp.salaryType === "Annual CTC");
+          triggerStatutoryCalc(prefilledSalaryAmount, prefilledSalaryType === "Annual CTC");
         }
       } else {
         // Defaults for create
         const defaultDept = depts[0]?.name || "Engineering";
         const defaultJob = jobs[0]?.name || "Software Engineer";
         const defaultSalType = salTypes[0]?.name || "Monthly";
+
+        let autoCode = generateNextEmployeeCode(allEmps);
+        try {
+          const serverCode = await hrService.getNextEmployeeCode();
+          if (serverCode) autoCode = serverCode;
+        } catch {
+          // Use client generated code
+        }
+
         setForm((prev) => ({
           ...prev,
+          employeeCode: autoCode,
           department: defaultDept,
           designation: defaultJob,
           salaryType: defaultSalType,
@@ -181,7 +412,8 @@ export function EmployeeFormPage() {
   };
 
   const handleManagerSelect = (managerId: string) => {
-    const manager = potentialManagers.find((m) => m.id === managerId);
+    const cleanId = managerId.toLowerCase();
+    const manager = potentialManagers.find((m) => m.id.toLowerCase() === cleanId);
     setForm((prev) => ({
       ...prev,
       reportsToEmployeeId: managerId,
@@ -199,159 +431,189 @@ export function EmployeeFormPage() {
     }
   };
 
-  // Product Master-level rigorous form validation
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
+  // Upfront Step-by-Step Validation using Zod
+  const validateStep = (step: TabType): boolean => {
+    const stepErrors: Record<string, string> = {};
 
-    // 1. Employee Code validation
-    const trimmedCode = form.employeeCode.trim().toUpperCase();
-    if (!trimmedCode) {
-      newErrors.employeeCode = "Employee code is required.";
-    } else if (trimmedCode.length < 2) {
-      newErrors.employeeCode = "Employee code must be at least 2 characters.";
-    } else if (trimmedCode.length > 50) {
-      newErrors.employeeCode = "Employee code cannot exceed 50 characters.";
-    } else if (!/^[A-Z0-9_-]+$/.test(trimmedCode)) {
-      newErrors.employeeCode = "Employee code must contain only uppercase letters, numbers, hyphens, and underscores.";
-    } else {
-      const duplicateCode = allEmployees.some(
-        (e) => e.id !== id && e.employeeCode?.toUpperCase() === trimmedCode
-      );
-      if (duplicateCode) {
-        newErrors.employeeCode = `Employee code '${trimmedCode}' is already assigned to another employee.`;
+    if (step === "BASIC") {
+      const res = basicStepSchema.safeParse({
+        employeeCode: form.employeeCode,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        email: form.email,
+        phone: form.phone,
+        joiningDate: form.joiningDate,
+        emergencyContactPhone: form.emergencyContactPhone,
+      });
+
+      if (!res.success) {
+        for (const issue of res.error.issues) {
+          const field = issue.path[0] as string;
+          if (!stepErrors[field]) {
+            stepErrors[field] = issue.message;
+          }
+        }
+      }
+
+      // Check duplicate code
+      const trimmedCode = form.employeeCode.trim().toUpperCase();
+      if (trimmedCode && !stepErrors.employeeCode) {
+        const dupCode = allEmployees.some(
+          (e) => e.id !== id && e.employeeCode?.toUpperCase() === trimmedCode
+        );
+        if (dupCode) {
+          stepErrors.employeeCode = `Employee code '${trimmedCode}' is already assigned to another employee.`;
+        }
+      }
+
+      // Check duplicate email
+      const trimmedEmail = form.email.trim();
+      if (trimmedEmail && !stepErrors.email) {
+        const dupEmail = allEmployees.some(
+          (e) => e.id !== id && e.email?.toLowerCase() === trimmedEmail.toLowerCase()
+        );
+        if (dupEmail) {
+          stepErrors.email = `Email '${trimmedEmail}' is already registered to another staff member.`;
+        }
+      }
+    } else if (step === "EMPLOYMENT") {
+      const res = employmentStepSchema.safeParse({
+        department: form.department,
+        designation: form.designation,
+        employmentType: form.employmentType,
+        status: form.status,
+      });
+
+      if (!res.success) {
+        for (const issue of res.error.issues) {
+          const field = issue.path[0] as string;
+          if (!stepErrors[field]) {
+            stepErrors[field] = issue.message;
+          }
+        }
+      }
+    } else if (step === "COMPENSATION") {
+      const res = compensationStepSchema.safeParse({
+        salaryType: form.salaryType,
+        salaryAmount: Number(form.salaryAmount),
+      });
+
+      if (!res.success) {
+        for (const issue of res.error.issues) {
+          const field = issue.path[0] as string;
+          if (!stepErrors[field]) {
+            stepErrors[field] = issue.message;
+          }
+        }
+      }
+    } else if (step === "BANK") {
+      const res = bankStepSchema.safeParse({
+        panNumber: form.panNumber,
+        aadhaarNumber: form.aadhaarNumber,
+        bankAccountNumber: form.bankAccountNumber,
+        bankIfscCode: form.bankIfscCode,
+        uanNumber: form.uanNumber,
+      });
+
+      if (!res.success) {
+        for (const issue of res.error.issues) {
+          const field = issue.path[0] as string;
+          if (!stepErrors[field]) {
+            stepErrors[field] = issue.message;
+          }
+        }
       }
     }
 
-    // 2. First Name validation
-    const trimmedFirst = form.firstName.trim();
-    if (!trimmedFirst) {
-      newErrors.firstName = "First name is required.";
-    } else if (trimmedFirst.length < 2) {
-      newErrors.firstName = "First name must be at least 2 characters.";
-    } else if (trimmedFirst.length > 100) {
-      newErrors.firstName = "First name cannot exceed 100 characters.";
-    } else if (!/^[a-zA-Z\s'-]+$/.test(trimmedFirst)) {
-      newErrors.firstName = "First name contains invalid characters. Only letters and spaces are allowed.";
-    }
-
-    // 3. Last Name validation
-    const trimmedLast = form.lastName.trim();
-    if (!trimmedLast) {
-      newErrors.lastName = "Last name is required.";
-    } else if (trimmedLast.length < 1) {
-      newErrors.lastName = "Last name is required.";
-    } else if (trimmedLast.length > 100) {
-      newErrors.lastName = "Last name cannot exceed 100 characters.";
-    } else if (!/^[a-zA-Z\s'-]+$/.test(trimmedLast)) {
-      newErrors.lastName = "Last name contains invalid characters. Only letters and spaces are allowed.";
-    }
-
-    // 4. Official Email validation
-    const trimmedEmail = form.email.trim();
-    if (!trimmedEmail) {
-      newErrors.email = "Official email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      newErrors.email = "Please enter a valid email address (e.g. employee@company.com).";
-    } else {
-      const duplicateEmail = allEmployees.some(
-        (e) => e.id !== id && e.email?.toLowerCase() === trimmedEmail.toLowerCase()
-      );
-      if (duplicateEmail) {
-        newErrors.email = `Email '${trimmedEmail}' is already registered to another staff member.`;
-      }
-    }
-
-    // 5. Contact Phone validation
-    const trimmedPhone = form.phone.trim().replace(/\D/g, "");
-    if (!form.phone.trim()) {
-      newErrors.phone = "Contact phone number is required.";
-    } else if (!/^[6-9]\d{9}$/.test(trimmedPhone)) {
-      newErrors.phone = "Enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.";
-    }
-
-    // 6. Joining Date validation
-    if (!form.joiningDate) {
-      newErrors.joiningDate = "Date of joining is required.";
-    }
-
-    // 7. Department & Designation
-    if (!form.department.trim()) {
-      newErrors.department = "Department master entry is required.";
-    }
-    if (!form.designation.trim()) {
-      newErrors.designation = "Job title / Designation is required.";
-    }
-
-    // 8. Salary Amount validation
-    if (!form.salaryAmount || form.salaryAmount < 1000) {
-      newErrors.salaryAmount = "Salary amount must be a positive number of at least ₹1,000.";
-    }
-
-    // 9. PAN Card Number (optional, but validated if provided)
-    if (form.panNumber.trim()) {
-      const pan = form.panNumber.trim().toUpperCase();
-      if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) {
-        newErrors.panNumber = "Invalid PAN format. Standard format is 5 uppercase letters, 4 digits, 1 letter (e.g. ABCDE1234F).";
-      }
-    }
-
-    // 10. Aadhaar Number (optional, but validated if provided)
-    if (form.aadhaarNumber.trim()) {
-      const aadhaar = form.aadhaarNumber.trim().replace(/\s/g, "");
-      if (!/^\d{12}$/.test(aadhaar)) {
-        newErrors.aadhaarNumber = "Aadhaar number must consist of exactly 12 numeric digits.";
-      }
-    }
-
-    // 11. Bank Account Number (optional, but validated if provided)
-    if (form.bankAccountNumber.trim()) {
-      const acc = form.bankAccountNumber.trim();
-      if (!/^\d{9,18}$/.test(acc)) {
-        newErrors.bankAccountNumber = "Bank account number must be between 9 and 18 digits.";
-      }
-    }
-
-    // 12. Bank IFSC Code (optional, but validated if provided)
-    if (form.bankIfscCode.trim()) {
-      const ifsc = form.bankIfscCode.trim().toUpperCase();
-      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
-        newErrors.bankIfscCode = "Invalid IFSC Code. Standard format is 4 letters, 0, and 6 alphanumeric characters (e.g. HDFC0001234).";
-      }
-    }
-
-    // 13. UAN Number (optional, but validated if provided)
-    if (form.uanNumber.trim()) {
-      const uan = form.uanNumber.trim();
-      if (!/^\d{12}$/.test(uan)) {
-        newErrors.uanNumber = "Universal Account Number (UAN) must be exactly 12 digits.";
-      }
-    }
-
-    // 14. Emergency Phone (optional, but validated if provided)
-    if (form.emergencyContactPhone.trim()) {
-      const ePhone = form.emergencyContactPhone.trim().replace(/\D/g, "");
-      if (!/^[6-9]\d{9}$/.test(ePhone)) {
-        newErrors.emergencyContactPhone = "Emergency contact phone must be a valid 10-digit mobile number.";
-      }
-    }
-
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length > 0) {
-      // Auto-switch to the first tab that has an error
-      if (newErrors.employeeCode || newErrors.firstName || newErrors.lastName || newErrors.email || newErrors.phone || newErrors.joiningDate || newErrors.emergencyContactPhone) {
-        setActiveTab("BASIC");
-      } else if (newErrors.department || newErrors.designation) {
-        setActiveTab("EMPLOYMENT");
-      } else if (newErrors.salaryAmount) {
-        setActiveTab("COMPENSATION");
-      } else if (newErrors.panNumber || newErrors.aadhaarNumber || newErrors.bankAccountNumber || newErrors.bankIfscCode || newErrors.uanNumber) {
-        setActiveTab("BANK");
-      }
-      notifications.error("Please resolve the highlighted validation errors.");
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...stepErrors }));
+      notifications.error(`Please complete the required fields in ${STEP_LABELS[step]} before proceeding.`);
       return false;
     }
 
+    // Step passed: clear errors belonging to this step
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (step === "BASIC") {
+        delete next.employeeCode;
+        delete next.firstName;
+        delete next.lastName;
+        delete next.email;
+        delete next.phone;
+        delete next.joiningDate;
+        delete next.emergencyContactPhone;
+      } else if (step === "EMPLOYMENT") {
+        delete next.department;
+        delete next.designation;
+        delete next.employmentType;
+        delete next.status;
+      } else if (step === "COMPENSATION") {
+        delete next.salaryType;
+        delete next.salaryAmount;
+      } else if (step === "BANK") {
+        delete next.panNumber;
+        delete next.aadhaarNumber;
+        delete next.bankAccountNumber;
+        delete next.bankIfscCode;
+        delete next.uanNumber;
+      }
+      return next;
+    });
+
+    return true;
+  };
+
+  // Upfront Step Navigation Handlers
+  const handleNextStep = () => {
+    if (!validateStep(activeTab)) {
+      return;
+    }
+
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    const nextTab = TAB_ORDER[currentIndex + 1];
+    if (nextTab) {
+      setActiveTab(nextTab);
+    }
+  };
+
+  const handlePreviousStep = () => {
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    const prevTab = TAB_ORDER[currentIndex - 1];
+    if (prevTab) {
+      setActiveTab(prevTab);
+    }
+  };
+
+  const handleTabChange = (targetTab: TabType) => {
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    const targetIndex = TAB_ORDER.indexOf(targetTab);
+
+    // If moving backwards, always allow immediately
+    if (targetIndex <= currentIndex) {
+      setActiveTab(targetTab);
+      return;
+    }
+
+    // If moving forwards, validate each intermediate step sequentially
+    for (let i = currentIndex; i < targetIndex; i++) {
+      const stepToValidate = TAB_ORDER[i];
+      if (stepToValidate && !validateStep(stepToValidate)) {
+        setActiveTab(stepToValidate);
+        return;
+      }
+    }
+
+    setActiveTab(targetTab);
+  };
+
+  // Full validation before final form submission
+  const validateForm = (): boolean => {
+    for (const step of TAB_ORDER) {
+      if (!validateStep(step)) {
+        setActiveTab(step);
+        return false;
+      }
+    }
     return true;
   };
 
@@ -479,7 +741,7 @@ export function EmployeeFormPage() {
       <div className="flex border-b border-gray-200 bg-white rounded-t-xl px-4 pt-2 gap-2">
         <button
           type="button"
-          onClick={() => setActiveTab("BASIC")}
+          onClick={() => handleTabChange("BASIC")}
           className={`flex items-center gap-2 px-4 py-3 border-b-2 text-sm font-medium transition-colors ${
             activeTab === "BASIC"
               ? "border-indigo-600 text-indigo-600"
@@ -494,7 +756,7 @@ export function EmployeeFormPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("EMPLOYMENT")}
+          onClick={() => handleTabChange("EMPLOYMENT")}
           className={`flex items-center gap-2 px-4 py-3 border-b-2 text-sm font-medium transition-colors ${
             activeTab === "EMPLOYMENT"
               ? "border-indigo-600 text-indigo-600"
@@ -509,7 +771,7 @@ export function EmployeeFormPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("COMPENSATION")}
+          onClick={() => handleTabChange("COMPENSATION")}
           className={`flex items-center gap-2 px-4 py-3 border-b-2 text-sm font-medium transition-colors ${
             activeTab === "COMPENSATION"
               ? "border-indigo-600 text-indigo-600"
@@ -524,7 +786,7 @@ export function EmployeeFormPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("BANK")}
+          onClick={() => handleTabChange("BANK")}
           className={`flex items-center gap-2 px-4 py-3 border-b-2 text-sm font-medium transition-colors ${
             activeTab === "BANK"
               ? "border-indigo-600 text-indigo-600"
@@ -539,16 +801,39 @@ export function EmployeeFormPage() {
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-b-xl border border-t-0 border-gray-200 p-6 shadow-sm">
+      <form onSubmit={handleSubmit} noValidate className="bg-white rounded-b-xl border border-t-0 border-gray-200 p-6 shadow-sm">
         {/* Tab 1: Basic & Contact */}
         {activeTab === "BASIC" && (
           <div className="space-y-6">
             <h3 className="text-base font-semibold text-gray-900 border-b pb-2">Personal Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Employee Code <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Employee Code <span className="text-red-500">*</span>
+                  </label>
+                  {!isEdit && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        let nextCode = generateNextEmployeeCode(allEmployees);
+                        try {
+                          const serverCode = await hrService.getNextEmployeeCode();
+                          if (serverCode) nextCode = serverCode;
+                        } catch {
+                          // Fallback
+                        }
+                        setForm((prev) => ({ ...prev, employeeCode: nextCode }));
+                        clearError("employeeCode");
+                        notifications.info(`Generated next sequential code: ${nextCode}`);
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center gap-1 cursor-pointer"
+                      title="Regenerate next sequential code (Year-Month-6 Digits)"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Auto-Sequence
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={form.employeeCode}
@@ -559,8 +844,9 @@ export function EmployeeFormPage() {
                   className={`w-full px-3 py-2 border rounded-lg text-sm font-mono uppercase focus:ring-2 ${
                     errors.employeeCode ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
                   }`}
-                  placeholder="EMP001"
+                  placeholder="2026-11-000001"
                 />
+                <p className="text-[11px] text-gray-400 mt-1">Format: YYYY-MM-000001 (e.g. 2026-11-000001)</p>
                 {errors.employeeCode && (
                   <p className="text-xs text-rose-500 mt-1 font-medium">{errors.employeeCode}</p>
                 )}
@@ -670,6 +956,30 @@ export function EmployeeFormPage() {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                <input
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                <select
+                  value={form.gender}
+                  onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Residential Address</label>
@@ -749,11 +1059,16 @@ export function EmployeeFormPage() {
                       <option value="Operations">Operations</option>
                     </>
                   ) : (
-                    departments.map((dept) => (
-                      <option key={dept.id} value={dept.name}>
-                        {dept.name} ({dept.code})
-                      </option>
-                    ))
+                    <>
+                      {departments.map((dept) => (
+                        <option key={dept.id} value={dept.name}>
+                          {dept.name} ({dept.code})
+                        </option>
+                      ))}
+                      {form.department && !departments.some((d) => d.name.toLowerCase() === form.department.toLowerCase()) && (
+                        <option value={form.department}>{form.department}</option>
+                      )}
+                    </>
                   )}
                 </select>
                 {errors.department && (
@@ -790,11 +1105,16 @@ export function EmployeeFormPage() {
                       <option value="Sales Lead">Sales Lead</option>
                     </>
                   ) : (
-                    jobTitles.map((jt) => (
-                      <option key={jt.id} value={jt.name}>
-                        {jt.name}
-                      </option>
-                    ))
+                    <>
+                      {jobTitles.map((jt) => (
+                        <option key={jt.id} value={jt.name}>
+                          {jt.name}
+                        </option>
+                      ))}
+                      {form.designation && !jobTitles.some((j) => j.name.toLowerCase() === form.designation.toLowerCase()) && (
+                        <option value={form.designation}>{form.designation}</option>
+                      )}
+                    </>
                   )}
                 </select>
                 {errors.designation && (
@@ -823,11 +1143,16 @@ export function EmployeeFormPage() {
                       <option value="INTERN">Intern</option>
                     </>
                   ) : (
-                    employmentTypes.map((et) => (
-                      <option key={et.id} value={et.code || et.name}>
-                        {et.name}
-                      </option>
-                    ))
+                    <>
+                      {employmentTypes.map((et) => (
+                        <option key={et.id} value={et.code || et.name}>
+                          {et.name}
+                        </option>
+                      ))}
+                      {form.employmentType && !employmentTypes.some((et) => (et.code || et.name) === form.employmentType) && (
+                        <option value={form.employmentType}>{form.employmentType}</option>
+                      )}
+                    </>
                   )}
                 </select>
               </div>
@@ -852,11 +1177,16 @@ export function EmployeeFormPage() {
                       <option value="TERMINATED">Terminated</option>
                     </>
                   ) : (
-                    employeeStatuses.map((st) => (
-                      <option key={st.id} value={st.code || st.name}>
-                        {st.name}
-                      </option>
-                    ))
+                    <>
+                      {employeeStatuses.map((st) => (
+                        <option key={st.id} value={st.code || st.name}>
+                          {st.name}
+                        </option>
+                      ))}
+                      {form.status && !employeeStatuses.some((st) => (st.code || st.name) === form.status) && (
+                        <option value={form.status}>{form.status}</option>
+                      )}
+                    </>
                   )}
                 </select>
               </div>
@@ -880,10 +1210,15 @@ export function EmployeeFormPage() {
                 >
                   <option value="">-- No Direct Manager (Top of Hierarchy / Director) --</option>
                   {potentialManagers.map((mgr) => (
-                    <option key={mgr.id} value={mgr.id}>
+                    <option key={mgr.id} value={mgr.id.toLowerCase()}>
                       {mgr.firstName} {mgr.lastName} ({mgr.designation} - {mgr.employeeCode})
                     </option>
                   ))}
+                  {form.reportsToEmployeeId && !potentialManagers.some((m) => m.id.toLowerCase() === form.reportsToEmployeeId.toLowerCase()) && (
+                    <option value={form.reportsToEmployeeId.toLowerCase()}>
+                      {form.reportsToEmployeeName || `Assigned Manager (${form.reportsToEmployeeId})`}
+                    </option>
+                  )}
                 </select>
               </div>
             </div>
@@ -919,11 +1254,16 @@ export function EmployeeFormPage() {
                       <option value="Annual CTC">Annual CTC (Yearly Package)</option>
                     </>
                   ) : (
-                    salaryTypes.map((st) => (
-                      <option key={st.id} value={st.name}>
-                        {st.name}
-                      </option>
-                    ))
+                    <>
+                      {salaryTypes.map((st) => (
+                        <option key={st.id} value={st.name}>
+                          {st.name}
+                        </option>
+                      ))}
+                      {form.salaryType && !salaryTypes.some((st) => st.name.toLowerCase() === form.salaryType.toLowerCase()) && (
+                        <option value={form.salaryType}>{form.salaryType}</option>
+                      )}
+                    </>
                   )}
                 </select>
               </div>
@@ -961,7 +1301,7 @@ export function EmployeeFormPage() {
                   <div className="flex items-center gap-2">
                     <Calculator className="w-5 h-5 text-indigo-600" />
                     <h4 className="text-sm font-bold text-gray-900">
-                      Auto-Calculated Statutory Salary Breakdown ({statutory.salaryType})
+                      Auto-Calculated Statutory Salary Breakdown ({statutory.salaryType || form.salaryType || "Monthly"})
                     </h4>
                   </div>
                   {calculatingStatutory && (
@@ -977,27 +1317,27 @@ export function EmployeeFormPage() {
                     </h5>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">Basic Salary (50%):</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.basicSalary.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.basicSalary ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">House Rent Allowance (HRA 20%):</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.houseRentAllowance.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.houseRentAllowance ?? statutory.hra ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">Conveyance Allowance:</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.conveyanceAllowance.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.conveyanceAllowance ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">Medical Allowance:</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.medicalAllowance.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.medicalAllowance ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">Special Allowance (Balancing):</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.specialAllowance.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.specialAllowance ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold pt-2 border-t text-indigo-900">
                       <span>Monthly Gross Earnings:</span>
-                      <span>₹{statutory.monthlyGross.toLocaleString()}</span>
+                      <span>₹{(statutory.monthlyGross ?? statutory.grossMonthlySalary ?? 0).toLocaleString()}</span>
                     </div>
                   </div>
 
@@ -1008,27 +1348,27 @@ export function EmployeeFormPage() {
                     </h5>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">Employee PF (12% of Basic, max ₹1,800):</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.providentFundEmployee.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.providentFundEmployee ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">ESIC Employee (0.75% if &le; ₹21k):</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.employeeStateInsurance.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.employeeStateInsurance ?? statutory.esiEmployee ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">Professional Tax (State PT Slab):</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.professionalTax.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.professionalTax ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1">
                       <span className="text-gray-600">Income Tax / TDS (New Tax Regime):</span>
-                      <span className="font-semibold text-gray-900">₹{statutory.taxDeductedAtSource.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">₹{(statutory.taxDeductedAtSource ?? statutory.tdsTax ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm py-1 text-gray-400 text-xs">
                       <span>Employer PF Contribution (Not deducted from pay):</span>
-                      <span>₹{statutory.providentFundEmployer.toLocaleString()}</span>
+                      <span>₹{(statutory.providentFundEmployer ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold pt-2 border-t text-red-700">
                       <span>Total Deductions:</span>
-                      <span>₹{statutory.totalDeductions.toLocaleString()}</span>
+                      <span>₹{(statutory.totalDeductions ?? 0).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
@@ -1042,7 +1382,7 @@ export function EmployeeFormPage() {
                     <p className="text-xs text-emerald-600">Gross Earnings minus Statutory PF, PT & TDS</p>
                   </div>
                   <div className="text-2xl font-bold text-emerald-700">
-                    ₹{statutory.netTakeHome.toLocaleString()} <span className="text-xs font-normal text-emerald-600">/ month</span>
+                    ₹{(statutory.netTakeHome ?? statutory.netMonthlySalary ?? 0).toLocaleString()} <span className="text-xs font-normal text-emerald-600">/ month</span>
                   </div>
                 </div>
               </div>
@@ -1176,6 +1516,18 @@ export function EmployeeFormPage() {
                 </div>
               </div>
             </div>
+
+            {/* Internal Notes & Remarks */}
+            <div className="pt-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes & Remarks</label>
+              <textarea
+                rows={3}
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="Internal HR notes, background check status, or special remarks..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
           </div>
         )}
 
@@ -1191,11 +1543,7 @@ export function EmployeeFormPage() {
             {activeTab !== "BASIC" && (
               <button
                 type="button"
-                onClick={() => {
-                  if (activeTab === "EMPLOYMENT") setActiveTab("BASIC");
-                  if (activeTab === "COMPENSATION") setActiveTab("EMPLOYMENT");
-                  if (activeTab === "BANK") setActiveTab("COMPENSATION");
-                }}
+                onClick={handlePreviousStep}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Previous Step
@@ -1204,12 +1552,8 @@ export function EmployeeFormPage() {
             {activeTab !== "BANK" ? (
               <button
                 type="button"
-                onClick={() => {
-                  if (activeTab === "BASIC") setActiveTab("EMPLOYMENT");
-                  if (activeTab === "EMPLOYMENT") setActiveTab("COMPENSATION");
-                  if (activeTab === "COMPENSATION") setActiveTab("BANK");
-                }}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium"
+                onClick={handleNextStep}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors"
               >
                 Next Step &rarr;
               </button>

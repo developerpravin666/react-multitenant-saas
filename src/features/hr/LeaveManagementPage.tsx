@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { z } from "zod";
 import {
   Calendar,
   Clock,
@@ -187,34 +188,82 @@ export function LeaveManagementPage() {
     return employees.find((e) => e.id === applyForm.employeeId);
   }, [employees, applyForm.employeeId]);
 
-  // Product Master-grade validation for leave application
+const applyLeaveSchema = z
+  .object({
+    employeeId: z.string().trim().min(1, "Employee selection is required."),
+    leaveTypeId: z.string().trim().min(1, "Leave category is required."),
+    startDate: z.string().trim().min(1, "Start date is required."),
+    endDate: z.string().trim().min(1, "End date is required."),
+    workingDays: z
+      .number({ error: "Working days must be calculated." })
+      .min(1, "The selected period contains 0 working days (weekends or holidays only)."),
+    reason: z
+      .string()
+      .trim()
+      .min(5, "Reason must be at least 5 characters.")
+      .max(500, "Reason cannot exceed 500 characters."),
+  })
+  .refine(
+    (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
+    {
+      message: "End date cannot be prior to start date.",
+      path: ["endDate"],
+    }
+  );
+
+const editLeaveRequestSchema = z
+  .object({
+    leaveTypeId: z.string().trim().min(1, "Leave category is required."),
+    startDate: z.string().trim().min(1, "Start date is required."),
+    endDate: z.string().trim().min(1, "End date is required."),
+    workingDays: z
+      .number({ error: "Working days must be calculated." })
+      .min(1, "Selected dates contain 0 working days."),
+    reason: z
+      .string()
+      .trim()
+      .min(5, "Reason must be at least 5 characters.")
+      .max(500, "Reason cannot exceed 500 characters."),
+  })
+  .refine(
+    (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
+    {
+      message: "End date cannot be prior to start date.",
+      path: ["endDate"],
+    }
+  );
+
+const allocateBalanceSchema = z.object({
+  totalDays: z
+    .number({ error: "Allocated days must be a valid number." })
+    .min(0, "Allocated days cannot be negative.")
+    .max(365, "Allocated days cannot exceed 365."),
+  year: z
+    .number({ error: "Year must be a valid number." })
+    .min(2020, "Please enter a valid year between 2020 and 2035.")
+    .max(2035, "Please enter a valid year between 2020 and 2035."),
+});
+
+  // Product Master-grade Zod validation for leave application
   const validateApplyForm = (): boolean => {
     const errs: Record<string, string> = {};
 
-    if (!applyForm.employeeId) {
-      errs.employeeId = "Employee selection is required.";
-    }
-    if (!applyForm.leaveTypeId) {
-      errs.leaveTypeId = "Leave category is required.";
-    }
-    if (!applyForm.startDate) {
-      errs.startDate = "Start date is required.";
-    }
-    if (!applyForm.endDate) {
-      errs.endDate = "End date is required.";
-    }
-    if (applyForm.startDate && applyForm.endDate && applyForm.endDate < applyForm.startDate) {
-      errs.endDate = "End date cannot be prior to start date.";
-    }
-    if (workingDaysData && workingDaysData.workingDays <= 0) {
-      errs.startDate = "The selected period contains 0 working days (weekends or holidays only).";
-    }
-    if (!applyForm.reason.trim()) {
-      errs.reason = "Reason for leave is required.";
-    } else if (applyForm.reason.trim().length < 5) {
-      errs.reason = "Reason must be at least 5 characters.";
-    } else if (applyForm.reason.trim().length > 500) {
-      errs.reason = "Reason cannot exceed 500 characters.";
+    const parseResult = applyLeaveSchema.safeParse({
+      employeeId: applyForm.employeeId,
+      leaveTypeId: applyForm.leaveTypeId,
+      startDate: applyForm.startDate,
+      endDate: applyForm.endDate,
+      workingDays: workingDaysData ? workingDaysData.workingDays : 1,
+      reason: applyForm.reason,
+    });
+
+    if (!parseResult.success) {
+      for (const issue of parseResult.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) {
+          errs[field] = issue.message;
+        }
+      }
     }
 
     setApplyErrors(errs);
@@ -266,23 +315,22 @@ export function LeaveManagementPage() {
     e.preventDefault();
     if (!editingRequest) return;
 
-    const errs: Record<string, string> = {};
-    if (!editingRequest.leaveTypeId) errs.leaveTypeId = "Leave category is required.";
-    if (!editingRequest.startDate) errs.startDate = "Start date is required.";
-    if (!editingRequest.endDate) errs.endDate = "End date is required.";
-    if (editingRequest.startDate && editingRequest.endDate && editingRequest.endDate < editingRequest.startDate) {
-      errs.endDate = "End date cannot be prior to start date.";
-    }
-    if (editingRequest.workingDays <= 0) {
-      errs.startDate = "Selected dates contain 0 working days.";
-    }
-    if (!editingRequest.reason.trim()) {
-      errs.reason = "Reason is required.";
-    } else if (editingRequest.reason.trim().length < 5) {
-      errs.reason = "Reason must be at least 5 characters.";
-    }
+    const parseResult = editLeaveRequestSchema.safeParse({
+      leaveTypeId: editingRequest.leaveTypeId,
+      startDate: editingRequest.startDate,
+      endDate: editingRequest.endDate,
+      workingDays: editingRequest.workingDays,
+      reason: editingRequest.reason,
+    });
 
-    if (Object.keys(errs).length > 0) {
+    if (!parseResult.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parseResult.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) {
+          errs[field] = issue.message;
+        }
+      }
       setEditRequestErrors(errs);
       return;
     }
@@ -351,17 +399,19 @@ export function LeaveManagementPage() {
     e.preventDefault();
     if (!editingBalance) return;
 
-    const errs: Record<string, string> = {};
-    if (editingBalance.totalDays < 0) {
-      errs.totalDays = "Allocated days cannot be negative.";
-    } else if (editingBalance.totalDays > 365) {
-      errs.totalDays = "Allocated days cannot exceed 365.";
-    }
-    if (!editingBalance.year || editingBalance.year < 2020 || editingBalance.year > 2035) {
-      errs.year = "Please enter a valid year between 2020 and 2035.";
-    }
+    const parseResult = allocateBalanceSchema.safeParse({
+      totalDays: Number(editingBalance.totalDays),
+      year: Number(editingBalance.year),
+    });
 
-    if (Object.keys(errs).length > 0) {
+    if (!parseResult.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parseResult.error.issues) {
+        const field = issue.path[0] as string;
+        if (!errs[field]) {
+          errs[field] = issue.message;
+        }
+      }
       setBalanceErrors(errs);
       return;
     }
@@ -885,7 +935,7 @@ export function LeaveManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditRequest} className="space-y-4">
+            <form onSubmit={handleSaveEditRequest} noValidate className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Leave Category *</label>
                 <select
@@ -1042,7 +1092,7 @@ export function LeaveManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveBalance} className="space-y-4">
+            <form onSubmit={handleSaveBalance} noValidate className="space-y-4">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-600">
                 <div>Employee: <strong className="text-slate-800">{editingBalance.employeeName}</strong></div>
                 <div>Category: <strong className="text-indigo-600">{editingBalance.leaveTypeName}</strong></div>
@@ -1118,7 +1168,7 @@ export function LeaveManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleApplySubmit} className="p-6 space-y-4">
+            <form onSubmit={handleApplySubmit} noValidate className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Select Employee *</label>
                 <select
