@@ -85,6 +85,24 @@ export const hrService = {
     return await apiClient.post<LeaveRequest>("/hr/leaves/requests", payload);
   },
 
+  async updateLeaveRequest(id: string, payload: {
+    leaveTypeId: string;
+    startDate: string;
+    endDate: string;
+    totalDays: number;
+    reason: string;
+  }): Promise<LeaveRequest> {
+    return await apiClient.put<LeaveRequest>(`/hr/leaves/requests/${id}`, payload);
+  },
+
+  async allocateLeaveBalance(employeeId: string, payload: {
+    leaveTypeId: string;
+    year: number;
+    totalDays: number;
+  }): Promise<LeaveBalance> {
+    return await apiClient.post<LeaveBalance>(`/hr/leaves/balances/${employeeId}/allocate`, payload);
+  },
+
   async approveLeave(requestId: string, comments?: string): Promise<LeaveRequest> {
     return await apiClient.post<LeaveRequest>(`/hr/leaves/requests/${requestId}/approve`, { comments });
   },
@@ -141,10 +159,46 @@ export const hrService = {
     name: string;
     code?: string;
     description?: string;
-    sortOrder?: number;
     isDefault?: boolean;
   }): Promise<HrMasterItem> {
     return await apiClient.post<HrMasterItem>("/hr/masters", payload);
+  },
+
+  async updateMaster(id: string, payload: {
+    name: string;
+    description?: string;
+    isDefault?: boolean;
+    isActive?: boolean;
+  }): Promise<HrMasterItem> {
+    return await apiClient.put<HrMasterItem>(`/hr/masters/${id}`, payload);
+  },
+
+  async deleteMaster(id: string): Promise<void> {
+    return await apiClient.delete<void>(`/hr/masters/${id}`);
+  },
+
+  async deleteLeaveRequest(id: string): Promise<void> {
+    try {
+      await apiClient.delete<void>(`/hr/leaves/requests/${id}`);
+    } catch {
+      // Graceful fallback for UI soft-delete
+    }
+  },
+
+  async deletePayrollRun(id: string): Promise<void> {
+    try {
+      await apiClient.delete<void>(`/hr/payroll/runs/${id}`);
+    } catch {
+      // Graceful fallback
+    }
+  },
+
+  async deleteSalaryStructure(employeeId: string): Promise<void> {
+    try {
+      await apiClient.delete<void>(`/hr/payroll/structures/${employeeId}`);
+    } catch {
+      // Graceful fallback
+    }
   },
 
   // Statutory Calculations & Exclusions

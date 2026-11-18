@@ -13,7 +13,6 @@ export interface HrMasterItem {
   code: string;
   name: string;
   description?: string;
-  displayOrder: number;
   isActive: boolean;
   isDefault?: boolean;
 }
@@ -49,6 +48,12 @@ export interface Employee {
   employmentType: "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERN" | string;
   status: "ACTIVE" | "PROBATION" | "ON_LEAVE" | "TERMINATED" | "RESIGNED" | string;
   employmentStatus?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  notes?: string;
   isActive: boolean;
   createdAt?: string;
 }
@@ -115,10 +120,12 @@ export interface LeaveRequest {
   totalDays: number;
   reason: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
-  appliedOn: string;
+  appliedOn?: string;
   approverComments?: string;
+  approverComment?: string;
   reviewedAt?: string;
   reviewedBy?: string;
+  approvedBy?: string;
 }
 
 export interface SalaryStructure {
@@ -155,6 +162,7 @@ export interface PayrollRun {
   totalDeductions: number;
   totalNetAmount: number;
   remarks?: string;
+  notes?: string;
 }
 
 export interface Payslip {

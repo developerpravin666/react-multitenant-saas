@@ -21,9 +21,12 @@ import {
   RefreshCw,
   Landmark,
   Network,
+  Eye,
+  X,
+  Calendar,
 } from "lucide-react";
 import { hrService } from "./hrService";
-import type { Employee, Department } from "./hr.types";
+import type { Employee, Department, StatutoryBreakdown } from "./hr.types";
 import { useNotifications } from "../../context/NotificationContext";
 import { APP_ROUTES } from "../../config/routes";
 
@@ -37,6 +40,11 @@ export function EmployeeDirectoryPage() {
   const [selectedDept, setSelectedDept] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"GRID" | "TABLE">("GRID");
+
+  // View Profile Modal State
+  const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [employeeStatutory, setEmployeeStatutory] = useState<StatutoryBreakdown | null>(null);
+  const [loadingStatutory, setLoadingStatutory] = useState<boolean>(false);
 
   const loadData = async () => {
     try {
@@ -58,13 +66,39 @@ export function EmployeeDirectoryPage() {
     loadData();
   }, []);
 
-  const handleDelete = async (emp: Employee) => {
-    if (!window.confirm(`Are you sure you want to deactivate employee ${emp.firstName} ${emp.lastName}?`)) {
-      return;
+  const handleOpenView = async (emp: Employee) => {
+    setViewingEmployee(emp);
+    const salary = emp.monthlyBaseSalary || emp.baseSalary || 0;
+    const isCtc = emp.salaryType === "Annual CTC" || emp.salaryType === "YearlyPackage";
+    if (salary > 0) {
+      try {
+        setLoadingStatutory(true);
+        const stat = await hrService.calculateStatutory(salary, isCtc);
+        setEmployeeStatutory(stat);
+      } catch {
+        setEmployeeStatutory(null);
+      } finally {
+        setLoadingStatutory(false);
+      }
+    } else {
+      setEmployeeStatutory(null);
     }
+  };
+
+  const handleDelete = async (emp: Employee) => {
+    const confirmed = await notifications.confirm({
+      title: `Deactivate ${emp.firstName} ${emp.lastName}?`,
+      message: `Are you sure you want to deactivate employee ${emp.employeeCode}? They will no longer be available for shift assignments or payroll calculation.`,
+      variant: "danger",
+      confirmLabel: "Deactivate",
+    });
+
+    if (!confirmed) return;
+
     try {
       await hrService.deleteEmployee(emp.id);
       notifications.success(`Employee ${emp.firstName} ${emp.lastName} deactivated.`);
+      if (viewingEmployee?.id === emp.id) setViewingEmployee(null);
       await loadData();
     } catch {
       notifications.error("Failed to deactivate employee.");
@@ -354,21 +388,33 @@ export function EmployeeDirectoryPage() {
                   </div>
                 </div>
 
-                {/* Card Actions */}
+                {/* Card Actions: View, Edit, Delete */}
                 <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => navigate(APP_ROUTES.hr.employeeEdit(emp.id))}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    Edit Profile
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenView(emp)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-indigo-600 px-2 py-1 rounded bg-gray-50 hover:bg-indigo-50 transition-colors"
+                      title="View Full Profile"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(APP_ROUTES.hr.employeeEdit(emp.id))}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded bg-indigo-50/60 hover:bg-indigo-100 transition-colors"
+                      title="Edit Profile"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleDelete(emp)}
-                    className="text-gray-400 hover:text-red-600 p-1 transition-colors"
-                    title="Deactivate"
+                    className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors"
+                    title="Deactivate Employee"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -456,11 +502,19 @@ export function EmployeeDirectoryPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenView(emp)}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="View Full Profile"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => navigate(APP_ROUTES.hr.employeeEdit(emp.id))}
-                            className="p-1 text-gray-400 hover:text-indigo-600 rounded"
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
                             title="Edit Employee"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -468,7 +522,7 @@ export function EmployeeDirectoryPage() {
                           <button
                             type="button"
                             onClick={() => handleDelete(emp)}
-                            className="p-1 text-gray-400 hover:text-red-600 rounded"
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                             title="Deactivate"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -480,6 +534,224 @@ export function EmployeeDirectoryPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Comprehensive View Profile Modal */}
+      {viewingEmployee && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-gray-200">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200 bg-gray-50/70 flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xl shadow-md">
+                  {viewingEmployee.firstName.charAt(0)}
+                  {viewingEmployee.lastName.charAt(0)}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      {viewingEmployee.firstName} {viewingEmployee.lastName}
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700">
+                      {viewingEmployee.status || viewingEmployee.employmentStatus || "ACTIVE"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-indigo-600 font-semibold">{viewingEmployee.designation}</p>
+                  <p className="text-xs text-gray-500 font-mono">Code: {viewingEmployee.employeeCode}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingEmployee(null)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6">
+              {/* Section 1: Role & Organization Details */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                  Organization & Reporting Hierarchy
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Department</span>
+                    <div className="font-semibold text-gray-900 mt-0.5">
+                      {viewingEmployee.department || viewingEmployee.departmentName || "General"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Employment Type</span>
+                    <div className="font-semibold text-gray-900 mt-0.5">{viewingEmployee.employmentType}</div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Date of Joining</span>
+                    <div className="font-semibold text-gray-900 mt-0.5">
+                      {viewingEmployee.joiningDate ? viewingEmployee.joiningDate.split("T")[0] : viewingEmployee.dateOfJoining ? viewingEmployee.dateOfJoining.split("T")[0] : "—"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-lg">
+                    <span className="text-indigo-600 font-medium">Reporting Manager</span>
+                    <div className="font-bold text-indigo-950 mt-0.5">
+                      {viewingEmployee.reportsToEmployeeName || "None (Top Level)"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Contact Information */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                  Contact & Personal Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Official Email</span>
+                    <div className="font-semibold text-gray-900 mt-0.5">{viewingEmployee.email}</div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Phone Number</span>
+                    <div className="font-semibold text-gray-900 mt-0.5">{viewingEmployee.phone}</div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Residential Address</span>
+                    <div className="font-semibold text-gray-900 mt-0.5">{viewingEmployee.address || "Not Provided"}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Statutory Salary Breakdown */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Statutory Salary Breakdown ({viewingEmployee.salaryType || "Monthly"})
+                  </h4>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Indian Tax & PF Compliant
+                  </span>
+                </div>
+
+                {employeeStatutory ? (
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="p-2.5 bg-white rounded border border-gray-200">
+                        <span className="text-gray-500">Monthly Gross</span>
+                        <div className="text-sm font-bold text-gray-900">₹{employeeStatutory.monthlyGross.toLocaleString()}</div>
+                      </div>
+                      <div className="p-2.5 bg-white rounded border border-gray-200">
+                        <span className="text-gray-500">Basic (50%)</span>
+                        <div className="text-sm font-bold text-gray-900">₹{employeeStatutory.basicSalary.toLocaleString()}</div>
+                      </div>
+                      <div className="p-2.5 bg-white rounded border border-gray-200">
+                        <span className="text-gray-500">HRA (20%)</span>
+                        <div className="text-sm font-bold text-gray-900">₹{employeeStatutory.houseRentAllowance.toLocaleString()}</div>
+                      </div>
+                      <div className="p-2.5 bg-white rounded border border-gray-200">
+                        <span className="text-gray-500">Total Deductions</span>
+                        <div className="text-sm font-bold text-red-600">₹{employeeStatutory.totalDeductions.toLocaleString()}</div>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-emerald-900">Net Take-Home Pay (In-Hand)</span>
+                        <p className="text-[11px] text-emerald-700">Gross earnings less Employee PF, PT, ESIC and TDS</p>
+                      </div>
+                      <div className="text-xl font-bold text-emerald-800">
+                        ₹{employeeStatutory.netTakeHome.toLocaleString()} <span className="text-xs font-normal">/ month</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gray-50 rounded-lg text-xs text-gray-700">
+                    Base Salary: <span className="font-bold">₹{(viewingEmployee.monthlyBaseSalary || viewingEmployee.baseSalary || 0).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 4: Bank Details & KYC */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                  Direct Bank Account & Statutory KYC
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                  <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
+                    <span className="text-blue-800 font-medium">Bank Name</span>
+                    <div className="font-bold text-gray-900 mt-0.5">{viewingEmployee.bankName || "Not Provided"}</div>
+                  </div>
+                  <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
+                    <span className="text-blue-800 font-medium">Bank Account Number</span>
+                    <div className="font-mono font-bold text-gray-900 mt-0.5">
+                      {viewingEmployee.bankAccountNumber || "Not Provided"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
+                    <span className="text-blue-800 font-medium">Bank IFSC Code</span>
+                    <div className="font-mono font-bold text-gray-900 mt-0.5">
+                      {viewingEmployee.bankIfscCode || viewingEmployee.bankIfsc || "Not Provided"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">PAN Card</span>
+                    <div className="font-mono font-bold text-gray-900 mt-0.5">
+                      {viewingEmployee.panNumber || viewingEmployee.pan || "Not Provided"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Aadhaar Card</span>
+                    <div className="font-mono font-bold text-gray-900 mt-0.5">
+                      {viewingEmployee.aadhaarNumber || viewingEmployee.aadhaar || "Not Provided"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500">Provident Fund UAN</span>
+                    <div className="font-mono font-bold text-gray-900 mt-0.5">
+                      {viewingEmployee.uanNumber || viewingEmployee.uan || "Not Provided"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => handleDelete(viewingEmployee)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Deactivate Employee
+              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setViewingEmployee(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-white"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = viewingEmployee.id;
+                    setViewingEmployee(null);
+                    navigate(APP_ROUTES.hr.employeeEdit(id));
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-sm"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Edit Profile
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

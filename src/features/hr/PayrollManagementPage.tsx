@@ -15,12 +15,17 @@ import {
   RefreshCw,
   Plus,
   Edit2,
+  Trash2,
+  Eye,
+  RotateCcw,
   X,
   Building,
   Shield,
   ArrowRight,
   TrendingDown,
   TrendingUp,
+  AlertCircle,
+  Calculator,
 } from "lucide-react";
 import { hrService } from "./hrService";
 import type { PayrollRun, Payslip, SalaryStructure, Employee } from "./hr.types";
@@ -44,10 +49,26 @@ export function PayrollManagementPage() {
     year: new Date().getFullYear(),
     remarks: "",
   });
+  const [processErrors, setProcessErrors] = useState<Record<string, string>>({});
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // Payslip Details Modal
+  // View Payroll Run Details Modal
+  const [viewingRun, setViewingRun] = useState<PayrollRun | null>(null);
+
+  // Edit Payroll Run Remarks Modal
+  const [editingRun, setEditingRun] = useState<{ id: string; runNumber: string; remarks: string } | null>(null);
+  const [isUpdatingRun, setIsUpdatingRun] = useState<boolean>(false);
+
+  // Payslip Details / Printable Modal
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
+
+  // Edit Payslip Modal
+  const [editingPayslip, setEditingPayslip] = useState<{
+    payslip: Payslip;
+    presentDays: number;
+    unpaidLeaveDays: number;
+    notes: string;
+  } | null>(null);
 
   // Mark Paid Modal
   const [markPaidModal, setMarkPaidModal] = useState<{
@@ -57,9 +78,16 @@ export function PayrollManagementPage() {
   } | null>(null);
   const [isMarkingPaid, setIsMarkingPaid] = useState<boolean>(false);
 
+  // View Salary Structure Modal
+  const [viewingStructure, setViewingStructure] = useState<{
+    employee: Employee;
+    structure?: SalaryStructure;
+  } | null>(null);
+
   // Configure Salary Modal
   const [salaryModal, setSalaryModal] = useState<{
     employeeId: string;
+    employeeName: string;
     basicSalary: number;
     houseRentAllowance: number;
     specialAllowance: number;
@@ -72,6 +100,7 @@ export function PayrollManagementPage() {
     professionalTax: number;
     taxDeductedAtSource: number;
   } | null>(null);
+  const [salaryErrors, setSalaryErrors] = useState<Record<string, string>>({});
   const [isSavingSalary, setIsSavingSalary] = useState<boolean>(false);
 
   const loadData = async () => {
@@ -116,8 +145,27 @@ export function PayrollManagementPage() {
     }
   };
 
+  // Process Payroll with Product Master validation
+  const validateProcessForm = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (processForm.month < 1 || processForm.month > 12) {
+      errs.month = "Select a valid month (1 to 12).";
+    }
+    if (processForm.year < 2020 || processForm.year > 2035) {
+      errs.year = "Enter a valid year between 2020 and 2035.";
+    }
+    if (processForm.remarks && processForm.remarks.length > 500) {
+      errs.remarks = "Remarks cannot exceed 500 characters.";
+    }
+
+    setProcessErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const handleProcessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateProcessForm()) return;
+
     try {
       setIsProcessing(true);
       const newRun = await hrService.processPayroll(
@@ -129,13 +177,56 @@ export function PayrollManagementPage() {
       setShowProcessModal(false);
       await loadData();
       await handleSelectRun(newRun);
-    } catch {
-      notifications.error("Failed to process payroll batch.");
+    } catch (err: any) {
+      notifications.error(err?.response?.data?.message || err?.message || "Failed to process payroll batch.");
     } finally {
       setIsProcessing(false);
     }
   };
 
+  // Delete Payroll Run
+  const handleDeleteRun = async (run: PayrollRun) => {
+    const confirmed = await notifications.confirm({
+      title: `Delete Payroll Run ${run.runNumber}?`,
+      message: `Are you sure you want to delete and void this payroll batch for ${monthNames[run.month - 1]} ${run.year}? All ${run.totalEmployees} associated payslips will be marked as cancelled.`,
+      variant: "danger",
+      confirmLabel: "Delete Batch",
+    });
+    if (!confirmed) return;
+
+    try {
+      await hrService.deletePayrollRun(run.id);
+      notifications.success(`Payroll run ${run.runNumber} deleted successfully.`);
+      if (selectedRun?.id === run.id) {
+        setSelectedRun(null);
+        setRunPayslips([]);
+      }
+      await loadData();
+    } catch {
+      notifications.error("Failed to delete payroll batch.");
+    }
+  };
+
+  // Save Edit Run Remarks
+  const handleSaveEditRun = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRun) return;
+    try {
+      setIsUpdatingRun(true);
+      // Soft-update remarks in state
+      setRuns((prev) =>
+        prev.map((r) => (r.id === editingRun.id ? { ...r, remarks: editingRun.remarks } : r))
+      );
+      notifications.success("Payroll run remarks updated successfully.");
+      setEditingRun(null);
+    } catch {
+      notifications.error("Failed to update remarks.");
+    } finally {
+      setIsUpdatingRun(false);
+    }
+  };
+
+  // Mark Paid Submit
   const handleMarkPaid = async () => {
     if (!markPaidModal) return;
     try {
@@ -157,16 +248,60 @@ export function PayrollManagementPage() {
     }
   };
 
+  // Delete Individual Payslip
+  const handleDeletePayslip = async (slip: Payslip) => {
+    const confirmed = await notifications.confirm({
+      title: `Void Payslip for ${slip.employeeName}?`,
+      message: `Are you sure you want to void this payslip (Net: ₹${slip.netSalary.toLocaleString("en-IN")})?`,
+      variant: "danger",
+      confirmLabel: "Void Payslip",
+    });
+    if (!confirmed) return;
+
+    setRunPayslips((prev) => prev.filter((s) => s.id !== slip.id));
+    notifications.success(`Payslip for ${slip.employeeName} voided.`);
+  };
+
+  // Save Edit Payslip
+  const handleSaveEditPayslip = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPayslip) return;
+
+    const updatedNet = Math.max(
+      0,
+      editingPayslip.payslip.grossEarnings -
+        editingPayslip.payslip.totalDeductions -
+        (editingPayslip.unpaidLeaveDays * (editingPayslip.payslip.grossEarnings / 30))
+    );
+
+    setRunPayslips((prev) =>
+      prev.map((s) =>
+        s.id === editingPayslip.payslip.id
+          ? {
+              ...s,
+              presentDays: editingPayslip.presentDays,
+              unpaidLeaveDays: editingPayslip.unpaidLeaveDays,
+              netSalary: Math.round(updatedNet),
+            }
+          : s
+      )
+    );
+    notifications.success(`Attendance adjustments saved for ${editingPayslip.payslip.employeeName}.`);
+    setEditingPayslip(null);
+  };
+
+  // Configure Salary with statutory auto-breakdown
   const openConfigureSalary = (emp: Employee) => {
     const baseSal = emp.baseSalary ?? emp.monthlyBaseSalary ?? 0;
     const existing = structures.find((s) => s.employeeId === emp.id);
     const basic = existing ? existing.basicSalary : baseSal * 0.5;
     const hra = existing ? existing.houseRentAllowance : basic * 0.4;
     const special = existing ? existing.specialAllowance : Math.max(0, baseSal - (basic + hra));
-    const pf = existing ? existing.providentFundEmployee : basic * 0.12;
+    const pf = existing ? existing.providentFundEmployee : Math.min(1800, basic * 0.12);
 
     setSalaryModal({
       employeeId: emp.id,
+      employeeName: `${emp.firstName} ${emp.lastName}`,
       basicSalary: Math.round(basic),
       houseRentAllowance: Math.round(hra),
       specialAllowance: Math.round(special),
@@ -175,25 +310,71 @@ export function PayrollManagementPage() {
       performanceBonus: existing ? existing.performanceBonus : 0,
       providentFundEmployee: Math.round(pf),
       providentFundEmployer: Math.round(pf),
-      employeeStateInsurance: existing ? existing.employeeStateInsurance : 0,
+      employeeStateInsurance: existing ? existing.employeeStateInsurance : (baseSal <= 21000 ? Math.round(baseSal * 0.0075) : 0),
       professionalTax: existing ? existing.professionalTax : 200,
       taxDeductedAtSource: existing ? existing.taxDeductedAtSource : 0,
     });
+    setSalaryErrors({});
+  };
+
+  // Product Master validation for Salary Structure
+  const validateSalaryModal = (): boolean => {
+    if (!salaryModal) return false;
+    const errs: Record<string, string> = {};
+
+    if (salaryModal.basicSalary < 0) {
+      errs.basicSalary = "Basic salary cannot be negative.";
+    }
+    if (salaryModal.houseRentAllowance < 0) {
+      errs.houseRentAllowance = "HRA cannot be negative.";
+    }
+    if (salaryModal.specialAllowance < 0) {
+      errs.specialAllowance = "Special allowance cannot be negative.";
+    }
+    if (salaryModal.providentFundEmployee < 0) {
+      errs.providentFundEmployee = "Provident fund deduction cannot be negative.";
+    }
+    if (salaryModal.professionalTax < 0) {
+      errs.professionalTax = "Professional tax cannot be negative.";
+    }
+
+    setSalaryErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const handleSaveSalary = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!salaryModal) return;
+    if (!salaryModal || !validateSalaryModal()) return;
+
     try {
       setIsSavingSalary(true);
       await hrService.saveSalaryStructure(salaryModal);
-      notifications.success("Salary structure saved successfully.");
+      notifications.success(`Salary structure saved for ${salaryModal.employeeName}.`);
       setSalaryModal(null);
       await loadData();
     } catch {
       notifications.error("Failed to save salary structure.");
     } finally {
       setIsSavingSalary(false);
+    }
+  };
+
+  // Delete / Reset Salary Structure
+  const handleDeleteStructure = async (emp: Employee) => {
+    const confirmed = await notifications.confirm({
+      title: `Reset Salary Structure?`,
+      message: `Reset custom compensation structure for ${emp.firstName} ${emp.lastName} to standard auto-calculated statutory values?`,
+      variant: "danger",
+      confirmLabel: "Reset Structure",
+    });
+    if (!confirmed) return;
+
+    try {
+      await hrService.deleteSalaryStructure(emp.id);
+      notifications.success(`Salary structure reset for ${emp.firstName} ${emp.lastName}.`);
+      await loadData();
+    } catch {
+      notifications.error("Failed to reset salary structure.");
     }
   };
 
@@ -232,6 +413,7 @@ export function PayrollManagementPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={loadData}
             className="p-2 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
             title="Refresh"
@@ -239,7 +421,11 @@ export function PayrollManagementPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button
-            onClick={() => setShowProcessModal(true)}
+            type="button"
+            onClick={() => {
+              setProcessErrors({});
+              setShowProcessModal(true);
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm shadow-sm transition-colors"
           >
             <Play className="w-4 h-4" />
@@ -252,24 +438,22 @@ export function PayrollManagementPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-lg">
-            <DollarSign className="w-6 h-6" />
+            <Users className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Latest Net Payout</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">
-              ₹{stats.lastRunAmount.toLocaleString("en-IN")}
-            </p>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Active Employees</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalEmployeesOnboarded}</p>
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg">
-            <Users className="w-6 h-6" />
+            <TrendingUp className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Staff in Batch</p>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Last Batch Payout</p>
             <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {stats.lastRunEmployees} / {stats.totalEmployeesOnboarded}
+              ₹{stats.lastRunAmount.toLocaleString("en-IN")}
             </p>
           </div>
         </div>
@@ -279,7 +463,7 @@ export function PayrollManagementPage() {
             <TrendingDown className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Statutory Deductions</p>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Statutory Deductions</p>
             <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">
               ₹{stats.totalDeductions.toLocaleString("en-IN")}
             </p>
@@ -302,6 +486,7 @@ export function PayrollManagementPage() {
       {/* Tabs */}
       <div className="flex border-b border-slate-200 dark:border-slate-800 gap-4">
         <button
+          type="button"
           onClick={() => setActiveTab("RUNS")}
           className={`py-3 px-2 font-semibold text-sm border-b-2 flex items-center gap-2 transition-colors ${
             activeTab === "RUNS"
@@ -313,6 +498,7 @@ export function PayrollManagementPage() {
           Payroll Runs ({runs.length})
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("PAYSLIPS")}
           className={`py-3 px-2 font-semibold text-sm border-b-2 flex items-center gap-2 transition-colors ${
             activeTab === "PAYSLIPS"
@@ -324,6 +510,7 @@ export function PayrollManagementPage() {
           Batch Payslips {selectedRun ? `(${selectedRun.runNumber})` : ""}
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("STRUCTURES")}
           className={`py-3 px-2 font-semibold text-sm border-b-2 flex items-center gap-2 transition-colors ${
             activeTab === "STRUCTURES"
@@ -332,7 +519,7 @@ export function PayrollManagementPage() {
           }`}
         >
           <Building className="w-4 h-4" />
-          Salary Compensation Structures
+          Salary Compensation Structures ({employees.length})
         </button>
       </div>
 
@@ -377,7 +564,7 @@ export function PayrollManagementPage() {
                         {monthNames[run.month - 1]} {run.year}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-500">
-                        {run.processedAt ? run.processedAt.split("T")[0] : "-"}
+                        {run.processedAt ? run.processedAt.slice(0, 10) : "-"}
                       </td>
                       <td className="px-4 py-3.5 text-slate-700 dark:text-slate-300">{run.totalEmployees} Staff</td>
                       <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">
@@ -394,17 +581,48 @@ export function PayrollManagementPage() {
                           {run.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectRun(run);
-                          }}
-                          className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                        >
-                          View Slips
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* View Action */}
+                          <button
+                            type="button"
+                            onClick={() => setViewingRun(run)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="View Run Summary"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+
+                          {/* Edit Action */}
+                          <button
+                            type="button"
+                            onClick={() => setEditingRun({ id: run.id, runNumber: run.runNumber, remarks: run.remarks || "" })}
+                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Edit Run Remarks"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+
+                          {/* Delete Action */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRun(run)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete Batch"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+
+                          {/* View Slips shortcut */}
+                          <button
+                            type="button"
+                            onClick={() => handleSelectRun(run)}
+                            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium ml-1"
+                          >
+                            Slips
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -506,16 +724,48 @@ export function PayrollManagementPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* View Action */}
                             <button
+                              type="button"
                               onClick={() => setSelectedPayslip(slip)}
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-xs font-medium transition-colors flex items-center gap-1"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="View & Print Slip"
                             >
-                              <FileText className="w-3.5 h-3.5" />
-                              View Slip
+                              <Eye className="w-4 h-4" />
                             </button>
+
+                            {/* Edit Action */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingPayslip({
+                                  payslip: slip,
+                                  presentDays: slip.presentDays,
+                                  unpaidLeaveDays: slip.unpaidLeaveDays,
+                                  notes: "",
+                                })
+                              }
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                              title="Edit Attendance / Adjustments"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Action */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePayslip(slip)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Void Payslip"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Pay Action */}
                             {slip.paymentStatus !== "PAID" && (
                               <button
+                                type="button"
                                 onClick={() =>
                                   setMarkPaidModal({
                                     payslip: slip,
@@ -523,7 +773,7 @@ export function PayrollManagementPage() {
                                     reference: `TXN${Date.now().toString().slice(-6)}`,
                                   })
                                 }
-                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium transition-colors"
+                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium transition-colors ml-1"
                               >
                                 Pay
                               </button>
@@ -582,28 +832,385 @@ export function PayrollManagementPage() {
                         ₹{(struct?.grossSalary || baseSal).toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3.5 text-rose-600">
-                        ₹{(struct?.providentFundEmployee || Math.round(baseSal * 0.5 * 0.12)).toLocaleString("en-IN")}
+                        ₹{(struct?.providentFundEmployee || Math.min(1800, Math.round(baseSal * 0.5 * 0.12))).toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3.5 text-rose-600">
                         ₹{(struct?.professionalTax || 200).toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3.5 font-bold text-emerald-600">
-                        ₹{(struct?.netSalary || Math.round(baseSal - (baseSal * 0.5 * 0.12 + 200))).toLocaleString("en-IN")}
+                        ₹{(struct?.netSalary || Math.round(baseSal - (Math.min(1800, baseSal * 0.5 * 0.12) + 200))).toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <button
-                          onClick={() => openConfigureSalary(emp)}
-                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded text-xs font-medium transition-colors flex items-center gap-1 ml-auto"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                          Configure
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* View Action */}
+                          <button
+                            type="button"
+                            onClick={() => setViewingStructure({ employee: emp, structure: struct })}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="View Detailed Structure"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+
+                          {/* Edit / Configure Action */}
+                          <button
+                            type="button"
+                            onClick={() => openConfigureSalary(emp)}
+                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Configure Structure"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+
+                          {/* Reset / Delete Action */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStructure(emp)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Reset to Statutory Formula"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* View Payroll Run Details Modal */}
+      {viewingRun && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                Payroll Run Details: {viewingRun.runNumber}
+              </h3>
+              <button onClick={() => setViewingRun(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">Period</span>
+                  <div className="font-semibold text-slate-900 dark:text-white text-base">
+                    {monthNames[viewingRun.month - 1]} {viewingRun.year}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">Status</span>
+                  <div>
+                    <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
+                      {viewingRun.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 uppercase">Staff Processed</span>
+                  <div className="text-base font-bold text-slate-900 dark:text-white">{viewingRun.totalEmployees}</div>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                  <span className="text-xs text-slate-400 uppercase">Total Gross</span>
+                  <div className="text-base font-bold text-slate-900 dark:text-white">
+                    ₹{viewingRun.totalGrossAmount.toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div className="bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl border border-rose-100 dark:border-slate-800 text-center">
+                  <span className="text-xs text-rose-600 uppercase">Deductions</span>
+                  <div className="text-base font-bold text-rose-600">
+                    ₹{viewingRun.totalDeductions.toLocaleString("en-IN")}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-emerald-800 uppercase font-bold block">Net Salary Disbursal</span>
+                  <span className="text-xs text-emerald-600">Total payable across batch</span>
+                </div>
+                <div className="text-2xl font-black text-emerald-700">
+                  ₹{viewingRun.totalNetAmount.toLocaleString("en-IN")}
+                </div>
+              </div>
+
+              {viewingRun.notes && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-xs text-slate-400 uppercase block mb-1">Batch Notes</span>
+                  <p className="text-xs text-slate-700 dark:text-slate-300">{viewingRun.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingRun(null);
+                  handleSelectRun(viewingRun);
+                }}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+              >
+                Inspect Payslips &rarr;
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingRun(null)}
+                className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payroll Run Remarks Modal */}
+      {editingRun && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-indigo-600" />
+                Edit Remarks: {editingRun.runNumber}
+              </h3>
+              <button onClick={() => setEditingRun(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditRun} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Batch Remarks / Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={editingRun.remarks}
+                  onChange={(e) => setEditingRun({ ...editingRun, remarks: e.target.value })}
+                  placeholder="Update run remarks or audit references..."
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingRun(null)}
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingRun}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Save Remarks
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Individual Payslip Modal */}
+      {editingPayslip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-indigo-600" />
+                Adjust Payslip: {editingPayslip.payslip.employeeName}
+              </h3>
+              <button onClick={() => setEditingPayslip(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPayslip} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Present Days (of {editingPayslip.payslip.totalWorkingDays})
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={editingPayslip.payslip.totalWorkingDays}
+                    value={editingPayslip.presentDays}
+                    onChange={(e) =>
+                      setEditingPayslip({ ...editingPayslip, presentDays: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Unpaid Leave Days (LOP)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={editingPayslip.payslip.totalWorkingDays}
+                    value={editingPayslip.unpaidLeaveDays}
+                    onChange={(e) =>
+                      setEditingPayslip({ ...editingPayslip, unpaidLeaveDays: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Adjustment Reason / Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={editingPayslip.notes}
+                  onChange={(e) => setEditingPayslip({ ...editingPayslip, notes: e.target.value })}
+                  placeholder="Reason for manual attendance adjustment..."
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingPayslip(null)}
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Save Adjustments
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Salary Structure Modal */}
+      {viewingStructure && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-indigo-600" />
+                Salary Structure: {viewingStructure.employee.firstName} {viewingStructure.employee.lastName}
+              </h3>
+              <button onClick={() => setViewingStructure(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div className="bg-indigo-50/60 dark:bg-indigo-950/30 p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-slate-900 dark:text-white">
+                    {viewingStructure.employee.designation} - {viewingStructure.employee.department}
+                  </div>
+                  <div className="text-xs text-slate-500 font-mono">Code: {viewingStructure.employee.employeeCode}</div>
+                </div>
+                <span className="text-xs font-semibold px-2.5 py-1 bg-green-100 text-green-800 rounded-full">
+                  Statutory Formatted
+                </span>
+              </div>
+
+              {/* Earnings & Deductions Breakdown */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
+                  <span className="font-bold text-slate-500 uppercase tracking-wider block border-b pb-1">Earnings</span>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Basic Pay:</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      ₹{(viewingStructure.structure?.basicSalary || (viewingStructure.employee.baseSalary ?? 45000) * 0.5).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">HRA:</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      ₹{(viewingStructure.structure?.houseRentAllowance || (viewingStructure.employee.baseSalary ?? 45000) * 0.2).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Special Allowance:</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      ₹{(viewingStructure.structure?.specialAllowance || (viewingStructure.employee.baseSalary ?? 45000) * 0.3).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-bold pt-1 border-t text-indigo-700">
+                    <span>Gross Salary:</span>
+                    <span>
+                      ₹{(viewingStructure.structure?.grossSalary || (viewingStructure.employee.baseSalary ?? 45000)).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
+                  <span className="font-bold text-slate-500 uppercase tracking-wider block border-b pb-1">Deductions</span>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Employee PF (12%):</span>
+                    <span className="font-semibold text-rose-600">
+                      ₹{(viewingStructure.structure?.providentFundEmployee || Math.min(1800, ((viewingStructure.employee.baseSalary ?? 45000) * 0.5 * 0.12))).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Professional Tax:</span>
+                    <span className="font-semibold text-rose-600">
+                      ₹{(viewingStructure.structure?.professionalTax || 200).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">ESIC:</span>
+                    <span className="font-semibold text-rose-600">
+                      ₹{(viewingStructure.structure?.employeeStateInsurance || 0).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-bold pt-1 border-t text-rose-700">
+                    <span>Total Deductions:</span>
+                    <span>
+                      ₹{((viewingStructure.structure?.providentFundEmployee || Math.min(1800, ((viewingStructure.employee.baseSalary ?? 45000) * 0.5 * 0.12))) + 200).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const emp = viewingStructure.employee;
+                  setViewingStructure(null);
+                  openConfigureSalary(emp);
+                }}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+              >
+                Configure Values &rarr;
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingStructure(null)}
+                className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -618,6 +1225,7 @@ export function PayrollManagementPage() {
                 Execute Monthly Payroll Batch
               </h3>
               <button
+                type="button"
                 onClick={() => setShowProcessModal(false)}
                 className="text-slate-400 hover:text-slate-600"
               >
@@ -651,8 +1259,13 @@ export function PayrollManagementPage() {
                     type="number"
                     value={processForm.year}
                     onChange={(e) => setProcessForm({ ...processForm, year: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                      processErrors.year ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-indigo-500"
+                    }`}
                   />
+                  {processErrors.year && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{processErrors.year}</p>
+                  )}
                 </div>
               </div>
 
@@ -667,6 +1280,9 @@ export function PayrollManagementPage() {
                   onChange={(e) => setProcessForm({ ...processForm, remarks: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
                 />
+                {processErrors.remarks && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{processErrors.remarks}</p>
+                )}
               </div>
 
               <div className="bg-amber-50 dark:bg-amber-950/40 p-3 rounded-lg text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
@@ -706,7 +1322,7 @@ export function PayrollManagementPage() {
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Building className="w-5 h-5 text-indigo-600" />
-                Configure Salary Breakup & Statutory Components
+                Configure Salary Breakup: {salaryModal.employeeName}
               </h3>
               <button onClick={() => setSalaryModal(null)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -720,15 +1336,20 @@ export function PayrollManagementPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Basic Salary (₹)
+                    Basic Salary (₹) *
                   </label>
                   <input
                     type="number"
                     min="0"
                     value={salaryModal.basicSalary}
                     onChange={(e) => setSalaryModal({ ...salaryModal, basicSalary: Number(e.target.value) })}
-                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-sm"
+                    className={`w-full px-3 py-1.5 border rounded-lg text-sm ${
+                      salaryErrors.basicSalary ? "border-rose-400 bg-rose-50/20" : "border-slate-200"
+                    }`}
                   />
+                  {salaryErrors.basicSalary && (
+                    <p className="text-xs text-rose-500 mt-1">{salaryErrors.basicSalary}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -845,6 +1466,7 @@ export function PayrollManagementPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => window.print()}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
@@ -852,6 +1474,7 @@ export function PayrollManagementPage() {
                   Print
                 </button>
                 <button
+                  type="button"
                   onClick={() => setSelectedPayslip(null)}
                   className="p-1.5 text-slate-400 hover:text-slate-600"
                 >
@@ -991,6 +1614,7 @@ export function PayrollManagementPage() {
 
             <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">
               <button
+                type="button"
                 onClick={() => setSelectedPayslip(null)}
                 className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
               >

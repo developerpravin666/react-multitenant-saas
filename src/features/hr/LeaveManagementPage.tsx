@@ -18,6 +18,10 @@ import {
   CalendarDays,
   Network,
   Sun,
+  Eye,
+  Edit2,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { hrService } from "./hrService";
 import type { LeaveRequest, LeaveBalance, LeaveType, Employee, HrMasterItem, LeaveWorkingDaysResult } from "./hr.types";
@@ -40,13 +44,46 @@ export function LeaveManagementPage() {
   const [applyForm, setApplyForm] = useState({
     employeeId: "",
     leaveTypeId: "",
-    startDate: new Date().toISOString().split("T")[0] || "",
-    endDate: new Date().toISOString().split("T")[0] || "",
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: new Date().toISOString().slice(0, 10),
     reason: "",
   });
+  const [applyErrors, setApplyErrors] = useState<Record<string, string>>({});
   const [workingDaysData, setWorkingDaysData] = useState<LeaveWorkingDaysResult | null>(null);
   const [calculatingDays, setCalculatingDays] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
+
+  // View Leave Request Modal
+  const [viewingRequest, setViewingRequest] = useState<LeaveRequest | null>(null);
+
+  // Edit Leave Request Modal
+  const [editingRequest, setEditingRequest] = useState<{
+    id: string;
+    employeeId: string;
+    employeeName: string;
+    leaveTypeId: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+    workingDays: number;
+  } | null>(null);
+  const [editRequestErrors, setEditRequestErrors] = useState<Record<string, string>>({});
+  const [isUpdatingRequest, setIsUpdatingRequest] = useState<boolean>(false);
+
+  // View Leave Balance Modal
+  const [viewingBalance, setViewingBalance] = useState<LeaveBalance | null>(null);
+
+  // Edit / Allocate Leave Balance Modal
+  const [editingBalance, setEditingBalance] = useState<{
+    employeeId: string;
+    employeeName: string;
+    leaveTypeId: string;
+    leaveTypeName: string;
+    year: number;
+    totalDays: number;
+  } | null>(null);
+  const [isSavingBalance, setIsSavingBalance] = useState<boolean>(false);
+  const [balanceErrors, setBalanceErrors] = useState<Record<string, string>>({});
 
   // Review Modal (Approve / Reject with comment)
   const [reviewModal, setReviewModal] = useState<{
@@ -82,7 +119,7 @@ export function LeaveManagementPage() {
     loadData();
   }, []);
 
-  // Calculate working days excluding weekends & holidays
+  // Calculate working days excluding weekends & holidays for Apply form
   useEffect(() => {
     if (applyForm.startDate && applyForm.endDate && showApplyModal) {
       const calcWorkingDays = async () => {
@@ -91,7 +128,6 @@ export function LeaveManagementPage() {
           const res = await hrService.calculateWorkingDays(applyForm.startDate, applyForm.endDate);
           setWorkingDaysData(res);
         } catch {
-          // Fallback simple calendar difference if endpoint encounters error
           const start = new Date(applyForm.startDate);
           const end = new Date(applyForm.endDate);
           if (end >= start) {
@@ -112,10 +148,30 @@ export function LeaveManagementPage() {
     }
   }, [applyForm.startDate, applyForm.endDate, showApplyModal]);
 
+  // Calculate working days for Edit Request modal
+  useEffect(() => {
+    if (editingRequest?.startDate && editingRequest?.endDate) {
+      const calcEditWorkingDays = async () => {
+        try {
+          const res = await hrService.calculateWorkingDays(editingRequest.startDate, editingRequest.endDate);
+          setEditingRequest((prev) => prev ? { ...prev, workingDays: res.workingDays } : null);
+        } catch {
+          const start = new Date(editingRequest.startDate);
+          const end = new Date(editingRequest.endDate);
+          if (end >= start) {
+            const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            setEditingRequest((prev) => prev ? { ...prev, workingDays: diffDays } : null);
+          }
+        }
+      };
+      calcEditWorkingDays();
+    }
+  }, [editingRequest?.startDate, editingRequest?.endDate]);
+
   const openApplyModal = () => {
     const defaultEmp = employees[0]?.id || "";
     const defaultType = leaveTypes[0]?.id || masterLeaveCategories[0]?.id || "";
-    const today = new Date().toISOString().split("T")[0] || "";
+    const today = new Date().toISOString().slice(0, 10);
     setApplyForm({
       employeeId: defaultEmp,
       leaveTypeId: defaultType,
@@ -123,6 +179,7 @@ export function LeaveManagementPage() {
       endDate: today,
       reason: "",
     });
+    setApplyErrors({});
     setShowApplyModal(true);
   };
 
@@ -130,16 +187,43 @@ export function LeaveManagementPage() {
     return employees.find((e) => e.id === applyForm.employeeId);
   }, [employees, applyForm.employeeId]);
 
-  const handleApplySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!applyForm.employeeId || !applyForm.leaveTypeId) {
-      notifications.error("Please select an employee and leave category.");
-      return;
+  // Product Master-grade validation for leave application
+  const validateApplyForm = (): boolean => {
+    const errs: Record<string, string> = {};
+
+    if (!applyForm.employeeId) {
+      errs.employeeId = "Employee selection is required.";
+    }
+    if (!applyForm.leaveTypeId) {
+      errs.leaveTypeId = "Leave category is required.";
+    }
+    if (!applyForm.startDate) {
+      errs.startDate = "Start date is required.";
+    }
+    if (!applyForm.endDate) {
+      errs.endDate = "End date is required.";
+    }
+    if (applyForm.startDate && applyForm.endDate && applyForm.endDate < applyForm.startDate) {
+      errs.endDate = "End date cannot be prior to start date.";
     }
     if (workingDaysData && workingDaysData.workingDays <= 0) {
-      notifications.error("Cannot apply: The selected dates fall entirely on weekends or gazetted holidays (0 net working days).");
-      return;
+      errs.startDate = "The selected period contains 0 working days (weekends or holidays only).";
     }
+    if (!applyForm.reason.trim()) {
+      errs.reason = "Reason for leave is required.";
+    } else if (applyForm.reason.trim().length < 5) {
+      errs.reason = "Reason must be at least 5 characters.";
+    } else if (applyForm.reason.trim().length > 500) {
+      errs.reason = "Reason cannot exceed 500 characters.";
+    }
+
+    setApplyErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleApplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateApplyForm()) return;
 
     try {
       setIsApplying(true);
@@ -148,7 +232,7 @@ export function LeaveManagementPage() {
         leaveTypeId: applyForm.leaveTypeId,
         startDate: applyForm.startDate,
         endDate: applyForm.endDate,
-        reason: applyForm.reason,
+        reason: applyForm.reason.trim(),
       });
       notifications.success(`Leave request submitted (${workingDaysData?.workingDays ?? 1} net working day(s) deducted).`);
       setShowApplyModal(false);
@@ -160,6 +244,88 @@ export function LeaveManagementPage() {
     }
   };
 
+  // Open Edit Request Modal
+  const handleOpenEditRequest = (req: LeaveRequest) => {
+    const sDate = req.startDate ? req.startDate.slice(0, 10) : "";
+    const eDate = req.endDate ? req.endDate.slice(0, 10) : "";
+    setEditingRequest({
+      id: req.id,
+      employeeId: req.employeeId,
+      employeeName: req.employeeName ?? "Employee",
+      leaveTypeId: req.leaveTypeId,
+      startDate: sDate,
+      endDate: eDate,
+      reason: req.reason,
+      workingDays: req.totalDays,
+    });
+    setEditRequestErrors({});
+  };
+
+  // Save Edit Request
+  const handleSaveEditRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRequest) return;
+
+    const errs: Record<string, string> = {};
+    if (!editingRequest.leaveTypeId) errs.leaveTypeId = "Leave category is required.";
+    if (!editingRequest.startDate) errs.startDate = "Start date is required.";
+    if (!editingRequest.endDate) errs.endDate = "End date is required.";
+    if (editingRequest.startDate && editingRequest.endDate && editingRequest.endDate < editingRequest.startDate) {
+      errs.endDate = "End date cannot be prior to start date.";
+    }
+    if (editingRequest.workingDays <= 0) {
+      errs.startDate = "Selected dates contain 0 working days.";
+    }
+    if (!editingRequest.reason.trim()) {
+      errs.reason = "Reason is required.";
+    } else if (editingRequest.reason.trim().length < 5) {
+      errs.reason = "Reason must be at least 5 characters.";
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setEditRequestErrors(errs);
+      return;
+    }
+
+    try {
+      setIsUpdatingRequest(true);
+      await hrService.updateLeaveRequest(editingRequest.id, {
+        leaveTypeId: editingRequest.leaveTypeId,
+        startDate: editingRequest.startDate,
+        endDate: editingRequest.endDate,
+        totalDays: editingRequest.workingDays,
+        reason: editingRequest.reason.trim(),
+      });
+      notifications.success("Leave application updated successfully.");
+      setEditingRequest(null);
+      await loadData();
+    } catch (err: any) {
+      notifications.error(err?.response?.data?.message || err?.message || "Failed to update leave application.");
+    } finally {
+      setIsUpdatingRequest(false);
+    }
+  };
+
+  // Delete Request
+  const handleDeleteRequest = async (req: LeaveRequest) => {
+    const confirmed = await notifications.confirm({
+      title: "Delete Leave Application?",
+      message: `Are you sure you want to cancel and delete the leave request for ${req.employeeName} (${req.totalDays} day(s))?`,
+      variant: "danger",
+      confirmLabel: "Delete Request",
+    });
+    if (!confirmed) return;
+
+    try {
+      await hrService.deleteLeaveRequest(req.id);
+      notifications.success("Leave application deleted successfully.");
+      await loadData();
+    } catch {
+      notifications.error("Failed to delete leave application.");
+    }
+  };
+
+  // Review Submit (Approve / Reject)
   const handleReviewSubmit = async () => {
     if (!reviewModal) return;
     try {
@@ -169,14 +335,74 @@ export function LeaveManagementPage() {
         notifications.success(`Leave request approved for ${reviewModal.request.employeeName}.`);
       } else {
         await hrService.rejectLeave(reviewModal.request.id, reviewModal.comment);
-        notifications.info(`Leave request rejected for ${reviewModal.request.employeeName}.`);
+        notifications.success(`Leave request rejected for ${reviewModal.request.employeeName}.`);
       }
       setReviewModal(null);
       await loadData();
     } catch {
-      notifications.error("Failed to update leave request status.");
+      notifications.error("Failed to process approval review.");
     } finally {
       setIsReviewing(false);
+    }
+  };
+
+  // Save / Adjust Leave Balance
+  const handleSaveBalance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBalance) return;
+
+    const errs: Record<string, string> = {};
+    if (editingBalance.totalDays < 0) {
+      errs.totalDays = "Allocated days cannot be negative.";
+    } else if (editingBalance.totalDays > 365) {
+      errs.totalDays = "Allocated days cannot exceed 365.";
+    }
+    if (!editingBalance.year || editingBalance.year < 2020 || editingBalance.year > 2035) {
+      errs.year = "Please enter a valid year between 2020 and 2035.";
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setBalanceErrors(errs);
+      return;
+    }
+
+    try {
+      setIsSavingBalance(true);
+      await hrService.allocateLeaveBalance(editingBalance.employeeId, {
+        leaveTypeId: editingBalance.leaveTypeId,
+        year: editingBalance.year,
+        totalDays: editingBalance.totalDays,
+      });
+      notifications.success(`Allocated quota updated for ${editingBalance.employeeName}.`);
+      setEditingBalance(null);
+      await loadData();
+    } catch {
+      notifications.error("Failed to adjust leave balance quota.");
+    } finally {
+      setIsSavingBalance(false);
+    }
+  };
+
+  // Reset Leave Balance
+  const handleResetBalance = async (bal: LeaveBalance) => {
+    const confirmed = await notifications.confirm({
+      title: "Reset Leave Quota?",
+      message: `Reset annual allocated quota for ${bal.employeeName} (${bal.leaveTypeName}) to 0 days?`,
+      variant: "danger",
+      confirmLabel: "Reset Quota",
+    });
+    if (!confirmed) return;
+
+    try {
+      await hrService.allocateLeaveBalance(bal.employeeId, {
+        leaveTypeId: bal.leaveTypeId,
+        year: bal.year || new Date().getFullYear(),
+        totalDays: 0,
+      });
+      notifications.success("Leave balance quota reset to 0.");
+      await loadData();
+    } catch {
+      notifications.error("Failed to reset leave balance.");
     }
   };
 
@@ -184,10 +410,10 @@ export function LeaveManagementPage() {
     return requests.filter((r) => {
       const matchStatus = statusFilter === "ALL" || r.status === statusFilter;
       const matchSearch =
-        search === "" ||
-        (r.employeeName && r.employeeName.toLowerCase().includes(search.toLowerCase())) ||
-        (r.leaveTypeName && r.leaveTypeName.toLowerCase().includes(search.toLowerCase())) ||
-        (r.reason && r.reason.toLowerCase().includes(search.toLowerCase()));
+        !search ||
+        r.employeeName?.toLowerCase().includes(search.toLowerCase()) ||
+        r.leaveTypeName?.toLowerCase().includes(search.toLowerCase()) ||
+        r.reason?.toLowerCase().includes(search.toLowerCase());
       return matchStatus && matchSearch;
     });
   }, [requests, statusFilter, search]);
@@ -299,7 +525,7 @@ export function LeaveManagementPage() {
           }`}
         >
           <UserCheck className="w-4 h-4" />
-          Staff Leave Balances
+          Staff Leave Balances ({balances.length})
         </button>
       </div>
 
@@ -351,7 +577,7 @@ export function LeaveManagementPage() {
                     <th className="px-4 py-3">Net Working Days</th>
                     <th className="px-4 py-3">Reason</th>
                     <th className="px-4 py-3">Approval Status</th>
-                    <th className="px-4 py-3 text-right">Workflow Action</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -379,8 +605,8 @@ export function LeaveManagementPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-slate-600 text-xs">
-                          {req.startDate ? req.startDate.split("T")[0] : ""} to{" "}
-                          {req.endDate ? req.endDate.split("T")[0] : ""}
+                          {req.startDate ? req.startDate.slice(0, 10) : ""} to{" "}
+                          {req.endDate ? req.endDate.slice(0, 10) : ""}
                         </td>
                         <td className="px-4 py-3.5 font-bold text-slate-900">
                           {req.totalDays} day{req.totalDays > 1 ? "s" : ""}
@@ -402,28 +628,63 @@ export function LeaveManagementPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          {req.status === "PENDING" ? (
-                            <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* View Action */}
+                            <button
+                              type="button"
+                              onClick={() => setViewingRequest(req)}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="View Application Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+
+                            {/* Edit Action (allowed for pending requests) */}
+                            {req.status === "PENDING" && (
                               <button
                                 type="button"
-                                onClick={() => setReviewModal({ request: req, action: "APPROVE", comment: "" })}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition-colors"
+                                onClick={() => handleOpenEditRequest(req)}
+                                className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                title="Edit Application"
                               >
-                                <Check className="w-3.5 h-3.5" />
-                                Approve
+                                <Edit2 className="w-4 h-4" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => setReviewModal({ request: req, action: "REJECT", comment: "" })}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-medium transition-colors"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                                Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">Processed</span>
-                          )}
+                            )}
+
+                            {/* Delete Action */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRequest(req)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete Application"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Approval Workflow Buttons */}
+                            {req.status === "PENDING" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setReviewModal({ request: req, action: "APPROVE", comment: "" })}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition-colors ml-1"
+                                  title="Approve Leave"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setReviewModal({ request: req, action: "REJECT", comment: "" })}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-medium transition-colors"
+                                  title="Reject Leave"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -447,12 +708,13 @@ export function LeaveManagementPage() {
                 <th className="px-4 py-3">Used Days</th>
                 <th className="px-4 py-3">Pending Requests</th>
                 <th className="px-4 py-3">Available Balance</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {balances.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-slate-400">
+                  <td colSpan={7} className="text-center py-8 text-slate-400">
                     No leave balances tracked yet.
                   </td>
                 </tr>
@@ -469,6 +731,44 @@ export function LeaveManagementPage() {
                     <td className="px-4 py-3 text-rose-600 font-medium">{b.usedDays} days</td>
                     <td className="px-4 py-3 text-amber-600 font-medium">{b.pendingDays} days</td>
                     <td className="px-4 py-3 font-bold text-emerald-600">{b.availableDays} days</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setViewingBalance(b)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="View Balance Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingBalance({
+                              employeeId: b.employeeId,
+                              employeeName: b.employeeName || "Employee",
+                              leaveTypeId: b.leaveTypeId,
+                              leaveTypeName: b.leaveTypeName || "Category",
+                              year: b.year || new Date().getFullYear(),
+                              totalDays: b.allocatedDays,
+                            });
+                            setBalanceErrors({});
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          title="Adjust Annual Quota"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResetBalance(b)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Reset Quota"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -477,9 +777,332 @@ export function LeaveManagementPage() {
         </div>
       )}
 
+      {/* View Request Modal */}
+      {viewingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                Leave Application Details
+              </h3>
+              <button onClick={() => setViewingRequest(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">Employee</span>
+                  <div className="font-semibold text-slate-900">{viewingRequest.employeeName}</div>
+                  <div className="text-xs text-slate-500 font-mono">Code: {viewingRequest.employeeCode || "EMP"}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">Category</span>
+                  <div className="font-semibold text-indigo-600">{viewingRequest.leaveTypeName}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">Start Date</span>
+                  <div className="font-semibold text-slate-900">{viewingRequest.startDate?.slice(0, 10)}</div>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">End Date</span>
+                  <div className="font-semibold text-slate-900">{viewingRequest.endDate?.slice(0, 10)}</div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-800 uppercase">Net Working Days Deducted</span>
+                <span className="text-lg font-bold text-emerald-700">{viewingRequest.totalDays} day(s)</span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-xs text-slate-400 uppercase block mb-1">Reason for Leave</span>
+                <p className="text-slate-700">{viewingRequest.reason}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">Status</span>
+                  <div>
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        viewingRequest.status === "APPROVED"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : viewingRequest.status === "PENDING"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-rose-50 text-rose-700"
+                      }`}
+                    >
+                      {viewingRequest.status}
+                    </span>
+                  </div>
+                </div>
+                {viewingRequest.approvedBy && (
+                  <div>
+                    <span className="text-xs text-slate-400 uppercase">Reviewed By</span>
+                    <div className="text-slate-800 font-medium">{viewingRequest.approvedBy}</div>
+                  </div>
+                )}
+              </div>
+
+              {viewingRequest.approverComment && (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+                  <span className="text-xs text-amber-800 font-semibold uppercase block mb-1">Reviewer Note</span>
+                  <p className="text-xs text-amber-900">{viewingRequest.approverComment}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingRequest(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Leave Request Modal */}
+      {editingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-indigo-600" />
+                Edit Leave Application: {editingRequest.employeeName}
+              </h3>
+              <button onClick={() => setEditingRequest(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditRequest} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Leave Category *</label>
+                <select
+                  value={editingRequest.leaveTypeId}
+                  onChange={(e) => setEditingRequest({ ...editingRequest, leaveTypeId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                >
+                  {leaveTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.code})
+                    </option>
+                  ))}
+                </select>
+                {editRequestErrors.leaveTypeId && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{editRequestErrors.leaveTypeId}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Start Date *</label>
+                  <input
+                    type="date"
+                    value={editingRequest.startDate}
+                    onChange={(e) => setEditingRequest({ ...editingRequest, startDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  />
+                  {editRequestErrors.startDate && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{editRequestErrors.startDate}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">End Date *</label>
+                  <input
+                    type="date"
+                    value={editingRequest.endDate}
+                    onChange={(e) => setEditingRequest({ ...editingRequest, endDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  />
+                  {editRequestErrors.endDate && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{editRequestErrors.endDate}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-800 uppercase">Computed Net Working Days</span>
+                <span className="text-lg font-bold text-emerald-700">{editingRequest.workingDays} day(s)</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Reason for Leave *</label>
+                <textarea
+                  rows={3}
+                  value={editingRequest.reason}
+                  onChange={(e) => setEditingRequest({ ...editingRequest, reason: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                />
+                {editRequestErrors.reason && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{editRequestErrors.reason}</p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingRequest(null)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingRequest}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  {isUpdatingRequest && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  Update Application
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Balance Modal */}
+      {viewingBalance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-indigo-600" />
+                Staff Leave Quota & Balance
+              </h3>
+              <button onClick={() => setViewingBalance(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div className="font-semibold text-slate-900 text-base">{viewingBalance.employeeName}</div>
+                <div className="text-xs text-indigo-600 font-medium">Category: {viewingBalance.leaveTypeName}</div>
+                <div className="text-xs text-slate-400">Calendar Year: {viewingBalance.year || new Date().getFullYear()}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                  <span className="text-xs text-slate-400 uppercase">Annual Allocated</span>
+                  <div className="text-lg font-bold text-slate-800">{viewingBalance.allocatedDays} days</div>
+                </div>
+                <div className="bg-rose-50 p-3 rounded-xl border border-rose-100 text-center">
+                  <span className="text-xs text-rose-600 uppercase">Consumed / Used</span>
+                  <div className="text-lg font-bold text-rose-700">{viewingBalance.usedDays} days</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-center">
+                  <span className="text-xs text-amber-700 uppercase">Pending Approval</span>
+                  <div className="text-lg font-bold text-amber-600">{viewingBalance.pendingDays} days</div>
+                </div>
+                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
+                  <span className="text-xs text-emerald-800 uppercase">Available Balance</span>
+                  <div className="text-lg font-bold text-emerald-700">{viewingBalance.availableDays} days</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingBalance(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit / Adjust Leave Balance Modal */}
+      {editingBalance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-indigo-600" />
+                Adjust Leave Quota
+              </h3>
+              <button onClick={() => setEditingBalance(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBalance} className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-600">
+                <div>Employee: <strong className="text-slate-800">{editingBalance.employeeName}</strong></div>
+                <div>Category: <strong className="text-indigo-600">{editingBalance.leaveTypeName}</strong></div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Calendar Year *</label>
+                <input
+                  type="number"
+                  min="2020"
+                  max="2035"
+                  value={editingBalance.year}
+                  onChange={(e) => setEditingBalance({ ...editingBalance, year: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                />
+                {balanceErrors.year && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{balanceErrors.year}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Annual Allocated Days *</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="365"
+                  value={editingBalance.totalDays}
+                  onChange={(e) => setEditingBalance({ ...editingBalance, totalDays: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                />
+                {balanceErrors.totalDays && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{balanceErrors.totalDays}</p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingBalance(null)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBalance}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  {isSavingBalance && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  Save Quota
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Apply Leave Modal with Holiday/Weekend Exclusions */}
       {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -499,17 +1122,22 @@ export function LeaveManagementPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Select Employee *</label>
                 <select
-                  required
                   value={applyForm.employeeId}
                   onChange={(e) => setApplyForm({ ...applyForm, employeeId: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    applyErrors.employeeId ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-indigo-500"
+                  }`}
                 >
+                  <option value="">-- Choose Employee --</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.firstName} {emp.lastName} ({emp.employeeCode} - {emp.designation})
                     </option>
                   ))}
                 </select>
+                {applyErrors.employeeId && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{applyErrors.employeeId}</p>
+                )}
                 {selectedEmployee?.reportsToEmployeeName && (
                   <p className="text-[11px] text-indigo-600 mt-1 flex items-center gap-1">
                     <Network className="w-3 h-3" />
@@ -524,11 +1152,13 @@ export function LeaveManagementPage() {
                   <span className="text-[11px] text-indigo-600 font-medium">Master Entry</span>
                 </div>
                 <select
-                  required
                   value={applyForm.leaveTypeId}
                   onChange={(e) => setApplyForm({ ...applyForm, leaveTypeId: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    applyErrors.leaveTypeId ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-indigo-500"
+                  }`}
                 >
+                  <option value="">-- Choose Category --</option>
                   {leaveTypes.length > 0
                     ? leaveTypes.map((t) => (
                         <option key={t.id} value={t.id}>
@@ -541,6 +1171,9 @@ export function LeaveManagementPage() {
                         </option>
                       ))}
                 </select>
+                {applyErrors.leaveTypeId && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{applyErrors.leaveTypeId}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -548,21 +1181,29 @@ export function LeaveManagementPage() {
                   <label className="block text-xs font-medium text-slate-700 mb-1">Start Date *</label>
                   <input
                     type="date"
-                    required
                     value={applyForm.startDate}
                     onChange={(e) => setApplyForm({ ...applyForm, startDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                      applyErrors.startDate ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-indigo-500"
+                    }`}
                   />
+                  {applyErrors.startDate && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{applyErrors.startDate}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">End Date *</label>
                   <input
                     type="date"
-                    required
                     value={applyForm.endDate}
                     onChange={(e) => setApplyForm({ ...applyForm, endDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                      applyErrors.endDate ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-indigo-500"
+                    }`}
                   />
+                  {applyErrors.endDate && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{applyErrors.endDate}</p>
+                  )}
                 </div>
               </div>
 
@@ -608,13 +1249,17 @@ export function LeaveManagementPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Reason for Leave *</label>
                 <textarea
-                  required
                   rows={3}
                   placeholder="Provide context or description for manager review..."
                   value={applyForm.reason}
                   onChange={(e) => setApplyForm({ ...applyForm, reason: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    applyErrors.reason ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-indigo-500"
+                  }`}
                 />
+                {applyErrors.reason && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{applyErrors.reason}</p>
+                )}
               </div>
 
               <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
@@ -641,7 +1286,7 @@ export function LeaveManagementPage() {
 
       {/* Review Modal */}
       {reviewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden p-6 space-y-4">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               {reviewModal.action === "APPROVE" ? (

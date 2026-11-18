@@ -38,7 +38,11 @@ export function EmployeeFormPage() {
   const [employmentTypes, setEmploymentTypes] = useState<HrMasterItem[]>([]);
   const [employeeStatuses, setEmployeeStatuses] = useState<HrMasterItem[]>([]);
   const [salaryTypes, setSalaryTypes] = useState<HrMasterItem[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [potentialManagers, setPotentialManagers] = useState<Employee[]>([]);
+
+  // Validation errors map
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Form State
   const [form, setForm] = useState({
@@ -100,7 +104,8 @@ export function EmployeeFormPage() {
       setEmploymentTypes(empTypes);
       setEmployeeStatuses(empStats);
       setSalaryTypes(salTypes);
-      setPotentialManagers(allEmps.filter((e) => e.id !== id));
+      setAllEmployees(allEmps || []);
+      setPotentialManagers((allEmps || []).filter((e) => e.id !== id));
 
       if (id) {
         const emp = await hrService.getEmployeeById(id);
@@ -113,7 +118,7 @@ export function EmployeeFormPage() {
             employeeCode: emp.employeeCode || "",
             designation: emp.designation || "",
             department: emp.department || emp.departmentName || "",
-            joiningDate: (emp.joiningDate || emp.dateOfJoining || "").split("T")[0] ?? (new Date().toISOString().split("T")[0] ?? ""),
+            joiningDate: (emp.joiningDate || emp.dateOfJoining || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
             employmentType: emp.employmentType || "FULL_TIME",
             status: emp.status || "ACTIVE",
             salaryType: emp.salaryType || "Monthly",
@@ -126,12 +131,12 @@ export function EmployeeFormPage() {
             bankAccountNumber: emp.bankAccountNumber || "",
             bankName: emp.bankName || "",
             bankIfscCode: emp.bankIfscCode || emp.bankIfsc || "",
-            gender: "MALE",
-            dateOfBirth: "",
-            address: "",
-            emergencyContactName: "",
-            emergencyContactPhone: "",
-            notes: "",
+            gender: emp.gender || "MALE",
+            dateOfBirth: emp.dateOfBirth ? emp.dateOfBirth.slice(0, 10) : "",
+            address: emp.address || "",
+            emergencyContactName: emp.emergencyContactName || "",
+            emergencyContactPhone: emp.emergencyContactPhone || "",
+            notes: emp.notes || "",
           });
           triggerStatutoryCalc(emp.monthlyBaseSalary || emp.baseSalary || 45000, emp.salaryType === "Annual CTC");
         }
@@ -171,6 +176,7 @@ export function EmployeeFormPage() {
   const handleSalaryChange = (value: number, type?: string) => {
     const sType = type ?? form.salaryType;
     setForm((prev) => ({ ...prev, salaryAmount: value, salaryType: sType }));
+    clearError("salaryAmount");
     triggerStatutoryCalc(value, sType === "Annual CTC" || sType === "YEARLY_CTC");
   };
 
@@ -183,15 +189,176 @@ export function EmployeeFormPage() {
     }));
   };
 
+  const clearError = (field: string) => {
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  // Product Master-level rigorous form validation
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    // 1. Employee Code validation
+    const trimmedCode = form.employeeCode.trim().toUpperCase();
+    if (!trimmedCode) {
+      newErrors.employeeCode = "Employee code is required.";
+    } else if (trimmedCode.length < 2) {
+      newErrors.employeeCode = "Employee code must be at least 2 characters.";
+    } else if (trimmedCode.length > 50) {
+      newErrors.employeeCode = "Employee code cannot exceed 50 characters.";
+    } else if (!/^[A-Z0-9_-]+$/.test(trimmedCode)) {
+      newErrors.employeeCode = "Employee code must contain only uppercase letters, numbers, hyphens, and underscores.";
+    } else {
+      const duplicateCode = allEmployees.some(
+        (e) => e.id !== id && e.employeeCode?.toUpperCase() === trimmedCode
+      );
+      if (duplicateCode) {
+        newErrors.employeeCode = `Employee code '${trimmedCode}' is already assigned to another employee.`;
+      }
+    }
+
+    // 2. First Name validation
+    const trimmedFirst = form.firstName.trim();
+    if (!trimmedFirst) {
+      newErrors.firstName = "First name is required.";
+    } else if (trimmedFirst.length < 2) {
+      newErrors.firstName = "First name must be at least 2 characters.";
+    } else if (trimmedFirst.length > 100) {
+      newErrors.firstName = "First name cannot exceed 100 characters.";
+    } else if (!/^[a-zA-Z\s'-]+$/.test(trimmedFirst)) {
+      newErrors.firstName = "First name contains invalid characters. Only letters and spaces are allowed.";
+    }
+
+    // 3. Last Name validation
+    const trimmedLast = form.lastName.trim();
+    if (!trimmedLast) {
+      newErrors.lastName = "Last name is required.";
+    } else if (trimmedLast.length < 1) {
+      newErrors.lastName = "Last name is required.";
+    } else if (trimmedLast.length > 100) {
+      newErrors.lastName = "Last name cannot exceed 100 characters.";
+    } else if (!/^[a-zA-Z\s'-]+$/.test(trimmedLast)) {
+      newErrors.lastName = "Last name contains invalid characters. Only letters and spaces are allowed.";
+    }
+
+    // 4. Official Email validation
+    const trimmedEmail = form.email.trim();
+    if (!trimmedEmail) {
+      newErrors.email = "Official email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      newErrors.email = "Please enter a valid email address (e.g. employee@company.com).";
+    } else {
+      const duplicateEmail = allEmployees.some(
+        (e) => e.id !== id && e.email?.toLowerCase() === trimmedEmail.toLowerCase()
+      );
+      if (duplicateEmail) {
+        newErrors.email = `Email '${trimmedEmail}' is already registered to another staff member.`;
+      }
+    }
+
+    // 5. Contact Phone validation
+    const trimmedPhone = form.phone.trim().replace(/\D/g, "");
+    if (!form.phone.trim()) {
+      newErrors.phone = "Contact phone number is required.";
+    } else if (!/^[6-9]\d{9}$/.test(trimmedPhone)) {
+      newErrors.phone = "Enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.";
+    }
+
+    // 6. Joining Date validation
+    if (!form.joiningDate) {
+      newErrors.joiningDate = "Date of joining is required.";
+    }
+
+    // 7. Department & Designation
+    if (!form.department.trim()) {
+      newErrors.department = "Department master entry is required.";
+    }
+    if (!form.designation.trim()) {
+      newErrors.designation = "Job title / Designation is required.";
+    }
+
+    // 8. Salary Amount validation
+    if (!form.salaryAmount || form.salaryAmount < 1000) {
+      newErrors.salaryAmount = "Salary amount must be a positive number of at least ₹1,000.";
+    }
+
+    // 9. PAN Card Number (optional, but validated if provided)
+    if (form.panNumber.trim()) {
+      const pan = form.panNumber.trim().toUpperCase();
+      if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) {
+        newErrors.panNumber = "Invalid PAN format. Standard format is 5 uppercase letters, 4 digits, 1 letter (e.g. ABCDE1234F).";
+      }
+    }
+
+    // 10. Aadhaar Number (optional, but validated if provided)
+    if (form.aadhaarNumber.trim()) {
+      const aadhaar = form.aadhaarNumber.trim().replace(/\s/g, "");
+      if (!/^\d{12}$/.test(aadhaar)) {
+        newErrors.aadhaarNumber = "Aadhaar number must consist of exactly 12 numeric digits.";
+      }
+    }
+
+    // 11. Bank Account Number (optional, but validated if provided)
+    if (form.bankAccountNumber.trim()) {
+      const acc = form.bankAccountNumber.trim();
+      if (!/^\d{9,18}$/.test(acc)) {
+        newErrors.bankAccountNumber = "Bank account number must be between 9 and 18 digits.";
+      }
+    }
+
+    // 12. Bank IFSC Code (optional, but validated if provided)
+    if (form.bankIfscCode.trim()) {
+      const ifsc = form.bankIfscCode.trim().toUpperCase();
+      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+        newErrors.bankIfscCode = "Invalid IFSC Code. Standard format is 4 letters, 0, and 6 alphanumeric characters (e.g. HDFC0001234).";
+      }
+    }
+
+    // 13. UAN Number (optional, but validated if provided)
+    if (form.uanNumber.trim()) {
+      const uan = form.uanNumber.trim();
+      if (!/^\d{12}$/.test(uan)) {
+        newErrors.uanNumber = "Universal Account Number (UAN) must be exactly 12 digits.";
+      }
+    }
+
+    // 14. Emergency Phone (optional, but validated if provided)
+    if (form.emergencyContactPhone.trim()) {
+      const ePhone = form.emergencyContactPhone.trim().replace(/\D/g, "");
+      if (!/^[6-9]\d{9}$/.test(ePhone)) {
+        newErrors.emergencyContactPhone = "Emergency contact phone must be a valid 10-digit mobile number.";
+      }
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      // Auto-switch to the first tab that has an error
+      if (newErrors.employeeCode || newErrors.firstName || newErrors.lastName || newErrors.email || newErrors.phone || newErrors.joiningDate || newErrors.emergencyContactPhone) {
+        setActiveTab("BASIC");
+      } else if (newErrors.department || newErrors.designation) {
+        setActiveTab("EMPLOYMENT");
+      } else if (newErrors.salaryAmount) {
+        setActiveTab("COMPENSATION");
+      } else if (newErrors.panNumber || newErrors.aadhaarNumber || newErrors.bankAccountNumber || newErrors.bankIfscCode || newErrors.uanNumber) {
+        setActiveTab("BANK");
+      }
+      notifications.error("Please resolve the highlighted validation errors.");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.firstName.trim() || !form.lastName.trim()) {
-      notifications.error("Please enter first and last name");
-      return;
-    }
-    if (!form.email.trim() || !form.phone.trim()) {
-      notifications.error("Email and phone number are required");
+    if (!validateForm()) {
       return;
     }
 
@@ -200,7 +367,7 @@ export function EmployeeFormPage() {
       const payload: Partial<Employee> = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        employeeCode: form.employeeCode.trim(),
+        employeeCode: form.employeeCode.trim().toUpperCase(),
         email: form.email.trim(),
         phone: form.phone.trim(),
         designation: form.designation,
@@ -216,15 +383,21 @@ export function EmployeeFormPage() {
         // Bank details
         bankAccountNumber: form.bankAccountNumber.trim() || undefined,
         bankName: form.bankName.trim() || undefined,
-        bankIfscCode: form.bankIfscCode.trim() || undefined,
-        bankIfsc: form.bankIfscCode.trim() || undefined,
+        bankIfscCode: form.bankIfscCode.trim().toUpperCase() || undefined,
+        bankIfsc: form.bankIfscCode.trim().toUpperCase() || undefined,
         // KYC
-        panNumber: form.panNumber.trim() || undefined,
-        pan: form.panNumber.trim() || undefined,
-        aadhaarNumber: form.aadhaarNumber.trim() || undefined,
-        aadhaar: form.aadhaarNumber.trim() || undefined,
+        panNumber: form.panNumber.trim().toUpperCase() || undefined,
+        pan: form.panNumber.trim().toUpperCase() || undefined,
+        aadhaarNumber: form.aadhaarNumber.trim().replace(/\s/g, "") || undefined,
+        aadhaar: form.aadhaarNumber.trim().replace(/\s/g, "") || undefined,
         uanNumber: form.uanNumber.trim() || undefined,
         uan: form.uanNumber.trim() || undefined,
+        gender: form.gender || "MALE",
+        dateOfBirth: form.dateOfBirth || undefined,
+        address: form.address.trim() || undefined,
+        emergencyContactName: form.emergencyContactName.trim() || undefined,
+        emergencyContactPhone: form.emergencyContactPhone.trim() || undefined,
+        notes: form.notes.trim() || undefined,
       };
 
       if (isEdit && id) {
@@ -315,6 +488,9 @@ export function EmployeeFormPage() {
         >
           <Users className="w-4 h-4" />
           Basic & Contact
+          {(errors.employeeCode || errors.firstName || errors.lastName || errors.email || errors.phone || errors.joiningDate) && (
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+          )}
         </button>
         <button
           type="button"
@@ -327,6 +503,9 @@ export function EmployeeFormPage() {
         >
           <Briefcase className="w-4 h-4" />
           Role & Hierarchy
+          {(errors.department || errors.designation) && (
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+          )}
         </button>
         <button
           type="button"
@@ -339,6 +518,9 @@ export function EmployeeFormPage() {
         >
           <DollarSign className="w-4 h-4" />
           Salary & Statutory
+          {errors.salaryAmount && (
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+          )}
         </button>
         <button
           type="button"
@@ -351,6 +533,9 @@ export function EmployeeFormPage() {
         >
           <CreditCard className="w-4 h-4" />
           Bank & KYC
+          {(errors.panNumber || errors.aadhaarNumber || errors.bankAccountNumber || errors.bankIfscCode || errors.uanNumber) && (
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+          )}
         </button>
       </div>
 
@@ -366,11 +551,19 @@ export function EmployeeFormPage() {
                 </label>
                 <input
                   type="text"
-                  required
                   value={form.employeeCode}
-                  onChange={(e) => setForm({ ...form, employeeCode: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => {
+                    setForm({ ...form, employeeCode: e.target.value.toUpperCase() });
+                    clearError("employeeCode");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm font-mono uppercase focus:ring-2 ${
+                    errors.employeeCode ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
+                  placeholder="EMP001"
                 />
+                {errors.employeeCode && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.employeeCode}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -378,12 +571,19 @@ export function EmployeeFormPage() {
                 </label>
                 <input
                   type="text"
-                  required
                   value={form.firstName}
-                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => {
+                    setForm({ ...form, firstName: e.target.value });
+                    clearError("firstName");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    errors.firstName ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
                   placeholder="e.g. Rahul"
                 />
+                {errors.firstName && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.firstName}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -391,12 +591,19 @@ export function EmployeeFormPage() {
                 </label>
                 <input
                   type="text"
-                  required
                   value={form.lastName}
-                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => {
+                    setForm({ ...form, lastName: e.target.value });
+                    clearError("lastName");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    errors.lastName ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
                   placeholder="e.g. Sharma"
                 />
+                {errors.lastName && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.lastName}</p>
+                )}
               </div>
             </div>
 
@@ -407,34 +614,59 @@ export function EmployeeFormPage() {
                 </label>
                 <input
                   type="email"
-                  required
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => {
+                    setForm({ ...form, email: e.target.value });
+                    clearError("email");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    errors.email ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
                   placeholder="name@company.com"
                 />
+                {errors.email && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contact Phone <span className="text-red-500">*</span>
+                  Contact Phone (Mobile) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
-                  required
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                  placeholder="+91 9876543210"
+                  onChange={(e) => {
+                    setForm({ ...form, phone: e.target.value });
+                    clearError("phone");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    errors.phone ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
+                  placeholder="9876543210"
+                  maxLength={10}
                 />
+                {errors.phone && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.phone}</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Joining</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date of Joining <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="date"
                   value={form.joiningDate}
-                  onChange={(e) => setForm({ ...form, joiningDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => {
+                    setForm({ ...form, joiningDate: e.target.value });
+                    clearError("joiningDate");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    errors.joiningDate ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
                 />
+                {errors.joiningDate && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.joiningDate}</p>
+                )}
               </div>
             </div>
 
@@ -459,13 +691,24 @@ export function EmployeeFormPage() {
                     placeholder="Contact Name"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   />
-                  <input
-                    type="tel"
-                    value={form.emergencyContactPhone}
-                    onChange={(e) => setForm({ ...form, emergencyContactPhone: e.target.value })}
-                    placeholder="Contact Phone"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
+                  <div>
+                    <input
+                      type="tel"
+                      value={form.emergencyContactPhone}
+                      onChange={(e) => {
+                        setForm({ ...form, emergencyContactPhone: e.target.value });
+                        clearError("emergencyContactPhone");
+                      }}
+                      placeholder="10-digit Phone"
+                      maxLength={10}
+                      className={`w-full px-3 py-2 border rounded-lg text-sm ${
+                        errors.emergencyContactPhone ? "border-rose-400 focus:ring-rose-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.emergencyContactPhone && (
+                      <p className="text-xs text-rose-500 mt-1 font-medium">{errors.emergencyContactPhone}</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -487,9 +730,15 @@ export function EmployeeFormPage() {
                 </div>
                 <select
                   value={form.department}
-                  onChange={(e) => setForm({ ...form, department: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => {
+                    setForm({ ...form, department: e.target.value });
+                    clearError("department");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    errors.department ? "border-rose-400 focus:ring-rose-500" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
                 >
+                  <option value="">-- Select Department Master --</option>
                   {departments.length === 0 ? (
                     <>
                       <option value="Engineering">Engineering</option>
@@ -507,6 +756,9 @@ export function EmployeeFormPage() {
                     ))
                   )}
                 </select>
+                {errors.department && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.department}</p>
+                )}
               </div>
 
               {/* Job Title / Designation Master */}
@@ -519,9 +771,15 @@ export function EmployeeFormPage() {
                 </div>
                 <select
                   value={form.designation}
-                  onChange={(e) => setForm({ ...form, designation: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => {
+                    setForm({ ...form, designation: e.target.value });
+                    clearError("designation");
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 ${
+                    errors.designation ? "border-rose-400 focus:ring-rose-500" : "border-gray-300 focus:ring-indigo-500"
+                  }`}
                 >
+                  <option value="">-- Select Job Title / Designation Master --</option>
                   {jobTitles.length === 0 ? (
                     <>
                       <option value="Software Engineer">Software Engineer</option>
@@ -539,6 +797,9 @@ export function EmployeeFormPage() {
                     ))
                   )}
                 </select>
+                {errors.designation && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.designation}</p>
+                )}
               </div>
             </div>
 
@@ -677,14 +938,19 @@ export function EmployeeFormPage() {
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 text-sm font-semibold">₹</span>
                   <input
                     type="number"
-                    min="0"
+                    min="1000"
                     step="500"
                     value={form.salaryAmount}
                     onChange={(e) => handleSalaryChange(Number(e.target.value))}
-                    className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg text-base font-semibold text-gray-900 focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full pl-8 pr-4 py-2 border rounded-lg text-base font-semibold text-gray-900 focus:ring-2 ${
+                      errors.salaryAmount ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                    }`}
                     placeholder="e.g. 50000"
                   />
                 </div>
+                {errors.salaryAmount && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.salaryAmount}</p>
+                )}
               </div>
             </div>
 
@@ -811,20 +1077,38 @@ export function EmployeeFormPage() {
                   <input
                     type="text"
                     value={form.bankAccountNumber}
-                    onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
+                    onChange={(e) => {
+                      setForm({ ...form, bankAccountNumber: e.target.value });
+                      clearError("bankAccountNumber");
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 font-mono ${
+                      errors.bankAccountNumber ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                    }`}
                     placeholder="e.g. 50100234567890"
+                    maxLength={18}
                   />
+                  {errors.bankAccountNumber && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{errors.bankAccountNumber}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">IFSC Code</label>
                   <input
                     type="text"
                     value={form.bankIfscCode}
-                    onChange={(e) => setForm({ ...form, bankIfscCode: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 font-mono uppercase"
+                    onChange={(e) => {
+                      setForm({ ...form, bankIfscCode: e.target.value.toUpperCase() });
+                      clearError("bankIfscCode");
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 font-mono uppercase ${
+                      errors.bankIfscCode ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                    }`}
                     placeholder="e.g. HDFC0001234"
+                    maxLength={11}
                   />
+                  {errors.bankIfscCode && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{errors.bankIfscCode}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -838,33 +1122,57 @@ export function EmployeeFormPage() {
                   <input
                     type="text"
                     value={form.panNumber}
-                    onChange={(e) => setForm({ ...form, panNumber: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono uppercase focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setForm({ ...form, panNumber: e.target.value.toUpperCase() });
+                      clearError("panNumber");
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm font-mono uppercase focus:ring-2 ${
+                      errors.panNumber ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                    }`}
                     placeholder="ABCDE1234F"
                     maxLength={10}
                   />
+                  {errors.panNumber && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{errors.panNumber}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Aadhaar Number</label>
                   <input
                     type="text"
                     value={form.aadhaarNumber}
-                    onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500"
-                    placeholder="XXXX XXXX XXXX"
+                    onChange={(e) => {
+                      setForm({ ...form, aadhaarNumber: e.target.value });
+                      clearError("aadhaarNumber");
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:ring-2 ${
+                      errors.aadhaarNumber ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                    }`}
+                    placeholder="12-digit Aadhaar"
                     maxLength={12}
                   />
+                  {errors.aadhaarNumber && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{errors.aadhaarNumber}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Provident Fund UAN</label>
                   <input
                     type="text"
                     value={form.uanNumber}
-                    onChange={(e) => setForm({ ...form, uanNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setForm({ ...form, uanNumber: e.target.value });
+                      clearError("uanNumber");
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:ring-2 ${
+                      errors.uanNumber ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-gray-300 focus:ring-indigo-500"
+                    }`}
                     placeholder="12-digit UAN"
                     maxLength={12}
                   />
+                  {errors.uanNumber && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{errors.uanNumber}</p>
+                  )}
                 </div>
               </div>
             </div>
